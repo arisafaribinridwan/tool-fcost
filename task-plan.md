@@ -771,7 +771,7 @@ Tugasmu saat ini:
 Batasan:
 - Jangan tambah fitur di luar MVP.
 - Gunakan Python 3.11.
-- Pisahkan logic web, transformasi data, dan output Excel.
+  - Pisahkan logic web, transformasi data, dan output Excel.
 - Jika ada asumsi, tulis asumsi secara eksplisit.
 - Jika validasi perlu ditambahkan, tambahkan.
 - Beri hasil dalam bentuk kode + penjelasan singkat.
