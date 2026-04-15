@@ -201,3 +201,9 @@ Semua fitur dalam scope MVP. Output akhir: folder portable yang siap dikopi ke P
 ---
 
 *Dokumen ini adalah PRD final v2.0. Siap dijadikan landasan coding.*
+
+
+dari @prd.md ini. tolong buatkan checklist task plan komprehensif untuk bisa dijadika sumber kebenaran untuk coding junior developer atau model lainnya yang lebih murah.
+- buatkan daftar library atau instalasi yang diperlukan agar saya bisa lakukan instalasi manual tanpa ai (lebih hemat)
+- buatkan daftar skills ai yang dibutuhkan untuk projek ini
+- jika ada yang belum jelas, tanyakan ke saya sebelum koding. buatkan hasilnya di file task-plan.md
