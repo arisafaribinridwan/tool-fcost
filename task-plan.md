@@ -36,45 +36,45 @@ Dokumen ini juga mengikuti pertimbangan bahwa development bisa dilakukan lintas 
 
 ## 2. Setup Development
 
-- [ ] Install Python 3.11.x 64-bit.
-- [ ] Install Git.
-- [ ] Install editor kerja.
-- [ ] Buat virtual environment `.venv`.
-- [ ] Upgrade `pip`.
-- [ ] Install dependency runtime.
-- [ ] Install dependency testing/linting.
-- [ ] Buat `requirements.txt`.
-- [ ] Buat `.gitignore`.
-- [ ] Buat `README.md` setup singkat.
-- [ ] Dokumentasikan langkah setup Linux dan Windows secara terpisah jika ada beda command.
-- [ ] Pastikan `.gitignore` dan editor config aman untuk line ending lintas OS.
+- [x] Install Python 3.14.x 64-bit.
+- [x] Install Git.
+- [x] Install editor kerja.
+- [x] Buat virtual environment `.venv`.
+- [x] Upgrade `pip`.
+- [x] Install dependency runtime.
+- [x] Install dependency testing/linting.
+- [x] Buat `requirements.txt`.
+- [x] Buat `.gitignore`.
+- [x] Buat `README.md` setup singkat.
+- [x] Dokumentasikan langkah setup Linux dan Windows secara terpisah jika ada beda command.
+- [x] Pastikan `.gitignore` dan editor config aman untuk line ending lintas OS.
 
 ## 3. Install Manual yang Diperlukan
 
 ### Software
 
-- [ ] Python 3.11.x 64-bit
-- [ ] Git
-- [ ] VS Code atau editor lain
-- [ ] Chrome atau Edge untuk testing UI lokal
+- [x] Python 3.14.x 64-bit
+- [x] Git
+- [x] VS Code atau editor lain
+- [x] Chrome atau Edge untuk testing UI lokal
 - [ ] Mesin Windows 10/11 untuk build final dan validasi portable
 
 ### Library Python
 
-- [ ] `Flask`
-- [ ] `pandas`
-- [ ] `openpyxl`
-- [ ] `PyYAML`
-- [ ] `pyinstaller`
-- [ ] `pytest`
-- [ ] `ruff`
-- [ ] `python-dotenv` (opsional)
+- [x] `Flask`
+- [x] `pandas`
+- [x] `openpyxl`
+- [x] `PyYAML`
+- [x] `pyinstaller`
+- [x] `pytest`
+- [x] `ruff`
+- [x] `python-dotenv` (opsional)
 
 ### Perintah install manual
 
 ```bash
-python -m venv .venv
-python -m pip install --upgrade pip
+python3 -m venv .venv
+python3 -m pip install --upgrade pip
 pip install Flask pandas openpyxl PyYAML pyinstaller pytest ruff python-dotenv
 ```
 
