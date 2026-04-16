@@ -1,9 +1,9 @@
 # PRD - Excel Automation Tool
 
-**Versi:** 2.2
+**Versi:** 2.3
 **Status:** Siap mulai coding MVP
 **Platform:** Windows 10/11 64-bit, portable tanpa install
-**Stack:** Python 3.11 + Flask + pandas + openpyxl + PyYAML + PyInstaller
+**Stack:** Python 3.14 + Flask + pandas + openpyxl + PyYAML + PyInstaller
 
 ---
 

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ app_name }}</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/main.css') }}"
+    />
+  </head>
+  <body>
+    <main class="hero">
+      <section class="hero-panel">
+        <p class="eyebrow">MVP Skeleton</p>
+        <h1>{{ app_name }}</h1>
+        <p class="subtitle">
+          Fase 1 selesai: Flask app, route utama, template awal, dan static
+          assets sudah siap untuk fase implementasi berikutnya.
+        </p>
+        <div class="meta">
+          <span id="build-stamp">Initializing...</span>
+          <span class="dot" aria-hidden="true"></span>
+          <span>Health endpoint: <code>/health</code></span>
+        </div>
+      </section>
+    </main>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  </body>
+</html>
