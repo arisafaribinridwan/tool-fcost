@@ -140,6 +140,8 @@
     const fileName = typeof result.file_name === "string" ? result.file_name : "-";
     const mode = typeof payload.mode === "string" ? payload.mode : "unknown";
     const runId = typeof payload.run_id === "string" ? payload.run_id : "-";
+    const downloadUrl = typeof result.download_url === "string" ? result.download_url : null;
+    const downloadReady = result.download_ready === true;
 
     resultStateEl.innerHTML = "";
 
@@ -155,7 +157,18 @@
     modeEl.className = "result-meta";
     modeEl.textContent = `Mode: ${mode} (belum menulis file final di fase 2)`;
 
-    resultStateEl.append(titleEl, fileEl, modeEl);
+    const downloadButtonEl = document.createElement("button");
+    downloadButtonEl.type = "button";
+    downloadButtonEl.textContent = downloadReady ? "Download output" : "Download output (coming soon)";
+    if (downloadReady && downloadUrl) {
+      downloadButtonEl.addEventListener("click", () => {
+        window.location.href = downloadUrl;
+      });
+    } else {
+      downloadButtonEl.disabled = true;
+    }
+
+    resultStateEl.append(titleEl, fileEl, modeEl, downloadButtonEl);
   }
 
   function addLog(message, level, isoTime) {
