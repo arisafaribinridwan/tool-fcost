@@ -21,6 +21,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         "UPLOADS_DIR": project_root / "uploads",
         "OUTPUTS_DIR": project_root / "outputs",
     }
+    runtime_dir_keys = tuple(runtime_dirs.keys())
 
     app.config.from_mapping(
         APP_NAME="Excel Automation Tool",
@@ -32,7 +33,9 @@ def create_app(test_config: dict | None = None) -> Flask:
     if test_config:
         app.config.update(test_config)
 
-    for folder_path in runtime_dirs.values():
+    for key in runtime_dir_keys:
+        folder_path = Path(app.config[key])
+        app.config[key] = folder_path
         folder_path.mkdir(parents=True, exist_ok=True)
 
     from app.web.routes import web_bp
