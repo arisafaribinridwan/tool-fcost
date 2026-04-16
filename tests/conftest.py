@@ -6,8 +6,14 @@ from app import create_app
 
 
 @pytest.fixture()
-def app():
-    return create_app({"TESTING": True})
+def app(tmp_path):
+    runtime_dirs = {
+        "CONFIGS_DIR": tmp_path / "configs",
+        "MASTERS_DIR": tmp_path / "masters",
+        "UPLOADS_DIR": tmp_path / "uploads",
+        "OUTPUTS_DIR": tmp_path / "outputs",
+    }
+    return create_app({"TESTING": True, **runtime_dirs})
 
 
 @pytest.fixture()
