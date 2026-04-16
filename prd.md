@@ -1,125 +1,172 @@
-# PRD — Excel Automation Tool
-**Versi:** 2.0 (Final)
-**Status:** Siap dikoding
-**Platform:** Windows (portable, tanpa install)
-**Stack:** Python + Flask + pandas + openpyxl + PyInstaller
+# PRD - Excel Automation Tool
+
+**Versi:** 2.2
+**Status:** Siap mulai coding MVP
+**Platform:** Windows 10/11 64-bit, portable tanpa install
+**Stack:** Python 3.11 + Flask + pandas + openpyxl + PyYAML + PyInstaller
 
 ---
 
-## 1. Latar Belakang & Masalah
+## 1. Tujuan
 
-Setiap periode ada pekerjaan rutin: ambil file Excel sumber → lakukan serangkaian transformasi (filter, pivot, VLOOKUP, kalkulasi, styling) → hasilkan banyak sheet atau file output. Proses ini repetitif, rawan kesalahan manual, dan memakan waktu. Diperlukan satu tools yang menjalankan semua itu cukup dengan satu tombol.
+Membuat tool lokal berbasis web untuk mengotomatisasi proses olah file Excel/CSV menjadi output Excel yang sudah ditransformasi dan diformat, tanpa proses manual berulang di Excel.
 
----
-
-## 2. Pengguna & Konteks
-
-| Atribut | Detail |
-|---|---|
-| Pengguna | 1 orang (personal use) |
-| Sistem operasi | Windows 10 / 11 (64-bit) |
-| Distribusi | Folder portable — tanpa install, tanpa admin permission |
-| Koneksi internet | Tidak diperlukan setelah folder dikopi |
+Tool ini ditujukan untuk alur kerja personal di Windows dan didistribusikan sebagai folder portable yang bisa langsung dijalankan lewat `run.bat`.
 
 ---
 
-## 3. Alur Kerja Utama
+## 2. Masalah yang Ingin Diselesaikan
 
-```
-Upload file sumber (.xlsx)
-        ↓
-Muat data master otomatis dari folder masters/
-        ↓
+Saat ini proses kerja dilakukan manual:
+
+1. Ambil file sumber
+2. Lakukan filter, lookup, kalkulasi, grouping, pivot, dan penyesuaian format
+3. Buat output laporan Excel
+
+Masalah utama:
+
+- Proses repetitif dan memakan waktu
+- Rawan salah rumus atau salah copy-paste
+- Sulit dijaga konsisten antar periode
+- Sulit diulang dengan cara yang sama tanpa checklist jelas
+
+---
+
+## 3. Pengguna dan Konteks
+
+- Pengguna utama: 1 orang, personal use
+- Sistem operasi: Windows 10/11 64-bit
+- Koneksi internet: tidak diperlukan setelah folder aplikasi dikopi
+- Admin permission: tidak diperlukan
+- Distribusi: folder portable
+
+---
+
+## 4. Alur Kerja Utama MVP
+
+```txt
+Upload file sumber (.xlsx / .csv)
+        ->
+Load data master otomatis dari folder masters/
+        ->
 Pilih config resep (.yaml)
-        ↓
+        ->
 Klik Execute
-        ↓
+        ->
 Download file output (.xlsx)
 ```
 
-> **Catatan:** Data master (file statis untuk VLOOKUP) dimuat otomatis dari folder `masters/` — tidak perlu diupload setiap kali. Cukup letakkan file master di sana sekali, tools akan selalu merujuk ke situ.
+Catatan:
+
+- File master tidak diupload per sesi; cukup diletakkan di folder `masters/`
+- Satu resep boleh memakai lebih dari satu file master
+- Satu use case awal difokuskan ke `1 source -> 1 output utama`
 
 ---
 
-## 4. Distribusi & Cara Pakai di PC Baru
+## 5. Distribusi dan Cara Pakai
 
-Tools didistribusikan sebagai **satu folder portable**. Tidak perlu install Python, tidak perlu install library, tidak perlu admin permission. Cukup copy folder ke PC manapun dan klik `run.bat`.
+Tool didistribusikan sebagai folder portable:
 
-### Langkah pakai di PC baru
-
-1. **Copy folder `ExcelAutoTool/`** ke PC tujuan (via flashdisk, shared drive, email, dll)
-2. **Klik dua kali `run.bat`** — otomatis buka browser dan tools siap dipakai
-3. **Letakkan data master** di folder `masters/` — cukup sekali, tidak perlu diulang setiap sesi
-4. **Upload file sumber, pilih resep, klik Execute** — hasil langsung bisa didownload
-
-### Detail teknis
-
-File `run.bat` menjalankan `ExcelAutoTool.exe` yang sudah dibundle dengan PyInstaller. Di dalamnya sudah include Python runtime, Flask, pandas, openpyxl, PyYAML, dan semua dependency — tidak ada yang perlu diinstall di PC tujuan.
-
-- Ukuran file distribusi: **~80–120 MB** (bundled, wajar untuk zero-install)
-- Tidak membutuhkan koneksi internet setelah dikopi
-
----
-
-## 5. Struktur Folder Distribusi
-
-Folder ini yang dikopi ke PC lain:
-
-```
+```txt
 ExcelAutoTool/
-├── ExcelAutoTool.exe     ← bundled app (Python + semua library)
-├── run.bat               ← klik ini untuk menjalankan
-├── masters/              ← letakkan file data master di sini
-├── configs/              ← file resep .yaml
-├── uploads/              ← file sumber yang diupload (otomatis)
-└── outputs/              ← hasil output .xlsx
+|- ExcelAutoTool.exe
+|- run.bat
+|- configs/
+|- masters/
+|- uploads/
+`- outputs/
 ```
+
+Cara pakai di PC tujuan:
+
+1. Copy folder `ExcelAutoTool/`
+2. Jalankan `run.bat`
+3. Letakkan file master di folder `masters/`
+4. Upload file sumber
+5. Pilih config YAML
+6. Klik `Execute`
+7. Download hasil
+
+Target distribusi:
+
+- Tanpa install Python
+- Tanpa install library tambahan
+- Tanpa internet
+- Tanpa admin permission
 
 ---
 
 ## 6. Scope MVP
 
-### Masuk scope (wajib ada)
+### Wajib ada
 
-- Upload file sumber `.xlsx` / `.csv`
-- Referensi data master dari folder statis (`masters/`)
-- Config resep via file YAML (bisa diedit pakai Notepad)
-- Filter & grouping data
-- Pivot / rekapitulasi
-- VLOOKUP / mapping ke data master
-- Kalkulasi rumus kustom
-- Output multi-sheet dalam 1 file
-- Header teks (judul + info periode)
-- Styling output: warna header, border, format angka/tanggal
-- Web UI sederhana (drag-drop upload + tombol execute + live log)
-- Log eksekusi & pesan error yang jelas
-- Portable `.exe` Windows (tanpa install apapun)
+- Upload file sumber `.xlsx` dan `.csv`
+- Load master otomatis dari folder `masters/`
+- Config resep berbasis file YAML
+- Filter data
+- Mapping/lookup ke master
+- Kalkulasi berbasis rule config
+- Conditional rule dasar sesuai use case nyata
+- Grouping dan agregasi
+- Pivot/rekapitulasi
+- Output 1 file `.xlsx` multi-sheet
+- Header laporan berisi judul dan info periode
+- Styling dasar Excel: warna header, border, font, number/date format, freeze pane
+- Web UI sederhana: upload, pilih config, execute, log, download
+- Log proses yang jelas
+- Error message yang mudah dipahami
+- Packaging portable Windows
 
-### Di luar scope — Fase 2
+### Tidak dikerjakan di MVP
 
-- Multi-file sumber (merge sebelum diproses)
-- Visual config builder (drag-drop tanpa edit YAML)
-- Logo / gambar di header output
+- Multi-file source merge
+- Visual config builder
+- Logo/gambar di header
 - Output multi-file terpisah
-- Mac / Linux support
-- Deploy ke cloud / server
-- CLI mode (deprioritized, sudah ter-cover oleh web UI portable)
+- Support Mac/Linux
+- Deploy ke server/cloud
+- Multi-user concurrency
 
 ---
 
-## 7. Config Resep (YAML)
+## 7. Input dan Output
 
-Semua aturan transformasi disimpan di file `.yaml` yang bisa diedit dengan text editor biasa (Notepad, VS Code, dll). Sekali dibuat, bisa dipakai berulang tanpa mengubah apapun.
+### Input
 
-### Contoh struktur config
+- File sumber: `.xlsx` atau `.csv`
+- File master: `.xlsx` atau `.csv`
+- File config: `.yaml`
+
+### Output
+
+- Format utama: 1 file `.xlsx`
+- Isi output: multi-sheet
+- Bentuk output: custom spesifik mengikuti use case nyata pertama
+- Nama file output sebaiknya unik untuk menghindari konflik overwrite
+
+---
+
+## 8. Prinsip Desain Config YAML
+
+YAML adalah sumber aturan transformasi untuk MVP.
+
+Prinsip awal:
+
+- Mudah dibaca dan diedit manual
+- Cukup fleksibel untuk banyak master file
+- Bisa berkembang per sub-tugas saat rule bisnis nyata sudah tersedia
+- Validasi harus ketat agar error cepat terlihat
+
+Contoh baseline:
 
 ```yaml
-name: "Laporan Penjualan Bulanan"
+name: "Laporan Penjualan"
 source_sheet: "Sheet1"
 
 header:
   title: "Laporan Penjualan"
-  period_from_column: "tanggal"   # ambil otomatis dari min/max kolom ini
+  period_from_column: "tanggal"
 
 masters:
   - file: "masters/produk.xlsx"
@@ -127,16 +174,13 @@ masters:
     columns: ["nama_produk", "kategori"]
 
 outputs:
-  - sheet_name: "Per Kategori"
-    group_by: "kategori"
-    columns: ["kategori", "total_qty", "total_nilai"]
-    formulas:
-      total_nilai: "qty * harga"
+  - sheet_name: "Detail"
+    columns: ["tanggal", "kode_produk", "qty", "harga"]
 
   - sheet_name: "Summary"
     pivot:
       index: "kategori"
-      values: "total_nilai"
+      values: "qty"
       aggfunc: "sum"
 
 styling:
@@ -147,63 +191,106 @@ styling:
   freeze_pane: "A2"
 ```
 
-> Format ini akan disesuaikan lebih lanjut ketika contoh kasus nyata dari PC kerja sudah tersedia.
+Keputusan awal yang sudah jelas:
+
+- Field root minimum: `name`, `source_sheet`, `header`, `outputs`
+- `masters` boleh kosong
+- `outputs` minimal 1 item
+- `styling` boleh kosong dan memakai default internal
+- Referensi master harus relatif ke folder `masters/`
+- Nama kolom sementara dianggap case-sensitive
+- Rule detail lookup, conditional, dan formula lanjutan akan difinalkan per sub-tugas berdasarkan sample nyata
 
 ---
 
-## 8. Arsitektur Teknis
+## 9. Arsitektur Teknis
 
-| Layer | Teknologi |
-|---|---|
-| Web UI | HTML + JavaScript vanilla |
-| Backend | Python 3.11, Flask |
-| Transformasi data | pandas |
-| Baca/tulis Excel | openpyxl |
-| Config | YAML (PyYAML) |
-| Packaging | PyInstaller (onedir mode) |
+- Web UI: HTML + JavaScript vanilla
+- Backend: Flask
+- Transformasi data: pandas
+- Baca/tulis Excel: openpyxl
+- Parsing config: PyYAML
+- Packaging: PyInstaller onedir
 
----
+Struktur modul yang diharapkan:
 
-## 9. Constraint Teknis
-
-| Constraint | Detail |
-|---|---|
-| Sistem operasi | Windows 10 / 11 (64-bit) |
-| Ukuran data | ~20 ribu baris — aman in-memory dengan pandas |
-| Data master | File `.xlsx` / `.csv` statis di folder `masters/`, dimuat sekali saat eksekusi |
-| Header output | 2–3 baris teks: judul laporan + info periode (diambil otomatis dari data) |
-| Kolom berubah | Kolom opsional tidak menyebabkan crash — cukup warning di log |
-| Koneksi internet | Tidak diperlukan sama sekali setelah folder dikopi |
-| Admin permission | Tidak diperlukan untuk menjalankan |
+- `config_loader`
+- `source_reader`
+- `master_loader`
+- `transformer`
+- `formula_engine`
+- `output_writer`
+- `logger`
 
 ---
 
-## 10. Rencana Pengembangan
+## 10. Constraint Teknis
 
-### Fase 1 — MVP (sekarang)
-
-Semua fitur dalam scope MVP. Output akhir: folder portable yang siap dikopi ke PC Windows manapun tanpa install apapun. Akan divalidasi menggunakan contoh kasus nyata dari PC kerja.
-
-### Fase 2 — Setelah validasi
-
-- Output multi-file terpisah
-- Visual config builder (drag-drop tanpa edit YAML)
-- Merge multi-file sumber
-- Logo / gambar di header output
-- Mekanisme update tools
+- Hanya untuk Windows 10/11 64-bit
+- Target ukuran data sekitar 20 ribu baris, diproses in-memory
+- Log di UI cukup polling per awal dan akhir sub-tugas
+- Kolom opsional yang hilang tidak boleh membuat sistem crash; cukup warning jika memang tidak kritikal
+- Error umum harus tampil jelas ke user non-teknis
+- Aplikasi harus tetap berjalan lokal tanpa internet
+- Hasil build harus bisa dipakai di PC lain tanpa install Python
 
 ---
 
-## 11. Pertanyaan Terbuka
+## 11. Asumsi Implementasi
 
-- [ ] Contoh kasus nyata (file sumber + transformasi yang diinginkan) — akan dipakai sebagai test case pertama MVP. Tersedia setelah akses ke PC kerja.
+- Use case pertama adalah `1 source -> 1 output utama`
+- Format source yang harus diprioritaskan sejak awal adalah campuran `.xlsx` dan `.csv`
+- Satu resep bisa memakai banyak master file
+- Kebutuhan lookup dan conditional dipastikan ada, tetapi rule detailnya akan diisi saat breakdown sub-tugas
+- Output target pertama adalah format custom spesifik, bukan sekadar summary generik
+- Browser lokal dibuka dari aplikasi portable untuk mengakses UI
 
 ---
 
-*Dokumen ini adalah PRD final v2.0. Siap dijadikan landasan coding.*
+## 12. Kriteria Sukses MVP
 
+MVP dianggap sukses jika:
 
-dari @prd.md ini. tolong buatkan checklist task plan komprehensif untuk bisa dijadika sumber kebenaran untuk coding junior developer atau model lainnya yang lebih murah.
-- buatkan daftar library atau instalasi yang diperlukan agar saya bisa lakukan instalasi manual tanpa ai (lebih hemat)
-- buatkan daftar skills ai yang dibutuhkan untuk projek ini
-- jika ada yang belum jelas, tanyakan ke saya sebelum koding. buatkan hasilnya di file task-plan.md
+- User bisa upload file `.xlsx` atau `.csv`
+- User bisa memilih config `.yaml`
+- Sistem bisa load banyak master file dari folder `masters/`
+- Sistem bisa menjalankan transformasi utama sesuai config dan use case nyata
+- Sistem menghasilkan file `.xlsx` multi-sheet yang bisa dibuka di Excel
+- Output punya header dan styling dasar
+- UI menampilkan log proses dan error yang jelas
+- Hasil bisa didownload
+- Aplikasi bisa dibundle dan dijalankan di PC Windows lain tanpa install Python
+- Minimal 1 use case nyata lolos validasi user
+
+---
+
+## 13. Hal yang Sengaja Ditunda Detailnya
+
+Bagian ini memang belum dirinci final di PRD karena akan diturunkan saat breakdown task per sub-tugas:
+
+- Rule lookup detail per master
+- Conditional rule detail
+- Formula lanjutan di luar aritmatika sederhana
+- Kolom wajib per use case nyata
+- Bentuk layout output custom final per sheet
+
+Pendekatannya:
+
+- PRD tetap simple dan jelas
+- Detail bisnis diturunkan ke `task-plan.md`
+- Saat sample nyata tersedia, detail rule ditambahkan per sub-tugas, bukan memenuhi PRD dengan banyak pengecualian
+
+---
+
+## 14. Kriteria Siap Coding
+
+Dokumen dianggap cukup siap untuk mulai coding jika:
+
+- Scope MVP tetap seperti di dokumen ini
+- Struktur folder runtime disepakati: `configs/`, `masters/`, `uploads/`, `outputs/`
+- `task-plan.md` dipakai sebagai checklist implementasi utama
+- Rule bisnis detail boleh menyusul per sub-tugas, selama arsitektur dasar sudah mendukungnya
+
+---
+
+*Dokumen ini adalah PRD v2.2 yang disederhanakan dan diperjelas untuk mulai coding MVP.*
