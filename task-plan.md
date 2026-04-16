@@ -2,6 +2,7 @@
 
 Dokumen ini adalah checklist implementasi utama untuk MVP.
 Fokusnya dibuat sederhana, jelas, dan bisa dipakai monitoring progress harian.
+Dokumen ini juga mengikuti pertimbangan bahwa development bisa dilakukan lintas OS, tetapi runtime final dan packaging tetap mengacu ke Windows.
 
 ## Cara Pakai
 
@@ -9,18 +10,29 @@ Fokusnya dibuat sederhana, jelas, dan bisa dipakai monitoring progress harian.
 - Jika ada perubahan scope, update `prd.md` dulu.
 - Jika ada rule bisnis baru dari sample nyata, tambahkan di sub-tugas terkait.
 - Detail lookup, conditional, dan formula lanjutan diisi per use case, tidak perlu dipaksa final dari awal.
+- Anggap Windows sebagai acuan runtime final, walau coding harian bisa dilakukan di Linux atau Windows.
+
+## Prinsip Environment
+
+- [ ] Kode dijaga OS-agnostic sejak awal.
+- [ ] Gunakan `pathlib` atau `os.path`, jangan hardcode path Windows/Linux.
+- [ ] Logic aplikasi tidak bergantung pada shell tertentu.
+- [ ] Perbedaan line ending dan case sensitivity nama file ikut diperhatikan saat development.
+- [ ] Build final `.exe`, `run.bat`, dan uji portable selalu dilakukan di Windows.
 
 ## 1. Gate Awal
 
 - [ ] PRD sudah cukup jelas untuk mulai coding.
 - [ ] Scope MVP sudah dikunci.
 - [ ] Platform target dikunci: Windows 10/11 64-bit.
+- [ ] Environment development boleh Linux atau Windows.
 - [ ] Format output dikunci: 1 file `.xlsx` multi-sheet.
 - [ ] Struktur folder runtime dikunci: `configs/`, `masters/`, `uploads/`, `outputs/`.
 - [ ] Use case awal dikunci: `1 source -> 1 output utama`.
 - [ ] Support source awal dikunci: `.xlsx` dan `.csv`.
 - [ ] Satu resep boleh memakai banyak master file.
 - [ ] Model live log dikunci: polling per awal/akhir sub-tugas.
+- [ ] Disepakati bahwa validasi final runtime dilakukan di Windows.
 
 ## 2. Setup Development
 
@@ -34,6 +46,8 @@ Fokusnya dibuat sederhana, jelas, dan bisa dipakai monitoring progress harian.
 - [ ] Buat `requirements.txt`.
 - [ ] Buat `.gitignore`.
 - [ ] Buat `README.md` setup singkat.
+- [ ] Dokumentasikan langkah setup Linux dan Windows secara terpisah jika ada beda command.
+- [ ] Pastikan `.gitignore` dan editor config aman untuk line ending lintas OS.
 
 ## 3. Install Manual yang Diperlukan
 
@@ -43,6 +57,7 @@ Fokusnya dibuat sederhana, jelas, dan bisa dipakai monitoring progress harian.
 - [ ] Git
 - [ ] VS Code atau editor lain
 - [ ] Chrome atau Edge untuk testing UI lokal
+- [ ] Mesin Windows 10/11 untuk build final dan validasi portable
 
 ### Library Python
 
@@ -75,6 +90,12 @@ CMD:
 .venv\Scripts\activate.bat
 ```
 
+Linux/macOS:
+
+```bash
+source .venv/bin/activate
+```
+
 ## 4. Struktur Proyek
 
 - [ ] Buat folder `app/`.
@@ -90,6 +111,7 @@ CMD:
 - [ ] Buat folder `outputs/`.
 - [ ] Buat folder `tests/`.
 - [ ] Buat file `run.py`.
+- [ ] Siapkan folder atau file config khusus packaging Windows bila diperlukan.
 
 ## 5. Breakdown Fase Implementasi
 
@@ -99,6 +121,7 @@ CMD:
 - [ ] Buat route halaman utama.
 - [ ] Buat template `index.html` awal.
 - [ ] Pastikan app bisa dijalankan lokal.
+- [ ] Pastikan bootstrap path dan lokasi file runtime tidak bergantung separator OS.
 
 Definition of done:
 
@@ -112,6 +135,7 @@ Definition of done:
 - [ ] Buat area log proses.
 - [ ] Buat area hasil/download.
 - [ ] Tambahkan validasi frontend sederhana.
+- [ ] Pastikan alur UI lokal tidak mengasumsikan command pembuka browser tertentu di luar fase packaging.
 
 Definition of done:
 
@@ -125,6 +149,7 @@ Definition of done:
 - [ ] Validasi struktur `masters`.
 - [ ] Validasi struktur `outputs`.
 - [ ] Validasi struktur `styling`.
+- [ ] Normalisasi dan validasi path config agar tetap aman di Linux dan Windows.
 - [ ] Buat error message yang mudah dipahami.
 - [ ] Buat minimal 2 config contoh.
 
@@ -141,6 +166,7 @@ Definition of done:
 - [ ] Validasi sheet source untuk Excel.
 - [ ] Validasi file kosong atau rusak.
 - [ ] Validasi kolom minimum jika dibutuhkan config.
+- [ ] Uji nama file/sheet dengan variasi huruf besar-kecil agar aman lintas OS.
 
 Definition of done:
 
@@ -155,6 +181,7 @@ Definition of done:
 - [ ] Validasi key master ada.
 - [ ] Support banyak master file dalam satu resep.
 - [ ] Siapkan helper merge dasar.
+- [ ] Pastikan resolusi path master tidak bergantung slash atau case tertentu.
 
 Definition of done:
 
@@ -206,6 +233,7 @@ Definition of done:
 - [ ] Terapkan freeze pane.
 - [ ] Validasi nama sheet Excel.
 - [ ] Simpan file ke folder `outputs/`.
+- [ ] Pastikan penulisan file memakai path portable dan aman di Windows.
 
 Definition of done:
 
@@ -233,6 +261,7 @@ Definition of done:
 - [ ] Tulis output Excel.
 - [ ] Tampilkan status sukses/gagal.
 - [ ] Tampilkan link download hasil.
+- [ ] Verifikasi alur lokal di environment development utama.
 
 Definition of done:
 
@@ -266,6 +295,9 @@ Definition of done:
 - [ ] Buat unit test formula/rule engine.
 - [ ] Buat unit test output writer.
 - [ ] Buat minimal 1 integration test.
+- [ ] Jalankan test rutin minimal di 1 environment development.
+- [ ] Jika memungkinkan, ulangi test penting di Linux dan Windows.
+- [ ] Tambahkan test atau checklist untuk path handling dan case sensitivity.
 
 Definition of done:
 
@@ -279,11 +311,14 @@ Definition of done:
 - [ ] Pastikan folder runtime tersedia.
 - [ ] Buat `run.bat`.
 - [ ] Pastikan browser lokal terbuka otomatis.
+- [ ] Lakukan build final PyInstaller di Windows, bukan Linux.
+- [ ] Uji `run.bat` di Windows target.
 - [ ] Uji hasil build di Windows lain.
 
 Definition of done:
 
 - [ ] Folder hasil build bisa dipakai tanpa install Python.
+- [ ] Build final tervalidasi di Windows sebagai target distribusi.
 
 ### Fase 14 - Validasi use case nyata
 
@@ -357,6 +392,7 @@ Bagian ini sengaja disiapkan sebagai placeholder agar saat sample nyata datang, 
 - [ ] Hasil bisa didownload.
 - [ ] Aplikasi bisa dibundle menjadi folder portable Windows.
 - [ ] Hasil build bisa jalan tanpa install Python.
+- [ ] Validasi final upload/download dan folder runtime lolos di Windows.
 - [ ] Minimal 1 use case nyata lolos validasi user.
 
 ## 8. Skills AI yang Dibutuhkan
@@ -385,6 +421,7 @@ Bagian ini sengaja disiapkan sebagai placeholder agar saat sample nyata datang, 
 ## 9. Urutan Eksekusi yang Direkomendasikan
 
 - [ ] Setup environment
+- [ ] Pastikan guardrail portability lintas OS
 - [ ] Buat skeleton Flask dan UI dasar
 - [ ] Buat config loader
 - [ ] Buat source reader
@@ -394,5 +431,6 @@ Bagian ini sengaja disiapkan sebagai placeholder agar saat sample nyata datang, 
 - [ ] Buat output writer
 - [ ] Tambahkan logging dan integrasi end-to-end
 - [ ] Tambahkan testing
-- [ ] Tambahkan packaging
+- [ ] Jalankan validasi lintas OS seperlunya
+- [ ] Tambahkan packaging khusus di Windows
 - [ ] Validasi dengan sample nyata
