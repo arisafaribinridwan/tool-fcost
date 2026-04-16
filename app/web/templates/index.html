@@ -10,20 +10,69 @@
     />
   </head>
   <body>
-    <main class="hero">
-      <section class="hero-panel">
-        <p class="eyebrow">MVP Skeleton</p>
+    <main class="layout">
+      <header class="app-header">
+        <p class="eyebrow">Phase 2 - Basic Web UI</p>
         <h1>{{ app_name }}</h1>
         <p class="subtitle">
-          Fase 1 selesai: Flask app, route utama, template awal, dan static
-          assets sudah siap untuk fase implementasi berikutnya.
+          Upload source, pilih recipe YAML, lalu jalankan dry-run untuk
+          memvalidasi alur sebelum engine transform penuh di fase berikutnya.
         </p>
-        <div class="meta">
-          <span id="build-stamp">Initializing...</span>
-          <span class="dot" aria-hidden="true"></span>
-          <span>Health endpoint: <code>/health</code></span>
+      </header>
+
+      <section class="panel workflow">
+        <h2>Execute Recipe</h2>
+        <form id="execute-form" novalidate>
+          <div class="field">
+            <label for="source-file">Source File (.xlsx / .csv)</label>
+            <input
+              id="source-file"
+              name="source_file"
+              type="file"
+              accept=".xlsx,.csv"
+              required
+            />
+          </div>
+
+          <div class="field">
+            <label for="config-select">Config YAML</label>
+            <select id="config-select" name="config_name" required>
+              <option value="">Loading config list...</option>
+            </select>
+          </div>
+
+          <p class="form-hint">
+            Folder config aktif:
+            <code>configs/</code>
+          </p>
+
+          <div id="form-error" class="form-error" role="alert" hidden></div>
+
+          <button id="execute-btn" type="submit">Execute</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>Process Log</h2>
+        <ul id="process-log" class="log-list" aria-live="polite">
+          <li class="log-item muted">Menunggu aksi execute...</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2>Result</h2>
+        <div id="result-state" class="result-card">
+          <p class="muted">
+            Belum ada hasil. Setelah execute, ringkasan hasil akan muncul di sini.
+          </p>
         </div>
       </section>
+
+      <footer class="app-footer">
+        <span id="build-stamp">Initializing...</span>
+        <span class="dot" aria-hidden="true"></span>
+        <span>Health endpoint: <code>/health</code></span>
+      </footer>
     </main>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
   </body>

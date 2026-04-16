@@ -129,17 +129,17 @@ Definition of done:
 
 ### Fase 2 - Web UI dasar
 
-- [ ] Buat area upload file.
-- [ ] Buat dropdown/list config YAML.
-- [ ] Buat tombol `Execute`.
-- [ ] Buat area log proses.
-- [ ] Buat area hasil/download.
-- [ ] Tambahkan validasi frontend sederhana.
-- [ ] Pastikan alur UI lokal tidak mengasumsikan command pembuka browser tertentu di luar fase packaging.
+- [x] Buat area upload file.
+- [x] Buat dropdown/list config YAML.
+- [x] Buat tombol `Execute`.
+- [x] Buat area log proses.
+- [x] Buat area hasil/download.
+- [x] Tambahkan validasi frontend sederhana.
+- [x] Pastikan alur UI lokal tidak mengasumsikan command pembuka browser tertentu di luar fase packaging.
 
 Definition of done:
 
-- [ ] User bisa melihat alur dasar dari UI walau backend belum lengkap.
+- [x] User bisa melihat alur dasar dari UI walau backend belum lengkap.
 
 ### Fase 3 - Config loader dan schema dasar
 
