@@ -14,25 +14,25 @@ Dokumen ini juga mengikuti pertimbangan bahwa development bisa dilakukan lintas 
 
 ## Prinsip Environment
 
-- [ ] Kode dijaga OS-agnostic sejak awal.
-- [ ] Gunakan `pathlib` atau `os.path`, jangan hardcode path Windows/Linux.
-- [ ] Logic aplikasi tidak bergantung pada shell tertentu.
-- [ ] Perbedaan line ending dan case sensitivity nama file ikut diperhatikan saat development.
+- [x] Kode dijaga OS-agnostic sejak awal.
+- [x] Gunakan `pathlib` atau `os.path`, jangan hardcode path Windows/Linux.
+- [x] Logic aplikasi tidak bergantung pada shell tertentu.
+- [x] Perbedaan line ending dan case sensitivity nama file ikut diperhatikan saat development.
 - [ ] Build final `.exe`, `run.bat`, dan uji portable selalu dilakukan di Windows.
 
 ## 1. Gate Awal
 
-- [ ] PRD sudah cukup jelas untuk mulai coding.
-- [ ] Scope MVP sudah dikunci.
-- [ ] Platform target dikunci: Windows 10/11 64-bit.
-- [ ] Environment development boleh Linux atau Windows.
-- [ ] Format output dikunci: 1 file `.xlsx` multi-sheet.
-- [ ] Struktur folder runtime dikunci: `configs/`, `masters/`, `uploads/`, `outputs/`.
-- [ ] Use case awal dikunci: `1 source -> 1 output utama`.
-- [ ] Support source awal dikunci: `.xlsx` dan `.csv`.
-- [ ] Satu resep boleh memakai banyak master file.
-- [ ] Model live log dikunci: polling per awal/akhir sub-tugas.
-- [ ] Disepakati bahwa validasi final runtime dilakukan di Windows.
+- [x] PRD sudah cukup jelas untuk mulai coding.
+- [x] Scope MVP sudah dikunci.
+- [x] Platform target dikunci: Windows 10/11 64-bit.
+- [x] Environment development boleh Linux atau Windows.
+- [x] Format output dikunci: 1 file `.xlsx` multi-sheet.
+- [x] Struktur folder runtime dikunci: `configs/`, `masters/`, `uploads/`, `outputs/`.
+- [x] Use case awal dikunci: `1 source -> 1 output utama`.
+- [x] Support source awal dikunci: `.xlsx` dan `.csv`.
+- [x] Satu resep boleh memakai banyak master file.
+- [x] Model live log dikunci: polling per awal/akhir sub-tugas.
+- [x] Disepakati bahwa validasi final runtime dilakukan di Windows.
 
 ## 2. Setup Development
 
@@ -98,34 +98,34 @@ source .venv/bin/activate
 
 ## 4. Struktur Proyek
 
-- [ ] Buat folder `app/`.
-- [ ] Buat folder `app/web/`.
-- [ ] Buat folder `app/web/templates/`.
-- [ ] Buat folder `app/web/static/css/`.
-- [ ] Buat folder `app/web/static/js/`.
-- [ ] Buat folder `app/services/`.
-- [ ] Buat folder `app/utils/`.
-- [ ] Buat folder `configs/`.
-- [ ] Buat folder `masters/`.
-- [ ] Buat folder `uploads/`.
-- [ ] Buat folder `outputs/`.
-- [ ] Buat folder `tests/`.
-- [ ] Buat file `run.py`.
+- [x] Buat folder `app/`.
+- [x] Buat folder `app/web/`.
+- [x] Buat folder `app/web/templates/`.
+- [x] Buat folder `app/web/static/css/`.
+- [x] Buat folder `app/web/static/js/`.
+- [x] Buat folder `app/services/`.
+- [x] Buat folder `app/utils/`.
+- [x] Buat folder `configs/`.
+- [x] Buat folder `masters/`.
+- [x] Buat folder `uploads/`.
+- [x] Buat folder `outputs/`.
+- [x] Buat folder `tests/`.
+- [x] Buat file `run.py`.
 - [ ] Siapkan folder atau file config khusus packaging Windows bila diperlukan.
 
 ## 5. Breakdown Fase Implementasi
 
 ### Fase 1 - Skeleton aplikasi
 
-- [ ] Buat app Flask dasar.
-- [ ] Buat route halaman utama.
-- [ ] Buat template `index.html` awal.
-- [ ] Pastikan app bisa dijalankan lokal.
-- [ ] Pastikan bootstrap path dan lokasi file runtime tidak bergantung separator OS.
+- [x] Buat app Flask dasar.
+- [x] Buat route halaman utama.
+- [x] Buat template `index.html` awal.
+- [x] Pastikan app bisa dijalankan lokal.
+- [x] Pastikan bootstrap path dan lokasi file runtime tidak bergantung separator OS.
 
 Definition of done:
 
-- [ ] Halaman utama tampil di browser lokal.
+- [x] Halaman utama tampil di browser lokal.
 
 ### Fase 2 - Web UI dasar
 

@@ -44,4 +44,4 @@ pip install -r requirements.txt
 
 - Virtual environment `.venv` sudah dipakai untuk setup lokal.
 - Dependency utama sudah didaftarkan di `requirements.txt`.
-- Struktur aplikasi inti belum dibuat; langkah berikutnya adalah mulai fase skeleton aplikasi.
+- Struktur folder inti dan skeleton Flask fase awal sudah siap.
