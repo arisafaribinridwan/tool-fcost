@@ -41,10 +41,44 @@ def validate_config_payload(payload: object) -> tuple[str, ...]:
     if "outputs" in payload:
         if not isinstance(outputs, list) or len(outputs) == 0:
             errors.append("Field 'outputs' wajib berupa list dan minimal 1 item.")
+        else:
+            for idx, item in enumerate(outputs):
+                if not isinstance(item, dict):
+                    errors.append(
+                        f"outputs[{idx}] harus berupa object dengan sheet_name dan rule output."
+                    )
+                    continue
+                if "sheet_name" not in item:
+                    errors.append(f"outputs[{idx}] wajib memiliki field 'sheet_name'.")
+                has_columns = "columns" in item
+                has_pivot = "pivot" in item
+                if not has_columns and not has_pivot:
+                    errors.append(
+                        f"outputs[{idx}] wajib memiliki minimal salah satu: 'columns' atau 'pivot'."
+                    )
+                if has_columns and not isinstance(item.get("columns"), list):
+                    errors.append(f"outputs[{idx}].columns harus berupa list.")
+                if has_pivot and not isinstance(item.get("pivot"), dict):
+                    errors.append(f"outputs[{idx}].pivot harus berupa object.")
 
     masters = payload.get("masters")
-    if masters is not None and not isinstance(masters, list):
-        errors.append("Field 'masters' harus berupa list jika diisi.")
+    if masters is not None:
+        if not isinstance(masters, list):
+            errors.append("Field 'masters' harus berupa list jika diisi.")
+        else:
+            for idx, item in enumerate(masters):
+                if not isinstance(item, dict):
+                    errors.append(
+                        f"masters[{idx}] harus berupa object berisi file, key, dan columns."
+                    )
+                    continue
+                for required in ("file", "key"):
+                    if required not in item:
+                        errors.append(
+                            f"masters[{idx}] wajib memiliki field '{required}'."
+                        )
+                if "columns" in item and not isinstance(item.get("columns"), list):
+                    errors.append(f"masters[{idx}].columns harus berupa list.")
 
     styling = payload.get("styling")
     if styling is not None and not isinstance(styling, dict):
@@ -91,3 +125,20 @@ def load_config_summary(path: Path) -> ConfigSummary:
 
 def discover_configs(configs_dir: Path) -> list[ConfigSummary]:
     return [load_config_summary(path) for path in list_config_files(configs_dir)]
+
+
+def load_config_payload(path: Path) -> dict:
+    try:
+        payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise ValueError(f"Gagal membaca config: {exc}") from exc
+    except yaml.YAMLError as exc:
+        raise ValueError(f"Format YAML tidak valid: {exc}") from exc
+
+    if payload is None:
+        payload = {}
+
+    errors = validate_config_payload(payload)
+    if errors:
+        raise ValueError("Config tidak valid: " + "; ".join(errors))
+    return payload

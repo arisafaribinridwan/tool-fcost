@@ -1,0 +1,150 @@
+from __future__ import annotations
+
+from datetime import datetime
+from pathlib import Path
+import re
+
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+import pandas as pd
+
+
+INVALID_SHEET_CHARS = re.compile(r"[:\\/?*\[\]]")
+
+
+def sanitize_sheet_name(raw_name: str, used_names: set[str]) -> str:
+    cleaned = INVALID_SHEET_CHARS.sub("_", raw_name).strip()
+    if not cleaned:
+        cleaned = "Sheet"
+    cleaned = cleaned[:31]
+
+    candidate = cleaned
+    suffix = 2
+    while candidate in used_names:
+        marker = f"_{suffix}"
+        candidate = f"{cleaned[: 31 - len(marker)]}{marker}"
+        suffix += 1
+    used_names.add(candidate)
+    return candidate
+
+
+def _build_period_text(source_df: pd.DataFrame, header_cfg: dict) -> str:
+    period_col = header_cfg.get("period_from_column")
+    if not isinstance(period_col, str) or period_col not in source_df.columns:
+        return "Periode: -"
+
+    parsed = pd.to_datetime(source_df[period_col], errors="coerce")
+    parsed = parsed.dropna()
+    if parsed.empty:
+        return "Periode: -"
+
+    start = parsed.min().strftime("%d/%m/%Y")
+    end = parsed.max().strftime("%d/%m/%Y")
+    return f"Periode: {start} - {end}"
+
+
+def _apply_worksheet_style(
+    worksheet,
+    frame: pd.DataFrame,
+    startrow: int,
+    styling_cfg: dict,
+) -> None:
+    header_row = startrow + 1
+    data_first_row = header_row + 1
+    data_last_row = header_row + len(frame)
+    max_col = max(1, len(frame.columns))
+
+    header_color = str(styling_cfg.get("header_color", "4472C4")).upper()
+    header_fill = PatternFill(fill_type="solid", fgColor=header_color)
+    header_font = Font(
+        name=str(styling_cfg.get("font", "Calibri")),
+        bold=True,
+        color="FFFFFF",
+    )
+    default_font = Font(name=str(styling_cfg.get("font", "Calibri")))
+    border = Border(
+        left=Side(style="thin", color="D9D9D9"),
+        right=Side(style="thin", color="D9D9D9"),
+        top=Side(style="thin", color="D9D9D9"),
+        bottom=Side(style="thin", color="D9D9D9"),
+    )
+
+    for col_idx in range(1, max_col + 1):
+        header_cell = worksheet.cell(row=header_row, column=col_idx)
+        header_cell.fill = header_fill
+        header_cell.font = header_font
+        header_cell.alignment = Alignment(horizontal="center", vertical="center")
+        header_cell.border = border
+
+        if len(frame.columns) >= col_idx:
+            column_name = frame.columns[col_idx - 1]
+            sample_size = min(100, len(frame))
+            max_len = max(
+                [len(str(column_name))]
+                + [len(str(value)) for value in frame[column_name].head(sample_size)]
+            )
+            worksheet.column_dimensions[header_cell.column_letter].width = min(
+                max(10, max_len + 2),
+                48,
+            )
+
+    if len(frame) == 0:
+        worksheet.freeze_panes = styling_cfg.get("freeze_pane", "A5")
+        return
+
+    date_format = str(styling_cfg.get("date_format", "DD/MM/YYYY"))
+    number_format = str(styling_cfg.get("number_format", "#,##0"))
+
+    for row_idx in range(data_first_row, data_last_row + 1):
+        for col_idx in range(1, max_col + 1):
+            cell = worksheet.cell(row=row_idx, column=col_idx)
+            cell.border = border
+            cell.font = default_font
+
+    for col_idx, column_name in enumerate(frame.columns, start=1):
+        series = frame[column_name]
+        if pd.api.types.is_datetime64_any_dtype(series):
+            for row_idx in range(data_first_row, data_last_row + 1):
+                worksheet.cell(row=row_idx, column=col_idx).number_format = date_format
+        elif pd.api.types.is_numeric_dtype(series):
+            for row_idx in range(data_first_row, data_last_row + 1):
+                worksheet.cell(row=row_idx, column=col_idx).number_format = number_format
+
+    worksheet.freeze_panes = styling_cfg.get("freeze_pane", "A5")
+
+
+def write_output_workbook(
+    output_sheets: dict[str, pd.DataFrame],
+    output_path: Path,
+    report_title: str,
+    header_cfg: dict,
+    styling_cfg: dict,
+    source_df: pd.DataFrame,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    period_text = _build_period_text(source_df, header_cfg)
+    used_sheet_names: set[str] = set()
+
+    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+        for raw_sheet_name, frame in output_sheets.items():
+            sheet_name = sanitize_sheet_name(raw_sheet_name, used_sheet_names)
+            startrow = 3
+            frame.to_excel(writer, sheet_name=sheet_name, index=False, startrow=startrow)
+            worksheet = writer.sheets[sheet_name]
+
+            worksheet["A1"] = report_title
+            worksheet["A2"] = period_text
+            worksheet["A3"] = f"Dibuat: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+            worksheet["A1"].font = Font(
+                name=str(styling_cfg.get("font", "Calibri")),
+                bold=True,
+                size=14,
+            )
+            worksheet["A2"].font = Font(name=str(styling_cfg.get("font", "Calibri")))
+            worksheet["A3"].font = Font(name=str(styling_cfg.get("font", "Calibri")))
+
+            _apply_worksheet_style(
+                worksheet=worksheet,
+                frame=frame,
+                startrow=startrow,
+                styling_cfg=styling_cfg,
+            )
