@@ -1,0 +1,512 @@
+name: "Monthly Report Final Recipe"
+version: 1
+status: "canonical_draft_for_recipe_engine"
+
+source_documents:
+  - "docs/batch1-finalization.md"
+  - "docs/batch2-finalization.md"
+  - "docs/sub4-finalization.md"
+  - "docs/sub10-finalization.md"
+  - "docs/batch4-finalization.md"
+  - "docs/batch5-finalization.md"
+
+notes:
+  - "File ini adalah recipe YAML kanonik yang menurunkan seluruh keputusan final dari docs/ ke satu urutan step."
+  - "Schema ini sengaja mengikuti bentuk step-based recipe dari dokumen finalisasi, bukan schema legacy config runtime saat ini."
+  - "sub-17 adalah ekstensi repo yang sudah disepakati, walaupun belum tertulis pada workbook proses referensi."
+
+integration_assumptions:
+  - "Urutan global menempatkan sub-9 dan sub-10 sebelum sub-7 agar total_cost dihitung dari biaya final setelah duplicate handling."
+  - "Untuk GQS non-winner pada sub-10, biaya di-reset ke 0 agar hasil tetap numerik dan stabil."
+  - "Kolom defect ditempatkan setelah defect_category karena sub-17 diposisikan sebagai langkah lanjutan dari sub-16."
+
+datasets:
+  working_dataset: "result"
+  canonical_columns:
+    - "notification"
+    - "job_sheet_section"
+    - "malfunction_start_date"
+    - "basic_finish_date"
+    - "model_name"
+    - "category"
+    - "serial_number"
+    - "symptom_code"
+    - "symptom_code_description"
+    - "pmacttype"
+    - "pmacttype_description"
+    - "symptom_comment"
+    - "repair_comment"
+    - "description"
+    - "warranty"
+    - "planner_group"
+    - "branch"
+    - "purchased_date"
+    - "labor_cost"
+    - "transportation_cost"
+    - "parts_cost"
+    - "part_used"
+    - "section"
+    - "prod_month"
+    - "inch"
+    - "total_cost"
+    - "diff_month"
+    - "part_name"
+    - "panel_usage"
+    - "factory"
+    - "symptom"
+    - "action"
+    - "defect_category"
+    - "defect"
+
+masters:
+  - file: "masters/master_table.xlsx"
+    sheets:
+      - "part_list"
+      - "panel_usage"
+      - "factory"
+      - "symptom"
+      - "branch"
+      - "action"
+      - "defect_category"
+
+steps:
+  - id: "sub_1_copy_gqs"
+    type: "extract_sheet"
+    sheet_selector:
+      contains: "GQS"
+      case_sensitive: false
+      pick: "first"
+    header_locator:
+      type: "required_columns"
+      scan_rows: [1, 15]
+      case_sensitive: false
+      normalize: true
+      required:
+        - "Notification"
+        - "Category"
+        - "Serial Number"
+        - "Labor Cost"
+    filters:
+      - column: "Category"
+        equals: "LCD SEID"
+    select:
+      "Notification": "notification"
+      "Job Sheet Section": "job_sheet_section"
+      "Malfunction Start Date": "malfunction_start_date"
+      "Basic Finish Date": "basic_finish_date"
+      "Model Name": "model_name"
+      "Category": "category"
+      "Serial Number": "serial_number"
+      "Symptom Code": "symptom_code"
+      "Symptom Code (Description)": "symptom_code_description"
+      "PMActType": "pmacttype"
+      "PMActType (Description)": "pmacttype_description"
+      "Symptom Comment": "symptom_comment"
+      "Repair Comment": "repair_comment"
+      "Description": "description"
+      "Warranty": "warranty"
+      "Planner Group": "planner_group"
+      "cabang": "branch"
+      "Purchased Date": "purchased_date"
+      "Labor Cost": "labor_cost"
+      "Transportation Cost": "transportation_cost"
+      "Parts Cost": "parts_cost"
+      "Part used": "part_used"
+    write_to: "result"
+    mode: "replace"
+
+  - id: "sub_2_copy_sass"
+    type: "extract_sheet"
+    sheet_selector:
+      contains: "SASS"
+      case_sensitive: false
+      pick: "first"
+    header_locator:
+      type: "required_columns"
+      scan_rows: [1, 15]
+      case_sensitive: false
+      normalize: true
+      required:
+        - "No Claim"
+        - "Category"
+        - "Serial No"
+        - "Service Fee"
+    filters:
+      - column: "Category"
+        equals: "LCD SEID"
+    select:
+      "No Claim": "notification"
+      "QTY Claim": "job_sheet_section"
+      "Receive": "malfunction_start_date"
+      "Finish": "basic_finish_date"
+      "Model": "model_name"
+      "Category": "category"
+      "Serial No": "serial_number"
+      "Damage": "symptom_comment"
+      "Part Replacement": "repair_comment"
+      "Branch": "branch"
+      "Purchase": "purchased_date"
+      "Service Fee": "labor_cost"
+      "Transport Cost": "transportation_cost"
+      "Part": "parts_cost"
+      "Part Code": "part_used"
+    fill_missing:
+      "symptom_code": null
+      "symptom_code_description": null
+      "pmacttype": null
+      "pmacttype_description": null
+      "description": null
+      "warranty": null
+      "planner_group": null
+    write_to: "result"
+    mode: "append"
+
+  - id: "sub_3_add_section"
+    type: "derive_column"
+    target: "section"
+    expression:
+      case:
+        - when:
+            len_eq:
+              column: "notification"
+              value: 9
+          then: "GQS"
+        - else: "SASS"
+
+  - id: "sub_4_normalize_gqs_costs"
+    type: "update_columns"
+    when:
+      column: "section"
+      equals: "GQS"
+    updates:
+      "labor_cost":
+        multiply:
+          column: "labor_cost"
+          value: 100
+      "transportation_cost":
+        multiply:
+          column: "transportation_cost"
+          value: 100
+      "parts_cost":
+        multiply:
+          column: "parts_cost"
+          value: 100
+
+  - id: "sub_5_add_prod_month"
+    type: "derive_column"
+    target: "prod_month"
+    expression:
+      substring:
+        column: "serial_number"
+        start: 5
+        length: 3
+    on_short_input: null
+
+  - id: "sub_6_add_inch"
+    type: "derive_column"
+    target: "inch"
+    expression:
+      case:
+        - when:
+            starts_with:
+              column: "model_name"
+              value: "L"
+          then:
+            substring:
+              column: "model_name"
+              start: 2
+              length: 2
+        - else:
+            substring:
+              column: "model_name"
+              start: 3
+              length: 2
+    on_short_input: null
+
+  - id: "sub_9_add_part_name"
+    type: "lookup_exact"
+    source_column: "part_used"
+    target_column: "part_name"
+    master:
+      file: "masters/master_table.xlsx"
+      sheet: "part_list"
+      key: "part_used"
+      value: "part_name"
+    matching:
+      trim: true
+      case_sensitive: true
+    on_blank_source: null
+    on_missing_match: "N/A"
+
+  - id: "sub_10_resolve_duplicate_notifications"
+    type: "duplicate_group_rewrite"
+    group_by: "notification"
+    section_column: "section"
+    dispatch:
+      SASS:
+        winner_selection:
+          type: "max_column"
+          column: "parts_cost"
+          tie_breakers:
+            - type: "max_column"
+              column: "job_sheet_section"
+            - type: "first_row"
+        winner_updates:
+          "job_sheet_section":
+            set: 1
+          "labor_cost":
+            aggregate: "sum_group"
+          "transportation_cost":
+            aggregate: "sum_group"
+          "parts_cost":
+            keep_original: true
+        loser_updates:
+          "job_sheet_section":
+            set: 0
+          "labor_cost":
+            set: 0
+          "transportation_cost":
+            set: 0
+          "parts_cost":
+            keep_original: true
+      GQS:
+        required_columns:
+          - "part_name"
+        signature:
+          type: "sorted_part_name_set"
+        winner_rules:
+          - priority: 10
+            parts_signature: ["PANEL", "TAPE"]
+            winner_part_name: "PANEL"
+          - priority: 20
+            parts_signature: ["MAIN_UNIT", "PANEL"]
+            winner_part_name: "PANEL"
+          - priority: 30
+            parts_signature: ["LED_BAR", "PANEL"]
+            winner_part_name: "PANEL"
+          - priority: 40
+            parts_signature: ["MAIN_UNIT", "POWER_UNIT"]
+            winner_part_name: "MAIN_UNIT"
+          - priority: 50
+            parts_signature: ["LVDS_WIRE", "PANEL", "PART_KIT", "TCON_UNIT"]
+            winner_part_name: "PANEL"
+        winner_updates:
+          "job_sheet_section":
+            set: 1
+          "labor_cost":
+            aggregate: "sum_group"
+          "transportation_cost":
+            aggregate: "sum_group"
+          "parts_cost":
+            aggregate: "sum_group"
+        loser_updates:
+          "job_sheet_section":
+            set: 0
+          "labor_cost":
+            set: 0
+          "transportation_cost":
+            set: 0
+          "parts_cost":
+            set: 0
+        on_unmatched_signature: "warn_and_keep_group"
+
+  - id: "sub_7_add_total_cost"
+    type: "derive_column"
+    target: "total_cost"
+    expression:
+      add:
+        columns:
+          - "labor_cost"
+          - "transportation_cost"
+          - "parts_cost"
+        null_as_zero: true
+
+  - id: "sub_8_add_diff_month"
+    type: "derive_column"
+    target: "diff_month"
+    expression:
+      ceil:
+        value:
+          divide:
+            left:
+              date_diff_days:
+                start_column: "purchased_date"
+                end_column: "malfunction_start_date"
+            right: 30
+    on_missing_input: null
+
+  - id: "sub_11_add_panel_usage"
+    type: "map_ranges"
+    source_column: "diff_month"
+    target_column: "panel_usage"
+    ranges:
+      - lte: 12
+        value: "< 1 Year"
+      - lte: 24
+        value: "1 - 2 Years"
+      - lte: 36
+        value: "2 - 3 Years"
+      - gte: 37
+        value: "> 3 Years"
+    on_blank_source: null
+
+  - id: "sub_12_add_factory"
+    type: "lookup_exact"
+    source_column: "model_name"
+    target_column: "factory"
+    master:
+      file: "masters/master_table.xlsx"
+      sheet: "factory"
+      key: "model_name"
+      value: "factory"
+    matching:
+      trim: true
+      case_sensitive: true
+    on_missing_match: "N/A"
+
+  - id: "sub_13_add_symptom"
+    type: "lookup_rules"
+    inputs:
+      - "part_name"
+      - "symptom_comment"
+    target_column: "symptom"
+    master:
+      file: "masters/master_table.xlsx"
+      sheet: "symptom"
+      value: "symptom"
+    matching:
+      order: "top_to_bottom"
+      first_match_wins: true
+      matchers:
+        - source: "part_name"
+          master: "part_name"
+          mode: "equals"
+          normalize:
+            trim: true
+            case_sensitive: true
+        - source: "symptom_comment"
+          master: "symptom_comment"
+          mode: "contains"
+          normalize:
+            trim: true
+            case_sensitive: false
+            wildcard: "*"
+            alternative_separator: " / "
+    on_missing_match: null
+
+  - id: "sub_14_normalize_branch"
+    type: "lookup_exact_replace"
+    source_column: "branch"
+    target_column: "branch"
+    master:
+      file: "masters/master_table.xlsx"
+      sheet: "branch"
+      key: "init"
+      value: "branch"
+    matching:
+      trim: true
+      case_sensitive: true
+    on_missing_match: "keep_original"
+
+  - id: "sub_15_add_action"
+    type: "lookup_rules"
+    inputs:
+      - "part_name"
+      - "repair_comment"
+    target_column: "action"
+    master:
+      file: "masters/master_table.xlsx"
+      sheet: "action"
+      value: "action"
+    matching:
+      order: "top_to_bottom"
+      first_match_wins: true
+      matchers:
+        - source: "part_name"
+          master: "part_name"
+          mode: "equals"
+          normalize:
+            trim: true
+            case_sensitive: false
+            blank_as_wildcard: true
+        - source: "repair_comment"
+          master: "repair_comment"
+          mode: "contains"
+          normalize:
+            trim: true
+            case_sensitive: false
+            wildcard: "*"
+            blank_as_wildcard: true
+    on_missing_match: null
+
+  - id: "sub_16_add_defect_category"
+    type: "lookup_exact"
+    source_column: "action"
+    target_column: "defect_category"
+    master:
+      file: "masters/master_table.xlsx"
+      sheet: "defect_category"
+      key: "Repair Action"
+      value: "Category"
+    matching:
+      trim: true
+      case_sensitive: false
+      normalizer: "compact_text"
+      aliases:
+        "replace_remote_control": "Replace Remote"
+    on_missing_match: null
+
+  - id: "sub_17_add_defect"
+    type: "lookup_exact"
+    source_column: "action"
+    target_column: "defect"
+    master:
+      file: "masters/master_table.xlsx"
+      sheet: "defect_category"
+      key: "Repair Action"
+      value: "Defect"
+    matching:
+      trim: true
+      case_sensitive: false
+      normalizer: "compact_text"
+      aliases:
+        "replace_remote_control": "Replace Remote"
+    on_missing_match: null
+
+outputs:
+  - sheet_name: "result"
+    columns:
+      - "notification"
+      - "job_sheet_section"
+      - "malfunction_start_date"
+      - "basic_finish_date"
+      - "model_name"
+      - "category"
+      - "serial_number"
+      - "symptom_code"
+      - "symptom_code_description"
+      - "pmacttype"
+      - "pmacttype_description"
+      - "symptom_comment"
+      - "repair_comment"
+      - "description"
+      - "warranty"
+      - "planner_group"
+      - "branch"
+      - "purchased_date"
+      - "labor_cost"
+      - "transportation_cost"
+      - "parts_cost"
+      - "part_used"
+      - "section"
+      - "prod_month"
+      - "inch"
+      - "total_cost"
+      - "diff_month"
+      - "part_name"
+      - "panel_usage"
+      - "factory"
+      - "symptom"
+      - "action"
+      - "defect_category"
+      - "defect"

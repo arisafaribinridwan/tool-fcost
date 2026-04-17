@@ -174,3 +174,239 @@ def test_run_pipeline_raises_when_excel_sheet_missing(app_paths):
             config_path=config_path,
             log=lambda _: None,
         )
+
+
+def test_run_pipeline_supports_ordered_rules_master_for_action(app_paths):
+    source_path = app_paths.project_root / "source.csv"
+    pd.DataFrame(
+        [
+            {"part_name": "AC_CORD", "repair_comment": "need ext support"},
+            {"part_name": "panel", "repair_comment": "replace unit"},
+            {"part_name": "MAIN_UNIT", "repair_comment": "UPGRADE firmware"},
+            {"part_name": "Other", "repair_comment": "dibawa customer"},
+            {"part_name": "Other", "repair_comment": "unknown"},
+        ]
+    ).to_csv(source_path, index=False)
+
+    master_path = app_paths.masters_dir / "master_table.xlsx"
+    with pd.ExcelWriter(master_path) as writer:
+        pd.DataFrame(
+            [
+                {"part_name": None, "repair_comment": "*ext", "action": "external"},
+                {"part_name": "PANEL", "repair_comment": "*", "action": "replace_panel"},
+                {
+                    "part_name": "MAIN_UNIT",
+                    "repair_comment": "*",
+                    "action": "replace_main_unit",
+                },
+                {"part_name": None, "repair_comment": "*bawa", "action": "ZY"},
+                {"part_name": None, "repair_comment": "UPGRADE", "action": "upgrade"},
+            ]
+        ).to_excel(writer, index=False, sheet_name="action")
+
+    config_path = app_paths.configs_dir / "batch5_action.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Batch 5 Action"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Batch 5 Action"',
+                "masters:",
+                '  - file: "masters/master_table.xlsx"',
+                '    sheet_name: "action"',
+                '    strategy: "ordered_rules"',
+                '    target_column: "action"',
+                '    value_column: "action"',
+                "    matchers:",
+                '      - source: "part_name"',
+                '        master: "part_name"',
+                '        mode: "equals"',
+                '      - source: "repair_comment"',
+                '        master: "repair_comment"',
+                '        mode: "contains"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "part_name"',
+                '      - "repair_comment"',
+                '      - "action"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _: None,
+    )
+
+    detail_df = pd.read_excel(result.output_path, sheet_name="Detail", skiprows=3)
+
+    assert detail_df["action"].fillna("").tolist() == [
+        "external",
+        "replace_panel",
+        "replace_main_unit",
+        "ZY",
+        "",
+    ]
+
+
+def test_run_pipeline_supports_lookup_for_defect_category_from_action(app_paths):
+    source_path = app_paths.project_root / "source.csv"
+    pd.DataFrame(
+        [
+            {"action": "replace_panel"},
+            {"action": "factory_reset"},
+            {"action": "replace_remote_control"},
+            {"action": "cancel"},
+            {"action": "external"},
+            {"action": "unknown_action"},
+        ]
+    ).to_csv(source_path, index=False)
+
+    master_path = app_paths.masters_dir / "master_table.xlsx"
+    with pd.ExcelWriter(master_path) as writer:
+        pd.DataFrame(
+            [
+                {"Repair Action": "Replace Panel", "Category": "Defect"},
+                {"Repair Action": "Factory Reset", "Category": "Defect"},
+                {"Repair Action": "Replace Remote", "Category": "Defect"},
+                {"Repair Action": "Cancel", "Category": "N/A"},
+                {"Repair Action": "External", "Category": "N/A"},
+            ]
+        ).to_excel(writer, index=False, sheet_name="defect_category")
+
+    config_path = app_paths.configs_dir / "batch5_defect_category.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Batch 5 Defect Category"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Batch 5 Defect Category"',
+                "masters:",
+                '  - file: "masters/master_table.xlsx"',
+                '    sheet_name: "defect_category"',
+                '    source_key: "action"',
+                '    master_key: "Repair Action"',
+                '    key_normalizer: "compact_text"',
+                "    key_aliases:",
+                '      replace_remote_control: "Replace Remote"',
+                "    columns:",
+                '      - "Category"',
+                "    rename_columns:",
+                '      Category: "defect_category"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "action"',
+                '      - "defect_category"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _: None,
+    )
+
+    detail_df = pd.read_excel(
+        result.output_path,
+        sheet_name="Detail",
+        skiprows=3,
+        keep_default_na=False,
+    )
+
+    assert detail_df["defect_category"].tolist() == [
+        "Defect",
+        "Defect",
+        "Defect",
+        "N/A",
+        "N/A",
+        "",
+    ]
+
+
+def test_run_pipeline_supports_lookup_for_defect_from_action(app_paths):
+    source_path = app_paths.project_root / "source.csv"
+    pd.DataFrame(
+        [
+            {"action": "replace_panel"},
+            {"action": "factory_reset"},
+            {"action": "replace_remote_control"},
+            {"action": "cancel"},
+            {"action": "external"},
+            {"action": "unknown_action"},
+        ]
+    ).to_csv(source_path, index=False)
+
+    master_path = app_paths.masters_dir / "master_table.xlsx"
+    with pd.ExcelWriter(master_path) as writer:
+        pd.DataFrame(
+            [
+                {"Repair Action": "Replace Panel", "Defect": "Panel"},
+                {"Repair Action": "Factory Reset", "Defect": "Software"},
+                {"Repair Action": "Replace Remote", "Defect": "Other"},
+                {"Repair Action": "Cancel", "Defect": "N/A"},
+                {"Repair Action": "External", "Defect": "N/A"},
+            ]
+        ).to_excel(writer, index=False, sheet_name="defect_category")
+
+    config_path = app_paths.configs_dir / "batch5_defect.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Batch 5 Defect"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Batch 5 Defect"',
+                "masters:",
+                '  - file: "masters/master_table.xlsx"',
+                '    sheet_name: "defect_category"',
+                '    source_key: "action"',
+                '    master_key: "Repair Action"',
+                '    key_normalizer: "compact_text"',
+                "    key_aliases:",
+                '      replace_remote_control: "Replace Remote"',
+                "    columns:",
+                '      - "Defect"',
+                "    rename_columns:",
+                '      Defect: "defect"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "action"',
+                '      - "defect"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _: None,
+    )
+
+    detail_df = pd.read_excel(
+        result.output_path,
+        sheet_name="Detail",
+        skiprows=3,
+        keep_default_na=False,
+    )
+
+    assert detail_df["defect"].tolist() == [
+        "Panel",
+        "Software",
+        "Other",
+        "N/A",
+        "N/A",
+        "",
+    ]
