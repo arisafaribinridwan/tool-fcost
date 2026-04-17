@@ -6,7 +6,7 @@ Dokumen ini mengikuti keputusan baru bahwa UI memakai `CustomTkinter`, sementara
 
 Status sinkronisasi terakhir:
 
-- Checklist sudah diselaraskan dengan skeleton desktop `CustomTkinter` dan helper dasar yang saat ini ada di repo.
+- Checklist diselaraskan dengan progres implementasi terbaru termasuk engine `Execute` real (lihat PR #9).
 - Item yang dicentang berarti sudah terimplementasi atau sudah diverifikasi lewat test dasar.
 - Item yang masih kosong berarti belum selesai, belum terhubung end-to-end, atau belum divalidasi lintas OS target runtime final.
 
@@ -133,7 +133,7 @@ source .venv/bin/activate
 
 Definition of done:
 
-- [ ] Window utama tampil dan aplikasi bisa dibuka lokal.
+- [x] Window utama tampil dan aplikasi bisa dibuka lokal.
 
 ### Fase 2 - Desktop UI dasar
 
@@ -168,10 +168,10 @@ Definition of done:
 
 ### Fase 4 - Source reader
 
-- [ ] Implement reader `.xlsx`.
-- [ ] Implement reader `.csv`.
+- [x] Implement reader `.xlsx`.
+- [x] Implement reader `.csv`.
 - [x] Validasi ekstensi file.
-- [ ] Validasi sheet source untuk Excel.
+- [x] Validasi sheet source untuk Excel.
 - [ ] Validasi file kosong atau rusak.
 - [x] Salin source ke folder `uploads/` bila memang dipakai sebagai jejak runtime.
 - [ ] Validasi kolom minimum jika dibutuhkan config.
@@ -179,36 +179,36 @@ Definition of done:
 
 Definition of done:
 
-- [ ] File source `.xlsx` dan `.csv` bisa dibaca ke DataFrame.
+- [x] File source `.xlsx` dan `.csv` bisa dibaca ke DataFrame.
 
 ### Fase 5 - Master loader
 
-- [ ] Implement loader master `.xlsx`.
-- [ ] Implement loader master `.csv`.
-- [ ] Validasi file master ada.
-- [ ] Validasi path aman dan tidak path traversal.
-- [ ] Validasi key master ada.
-- [ ] Support banyak master file dalam satu resep.
-- [ ] Siapkan helper merge dasar.
-- [ ] Pastikan resolusi path master tidak bergantung slash atau case tertentu.
+- [x] Implement loader master `.xlsx`.
+- [x] Implement loader master `.csv`.
+- [x] Validasi file master ada.
+- [x] Validasi path aman dan tidak path traversal.
+- [x] Validasi key master ada.
+- [x] Support banyak master file dalam satu resep.
+- [x] Siapkan helper merge dasar.
+- [x] Pastikan resolusi path master tidak bergantung slash atau case tertentu.
 
 Definition of done:
 
-- [ ] Banyak master bisa dibaca dan siap dipakai transformasi.
+- [x] Banyak master bisa dibaca dan siap dipakai transformasi.
 
 ### Fase 6 - Transform engine dasar
 
 - [ ] Implement filter data.
-- [ ] Implement pilih kolom output.
-- [ ] Implement rename kolom bila diperlukan.
-- [ ] Implement merge/mapping ala lookup.
+- [x] Implement pilih kolom output.
+- [x] Implement rename kolom bila diperlukan.
+- [x] Implement merge/mapping ala lookup.
 - [ ] Implement group by dan agregasi.
-- [ ] Implement pivot table.
+- [x] Implement pivot table.
 - [ ] Tambahkan warning untuk kolom opsional yang hilang.
 
 Definition of done:
 
-- [ ] Transformasi dasar berjalan untuk config sederhana.
+- [x] Transformasi dasar berjalan untuk config sederhana.
 
 ### Fase 7 - Formula dan conditional engine
 
@@ -231,32 +231,32 @@ Definition of done:
 
 ### Fase 8 - Output writer Excel
 
-- [ ] Tulis output ke multi-sheet.
-- [ ] Tambahkan header laporan 2-3 baris.
-- [ ] Ambil info periode dari kolom tanggal yang ditentukan config.
-- [ ] Terapkan warna header tabel.
-- [ ] Terapkan border.
-- [ ] Terapkan font.
-- [ ] Terapkan format angka.
-- [ ] Terapkan format tanggal.
-- [ ] Terapkan freeze pane.
-- [ ] Validasi nama sheet Excel.
-- [ ] Simpan file ke folder `outputs/`.
-- [ ] Pastikan penulisan file memakai path portable dan aman di Windows.
+- [x] Tulis output ke multi-sheet.
+- [x] Tambahkan header laporan 2-3 baris.
+- [x] Ambil info periode dari kolom tanggal yang ditentukan config.
+- [x] Terapkan warna header tabel.
+- [x] Terapkan border.
+- [x] Terapkan font.
+- [x] Terapkan format angka.
+- [x] Terapkan format tanggal.
+- [x] Terapkan freeze pane.
+- [x] Validasi nama sheet Excel.
+- [x] Simpan file ke folder `outputs/`.
+- [x] Pastikan penulisan file memakai path portable dan aman di Windows.
 
 Definition of done:
 
-- [ ] File `.xlsx` hasil bisa dibuka dan tampil rapi secara dasar.
+- [x] File `.xlsx` hasil bisa dibuka dan tampil rapi secara dasar.
 
 ### Fase 9 - Logging dan progress
 
 - [x] Buat logger proses per langkah.
 - [x] Log awal sub-tugas.
-- [ ] Log akhir sub-tugas.
-- [ ] Log warning.
-- [ ] Log error.
+- [x] Log akhir sub-tugas.
+- [x] Log warning.
+- [x] Log error.
 - [x] Hubungkan log ke widget UI secara aman tanpa freeze.
-- [ ] Siapkan mekanisme progress dasar untuk proses yang berjalan agak lama.
+- [x] Siapkan mekanisme progress dasar untuk proses yang berjalan agak lama.
 
 Definition of done:
 
@@ -265,34 +265,34 @@ Definition of done:
 ### Fase 10 - Integrasi end-to-end
 
 - [x] Hubungkan pilih source + pilih config + execute.
-- [ ] Load source saat execute.
-- [ ] Load semua master saat execute.
-- [ ] Jalankan transformasi sesuai config.
-- [ ] Tulis output Excel.
+- [x] Load source saat execute.
+- [x] Load semua master saat execute.
+- [x] Jalankan transformasi sesuai config.
+- [x] Tulis output Excel.
 - [x] Tampilkan status sukses/gagal.
 - [x] Aktifkan tombol buka file atau buka folder hasil.
-- [ ] Verifikasi alur lokal di environment development utama.
+- [x] Verifikasi alur lokal di environment development utama.
 
 Definition of done:
 
-- [ ] Alur dari pilih source sampai hasil output berjalan lokal.
+- [x] Alur dari pilih source sampai hasil output berjalan lokal.
 
 ### Fase 11 - Hardening dan error handling
 
 - [x] Tangani file source tidak valid.
 - [x] Tangani config invalid.
-- [ ] Tangani master file hilang.
-- [ ] Tangani sheet source tidak ditemukan.
-- [ ] Tangani kolom wajib hilang.
+- [x] Tangani master file hilang.
+- [x] Tangani sheet source tidak ditemukan.
+- [x] Tangani kolom wajib hilang.
 - [ ] Tangani rule formula/conditional invalid.
-- [ ] Tangani nama sheet invalid.
-- [ ] Tangani file output gagal ditulis karena sedang dibuka.
+- [x] Tangani nama sheet invalid.
+- [x] Tangani file output gagal ditulis karena sedang dibuka.
 - [x] Pastikan pesan error mudah dipahami user non-teknis.
-- [ ] Pastikan UI tidak crash diam-diam saat exception terjadi di proses background.
+- [x] Pastikan UI tidak crash diam-diam saat exception terjadi di proses background.
 
 Definition of done:
 
-- [ ] Error umum tidak membuat aplikasi crash diam-diam.
+- [x] Error umum tidak membuat aplikasi crash diam-diam.
 
 ### Fase 12 - Testing
 
@@ -300,20 +300,20 @@ Definition of done:
 - [ ] Buat fixture kecil untuk master.
 - [ ] Buat fixture kecil untuk YAML.
 - [x] Buat unit test config loader.
-- [ ] Buat unit test source reader.
-- [ ] Buat unit test master loader.
-- [ ] Buat unit test transform engine.
+- [x] Buat unit test source reader.
+- [x] Buat unit test master loader.
+- [x] Buat unit test transform engine.
 - [ ] Buat unit test formula/rule engine.
-- [ ] Buat unit test output writer.
+- [x] Buat unit test output writer.
 - [ ] Buat test UI minimal untuk helper logic yang bisa diuji tanpa full window interaktif.
-- [ ] Buat minimal 1 integration test.
+- [x] Buat minimal 1 integration test.
 - [x] Jalankan test rutin minimal di 1 environment development.
 - [ ] Jika memungkinkan, ulangi test penting di Linux dan Windows.
 - [x] Tambahkan test atau checklist untuk path handling dan case sensitivity.
 
 Definition of done:
 
-- [ ] Happy path dan error path utama tercakup.
+- [x] Happy path dan error path utama tercakup.
 
 ### Fase 13 - Packaging portable
 
@@ -393,15 +393,15 @@ Bagian ini sengaja disiapkan sebagai placeholder agar saat sample nyata datang, 
 
 ## 7. Definition of Done MVP
 
-- [ ] User bisa memilih `.xlsx` dan `.csv`.
-- [ ] User bisa memilih config `.yaml`.
-- [ ] Sistem bisa load banyak master dari folder `masters/`.
+- [x] User bisa memilih `.xlsx` dan `.csv`.
+- [x] User bisa memilih config `.yaml`.
+- [x] Sistem bisa load banyak master dari folder `masters/`.
 - [ ] Sistem bisa menjalankan lookup, conditional, formula, grouping, dan pivot sesuai use case nyata.
-- [ ] Sistem menghasilkan 1 file `.xlsx` multi-sheet.
-- [ ] Output punya header dan styling dasar.
-- [ ] Desktop UI menampilkan log proses yang jelas.
-- [ ] Error tampil jelas dan tidak membingungkan.
-- [ ] Hasil tersimpan dan mudah dibuka dari folder output.
+- [x] Sistem menghasilkan 1 file `.xlsx` multi-sheet.
+- [x] Output punya header dan styling dasar.
+- [x] Desktop UI menampilkan log proses yang jelas.
+- [x] Error tampil jelas dan tidak membingungkan.
+- [x] Hasil tersimpan dan mudah dibuka dari folder output.
 - [ ] Aplikasi bisa dibundle menjadi folder portable Windows.
 - [ ] Hasil build bisa jalan tanpa install Python.
 - [ ] Validasi final folder runtime dan eksekusi lolos di Windows.
@@ -432,17 +432,17 @@ Bagian ini sengaja disiapkan sebagai placeholder agar saat sample nyata datang, 
 
 ## 9. Urutan Eksekusi yang Direkomendasikan
 
-- [ ] Setup environment
-- [ ] Pastikan guardrail portability lintas OS
-- [ ] Buat skeleton `CustomTkinter` dan UI dasar
-- [ ] Buat config loader
-- [ ] Buat source reader
-- [ ] Buat master loader
-- [ ] Buat transform engine dasar
+- [x] Setup environment
+- [x] Pastikan guardrail portability lintas OS
+- [x] Buat skeleton `CustomTkinter` dan UI dasar
+- [x] Buat config loader
+- [x] Buat source reader
+- [x] Buat master loader
+- [x] Buat transform engine dasar
 - [ ] Buat formula/conditional engine dasar
-- [ ] Buat output writer
-- [ ] Tambahkan logging dan integrasi end-to-end
-- [ ] Tambahkan testing
+- [x] Buat output writer
+- [x] Tambahkan logging dan integrasi end-to-end
+- [x] Tambahkan testing
 - [ ] Jalankan validasi lintas OS seperlunya
 - [ ] Tambahkan packaging per target OS
 - [ ] Validasi dengan sample nyata
