@@ -2,7 +2,7 @@
 
 Dokumen ini adalah checklist implementasi utama untuk MVP.
 Fokusnya dibuat sederhana, jelas, dan bisa dipakai monitoring progress harian.
-Dokumen ini juga mengikuti pertimbangan bahwa development bisa dilakukan lintas OS, tetapi runtime final dan packaging tetap mengacu ke Windows.
+Dokumen ini mengikuti keputusan baru bahwa UI memakai `CustomTkinter`, sementara strategi kerja tetap mengutamakan development lintas OS dan build per OS target dengan `PyInstaller`.
 
 ## Cara Pakai
 
@@ -10,7 +10,7 @@ Dokumen ini juga mengikuti pertimbangan bahwa development bisa dilakukan lintas 
 - Jika ada perubahan scope, update `prd.md` dulu.
 - Jika ada rule bisnis baru dari sample nyata, tambahkan di sub-tugas terkait.
 - Detail lookup, conditional, dan formula lanjutan diisi per use case, tidak perlu dipaksa final dari awal.
-- Anggap Windows sebagai acuan runtime final, walau coding harian bisa dilakukan di Linux atau Windows.
+- Anggap Windows sebagai acuan runtime final distribusi pertama, walau coding harian bisa dilakukan di Linux atau Windows.
 
 ## Prinsip Environment
 
@@ -18,21 +18,24 @@ Dokumen ini juga mengikuti pertimbangan bahwa development bisa dilakukan lintas 
 - [x] Gunakan `pathlib` atau `os.path`, jangan hardcode path Windows/Linux.
 - [x] Logic aplikasi tidak bergantung pada shell tertentu.
 - [x] Perbedaan line ending dan case sensitivity nama file ikut diperhatikan saat development.
+- [x] UI dipilih berbasis Python desktop agar lebih sederhana untuk dev lintas OS dibanding web lokal.
 - [ ] Build final `.exe`, `run.bat`, dan uji portable selalu dilakukan di Windows.
+- [ ] Jika nanti butuh binary Linux atau macOS, build dilakukan lagi di OS target masing-masing.
 
 ## 1. Gate Awal
 
 - [x] PRD sudah cukup jelas untuk mulai coding.
 - [x] Scope MVP sudah dikunci.
-- [x] Platform target dikunci: Windows 10/11 64-bit.
+- [x] Platform target distribusi pertama dikunci: Windows 10/11 64-bit.
 - [x] Environment development boleh Linux atau Windows.
 - [x] Format output dikunci: 1 file `.xlsx` multi-sheet.
 - [x] Struktur folder runtime dikunci: `configs/`, `masters/`, `uploads/`, `outputs/`.
 - [x] Use case awal dikunci: `1 source -> 1 output utama`.
 - [x] Support source awal dikunci: `.xlsx` dan `.csv`.
 - [x] Satu resep boleh memakai banyak master file.
-- [x] Model live log dikunci: polling per awal/akhir sub-tugas.
-- [x] Disepakati bahwa validasi final runtime dilakukan di Windows.
+- [x] Model live log dikunci: update progress internal per awal/akhir sub-tugas.
+- [x] Diputuskan memakai `CustomTkinter`, bukan web UI.
+- [x] Disepakati bahwa validasi final runtime distribusi pertama dilakukan di Windows.
 
 ## 2. Setup Development
 
@@ -56,12 +59,12 @@ Dokumen ini juga mengikuti pertimbangan bahwa development bisa dilakukan lintas 
 - [x] Python 3.14.x 64-bit
 - [x] Git
 - [x] VS Code atau editor lain
-- [x] Chrome atau Edge untuk testing UI lokal
 - [ ] Mesin Windows 10/11 untuk build final dan validasi portable
+- [ ] Jika ingin build Linux native, siapkan environment Linux terpisah
 
 ### Library Python
 
-- [x] `Flask`
+- [x] `customtkinter`
 - [x] `pandas`
 - [x] `openpyxl`
 - [x] `PyYAML`
@@ -75,7 +78,7 @@ Dokumen ini juga mengikuti pertimbangan bahwa development bisa dilakukan lintas 
 ```bash
 python3 -m venv .venv
 python3 -m pip install --upgrade pip
-pip install Flask pandas openpyxl PyYAML pyinstaller pytest ruff python-dotenv
+pip install customtkinter pandas openpyxl PyYAML pyinstaller pytest ruff python-dotenv
 ```
 
 PowerShell:
@@ -99,47 +102,46 @@ source .venv/bin/activate
 ## 4. Struktur Proyek
 
 - [x] Buat folder `app/`.
-- [x] Buat folder `app/web/`.
-- [x] Buat folder `app/web/templates/`.
-- [x] Buat folder `app/web/static/css/`.
-- [x] Buat folder `app/web/static/js/`.
-- [x] Buat folder `app/services/`.
-- [x] Buat folder `app/utils/`.
+- [ ] Buat folder `app/ui/`.
+- [ ] Buat folder `app/ui/components/` jika diperlukan.
+- [ ] Buat folder `app/services/`.
+- [ ] Buat folder `app/utils/`.
 - [x] Buat folder `configs/`.
 - [x] Buat folder `masters/`.
 - [x] Buat folder `uploads/`.
 - [x] Buat folder `outputs/`.
 - [x] Buat folder `tests/`.
-- [x] Buat file `run.py`.
-- [ ] Siapkan folder atau file config khusus packaging Windows bila diperlukan.
+- [ ] Buat file entrypoint desktop, misalnya `run.py` atau `main.py`.
+- [ ] Siapkan folder atau file config khusus packaging per OS bila diperlukan.
+- [ ] Siapkan helper path runtime agar source mode dan bundle mode konsisten.
 
 ## 5. Breakdown Fase Implementasi
 
 ### Fase 1 - Skeleton aplikasi
 
-- [x] Buat app Flask dasar.
-- [x] Buat route halaman utama.
-- [x] Buat template `index.html` awal.
-- [x] Pastikan app bisa dijalankan lokal.
-- [x] Pastikan bootstrap path dan lokasi file runtime tidak bergantung separator OS.
+- [ ] Buat app `CustomTkinter` dasar.
+- [ ] Buat window utama.
+- [ ] Buat layout dasar panel input, log, dan status.
+- [ ] Pastikan app bisa dijalankan lokal di Linux dan Windows.
+- [ ] Pastikan bootstrap path dan lokasi file runtime tidak bergantung separator OS.
 
 Definition of done:
 
-- [x] Halaman utama tampil di browser lokal.
+- [ ] Window utama tampil dan aplikasi bisa dibuka lokal.
 
-### Fase 2 - Web UI dasar
+### Fase 2 - Desktop UI dasar
 
-- [x] Buat area upload file.
-- [x] Buat dropdown/list config YAML.
-- [x] Buat tombol `Execute`.
-- [x] Buat area log proses.
-- [x] Buat area hasil/download.
-- [x] Tambahkan validasi frontend sederhana.
-- [x] Pastikan alur UI lokal tidak mengasumsikan command pembuka browser tertentu di luar fase packaging.
+- [ ] Buat tombol pilih file source.
+- [ ] Buat dropdown/list config YAML.
+- [ ] Buat tombol `Execute`.
+- [ ] Buat area log proses.
+- [ ] Buat area hasil dan tombol buka folder output.
+- [ ] Tambahkan validasi input sederhana.
+- [ ] Pastikan pemilihan file dan pembukaan folder memakai mekanisme yang aman lintas OS.
 
 Definition of done:
 
-- [x] User bisa melihat alur dasar dari UI walau backend belum lengkap.
+- [ ] User bisa melihat alur dasar dari desktop UI walau backend belum lengkap.
 
 ### Fase 3 - Config loader dan schema dasar
 
@@ -165,6 +167,7 @@ Definition of done:
 - [ ] Validasi ekstensi file.
 - [ ] Validasi sheet source untuk Excel.
 - [ ] Validasi file kosong atau rusak.
+- [ ] Salin source ke folder `uploads/` bila memang dipakai sebagai jejak runtime.
 - [ ] Validasi kolom minimum jika dibutuhkan config.
 - [ ] Uji nama file/sheet dengan variasi huruf besar-kecil agar aman lintas OS.
 
@@ -246,26 +249,27 @@ Definition of done:
 - [ ] Log akhir sub-tugas.
 - [ ] Log warning.
 - [ ] Log error.
-- [ ] Tampilkan log ke UI dengan polling.
+- [ ] Hubungkan log ke widget UI secara aman tanpa freeze.
+- [ ] Siapkan mekanisme progress dasar untuk proses yang berjalan agak lama.
 
 Definition of done:
 
-- [ ] User bisa melihat progress proses utama dari UI.
+- [ ] User bisa melihat progress proses utama dari desktop UI.
 
 ### Fase 10 - Integrasi end-to-end
 
-- [ ] Hubungkan upload + pilih config + execute.
+- [ ] Hubungkan pilih source + pilih config + execute.
 - [ ] Load source saat execute.
 - [ ] Load semua master saat execute.
 - [ ] Jalankan transformasi sesuai config.
 - [ ] Tulis output Excel.
 - [ ] Tampilkan status sukses/gagal.
-- [ ] Tampilkan link download hasil.
+- [ ] Aktifkan tombol buka file atau buka folder hasil.
 - [ ] Verifikasi alur lokal di environment development utama.
 
 Definition of done:
 
-- [ ] Alur dari upload sampai download berjalan lokal.
+- [ ] Alur dari pilih source sampai hasil output berjalan lokal.
 
 ### Fase 11 - Hardening dan error handling
 
@@ -278,6 +282,7 @@ Definition of done:
 - [ ] Tangani nama sheet invalid.
 - [ ] Tangani file output gagal ditulis karena sedang dibuka.
 - [ ] Pastikan pesan error mudah dipahami user non-teknis.
+- [ ] Pastikan UI tidak crash diam-diam saat exception terjadi di proses background.
 
 Definition of done:
 
@@ -294,6 +299,7 @@ Definition of done:
 - [ ] Buat unit test transform engine.
 - [ ] Buat unit test formula/rule engine.
 - [ ] Buat unit test output writer.
+- [ ] Buat test UI minimal untuk helper logic yang bisa diuji tanpa full window interaktif.
 - [ ] Buat minimal 1 integration test.
 - [ ] Jalankan test rutin minimal di 1 environment development.
 - [ ] Jika memungkinkan, ulangi test penting di Linux dan Windows.
@@ -303,22 +309,22 @@ Definition of done:
 
 - [ ] Happy path dan error path utama tercakup.
 
-### Fase 13 - Packaging Windows portable
+### Fase 13 - Packaging portable
 
-- [ ] Buat konfigurasi PyInstaller.
-- [ ] Pastikan template HTML ikut terbundle.
-- [ ] Pastikan static asset ikut terbundle.
-- [ ] Pastikan folder runtime tersedia.
+- [ ] Buat konfigurasi `PyInstaller` untuk Windows.
+- [ ] Pastikan asset non-code ikut terbundle jika ada.
+- [ ] Pastikan folder runtime tersedia atau dibuat otomatis saat first run.
 - [ ] Buat `run.bat`.
-- [ ] Pastikan browser lokal terbuka otomatis.
-- [ ] Lakukan build final PyInstaller di Windows, bukan Linux.
-- [ ] Uji `run.bat` di Windows target.
+- [ ] Uji jalan dari source mode dan bundle mode.
+- [ ] Lakukan build final `PyInstaller` Windows di Windows, bukan Linux.
+- [ ] Uji `run.bat` dan `ExcelAutoTool.exe` di Windows target.
 - [ ] Uji hasil build di Windows lain.
+- [ ] Jika ingin distribusi Linux native, buat file spec atau langkah build Linux terpisah.
 
 Definition of done:
 
 - [ ] Folder hasil build bisa dipakai tanpa install Python.
-- [ ] Build final tervalidasi di Windows sebagai target distribusi.
+- [ ] Build final Windows tervalidasi sebagai target distribusi utama.
 
 ### Fase 14 - Validasi use case nyata
 
@@ -381,18 +387,18 @@ Bagian ini sengaja disiapkan sebagai placeholder agar saat sample nyata datang, 
 
 ## 7. Definition of Done MVP
 
-- [ ] User bisa upload `.xlsx` dan `.csv`.
+- [ ] User bisa memilih `.xlsx` dan `.csv`.
 - [ ] User bisa memilih config `.yaml`.
 - [ ] Sistem bisa load banyak master dari folder `masters/`.
 - [ ] Sistem bisa menjalankan lookup, conditional, formula, grouping, dan pivot sesuai use case nyata.
 - [ ] Sistem menghasilkan 1 file `.xlsx` multi-sheet.
 - [ ] Output punya header dan styling dasar.
-- [ ] UI menampilkan log proses yang jelas.
+- [ ] Desktop UI menampilkan log proses yang jelas.
 - [ ] Error tampil jelas dan tidak membingungkan.
-- [ ] Hasil bisa didownload.
+- [ ] Hasil tersimpan dan mudah dibuka dari folder output.
 - [ ] Aplikasi bisa dibundle menjadi folder portable Windows.
 - [ ] Hasil build bisa jalan tanpa install Python.
-- [ ] Validasi final upload/download dan folder runtime lolos di Windows.
+- [ ] Validasi final folder runtime dan eksekusi lolos di Windows.
 - [ ] Minimal 1 use case nyata lolos validasi user.
 
 ## 8. Skills AI yang Dibutuhkan
@@ -400,12 +406,12 @@ Bagian ini sengaja disiapkan sebagai placeholder agar saat sample nyata datang, 
 ### Skill teknis
 
 - [ ] Python modular project structure
-- [ ] Flask routing, upload, template, download
-- [ ] pandas untuk read, merge, groupby, pivot, transform
-- [ ] openpyxl untuk writer dan styling Excel
-- [ ] PyYAML untuk parsing dan validasi config
-- [ ] PyInstaller untuk packaging Windows portable
-- [ ] pytest untuk unit dan integration test
+- [ ] `CustomTkinter` layout, event handling, file dialog, dan state update
+- [ ] `pandas` untuk read, merge, groupby, pivot, transform
+- [ ] `openpyxl` untuk writer dan styling Excel
+- [ ] `PyYAML` untuk parsing dan validasi config
+- [ ] `PyInstaller` untuk packaging portable per OS target
+- [ ] `pytest` untuk unit dan integration test
 - [ ] Dasar validasi input dan keamanan rule evaluation
 
 ### Skill kerja
@@ -415,14 +421,14 @@ Bagian ini sengaja disiapkan sebagai placeholder agar saat sample nyata datang, 
 - [ ] Menulis error message yang jelas
 - [ ] Membaca traceback dan memperbaiki bug
 - [ ] Menerjemahkan kebutuhan bisnis ke operasi DataFrame
-- [ ] Menjaga kompatibilitas path Windows
+- [ ] Menjaga kompatibilitas path lintas OS
 - [ ] Menulis dokumentasi yang mudah dipahami developer junior
 
 ## 9. Urutan Eksekusi yang Direkomendasikan
 
 - [ ] Setup environment
 - [ ] Pastikan guardrail portability lintas OS
-- [ ] Buat skeleton Flask dan UI dasar
+- [ ] Buat skeleton `CustomTkinter` dan UI dasar
 - [ ] Buat config loader
 - [ ] Buat source reader
 - [ ] Buat master loader
@@ -432,5 +438,5 @@ Bagian ini sengaja disiapkan sebagai placeholder agar saat sample nyata datang, 
 - [ ] Tambahkan logging dan integrasi end-to-end
 - [ ] Tambahkan testing
 - [ ] Jalankan validasi lintas OS seperlunya
-- [ ] Tambahkan packaging khusus di Windows
+- [ ] Tambahkan packaging per target OS
 - [ ] Validasi dengan sample nyata

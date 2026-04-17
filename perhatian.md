@@ -1,12 +1,13 @@
-# Perhatian - Development di Linux dan Windows 11
+# Perhatian - Development Lintas OS untuk CustomTkinter dan PyInstaller
 
-Ya, perbedaan OS akan berpengaruh, tapi dampaknya lebih ke environment development dan packaging, bukan ke konsep inti aplikasinya.
+Ya, perbedaan OS tetap berpengaruh, tetapi sekarang fokusnya bergeser dari browser/server lokal ke desktop GUI, path runtime, dan packaging `PyInstaller` per OS target.
 
 ## Inti Jawaban
 
-- Target aplikasi tetap `Windows portable`, jadi build final `.exe` tetap harus dibuat dan diuji di Windows.
-- Sebagian besar logic aplikasi tetap bisa dikembangkan di Linux.
-- Perbedaan OS paling terasa pada path, shell command, line ending, dan packaging.
+- Memakai `CustomTkinter` justru lebih cocok untuk workflow Python desktop yang ingin sederhana dan portable.
+- Sebagian besar logic aplikasi tetap aman dikembangkan di Linux maupun Windows.
+- Build final tetap tidak benar-benar lintas OS; binary harus dibuat di OS targetnya.
+- Untuk distribusi utama saat ini, `.exe` final tetap harus dibuild dan diuji di Windows.
 
 ## Bagian yang Aman Dikerjakan Lintas OS
 
@@ -15,7 +16,9 @@ Ya, perbedaan OS akan berpengaruh, tapi dampaknya lebih ke environment developme
 - Transformasi data dengan `pandas`
 - Penulisan Excel dengan `openpyxl`
 - Unit test business logic
-- Struktur modul backend Flask
+- Struktur modul aplikasi desktop
+- Sebagian besar komponen `CustomTkinter` dasar
+- Validasi path runtime dan helper folder
 
 ## Bagian yang Biasanya Berbeda antara Linux dan Windows
 
@@ -24,15 +27,24 @@ Ya, perbedaan OS akan berpengaruh, tapi dampaknya lebih ke environment developme
 - Command shell: bash vs PowerShell/CMD
 - Cara aktivasi virtual environment
 - Line endings `LF` vs `CRLF`
+- Tampilan tema, font, atau perilaku kecil widget GUI
 - Packaging `PyInstaller`
-- Cara membuka browser lokal / `run.bat`
+- Cara membuka file/folder hasil dari aplikasi
 - Permission file tertentu
 
 ## Hal Paling Penting untuk Proyek Ini
 
-- `PyInstaller` tidak ideal untuk cross-build target Windows dari Linux.
-- Jika target akhir adalah file `.exe` Windows, maka build final sebaiknya dilakukan di Windows.
-- Testing final juga wajib dilakukan di Windows karena aplikasi akan dipakai di sana.
+- `PyInstaller` bukan alat yang nyaman untuk membuat `.exe` Windows dari Linux.
+- `PyInstaller` juga pada praktiknya dibuild per OS target: Windows build di Windows, Linux build di Linux, macOS build di macOS.
+- Jadi yang disebut build lintas OS di proyek ini sebaiknya dipahami sebagai: basis kode yang sama bisa didevelop lintas OS, lalu dibuild terpisah sesuai target.
+- Karena distribusi MVP difokuskan ke Windows, build final dan testing final tetap wajib dilakukan di Windows.
+
+## Kenapa CustomTkinter Lebih Mulus untuk Kasus Ini
+
+- Tidak perlu Flask, browser lokal, port, template HTML, atau static asset web.
+- Packaging lebih lurus karena UI tetap berada di proses Python yang sama.
+- Alur user lebih natural untuk tool personal: buka aplikasi, pilih file, execute, ambil output.
+- Development lintas OS tetap nyaman karena logic inti tidak berubah dan UI tidak bergantung browser tertentu.
 
 ## Rekomendasi Praktis
 
@@ -41,29 +53,34 @@ Ya, perbedaan OS akan berpengaruh, tapi dampaknya lebih ke environment developme
   - pakai `pathlib` atau `os.path`
   - jangan hardcode path Windows
   - jangan bergantung pada shell tertentu di logic aplikasi
-- Jika memungkinkan, jalankan test rutin di kedua OS.
-- Lakukan tahap berikut khusus di Windows:
-  - test upload/download end-to-end
+  - pisahkan logic bisnis dari layer `CustomTkinter`
+- Jika memungkinkan, jalankan test rutin di lebih dari satu OS.
+- Lakukan tahap berikut khusus di Windows untuk distribusi utama:
+  - test alur pilih file, execute, dan buka folder output
   - test folder runtime `configs/`, `masters/`, `uploads/`, `outputs/`
   - build `PyInstaller`
   - test `run.bat`
   - validasi hasil portable di PC Windows lain
+- Jika nanti ingin binary Linux native, lakukan build Linux terpisah di Linux.
 
 ## Potensi Masalah Nyata
 
 - File seperti `Masters.xlsx` bisa lolos di Windows tapi gagal di Linux jika referensi huruf besar-kecil tidak konsisten.
-- Script yang jalan di bash bisa gagal di CMD/PowerShell.
+- Helper pembuka folder bisa beda implementasi di Windows dan Linux.
 - Path relatif yang kebetulan jalan di Linux belum tentu aman di Windows.
+- Resource path saat jalan dari source mode bisa berbeda dengan saat jalan dari bundle `PyInstaller`.
 - Hasil build `PyInstaller` dari Linux tidak cocok untuk distribusi `.exe` Windows.
 
 ## Strategi Kerja yang Disarankan
 
-- Linux di rumah: fokus coding modul, test logic, refactor, schema YAML, dan transformasi `pandas`.
-- Windows di kantor: fokus integrasi final, UI lokal, packaging, dan validasi portable.
-- Anggap Windows sebagai `source of truth` untuk runtime final.
+- Linux di rumah: fokus coding modul, test logic, schema YAML, transformasi `pandas`, dan komponen UI dasar.
+- Windows di kantor: fokus integrasi final desktop UI, uji runtime folder, packaging, dan validasi portable.
+- Anggap Windows sebagai `source of truth` untuk runtime distribusi MVP.
+- Anggap Linux sebagai environment cepat untuk development harian dan regression test logic.
 
 ## Ringkasan
 
 - Beda OS tidak menghambat proyek.
-- Namun karena target distribusi adalah Windows, validasi akhir harus selalu di Windows.
-- Kode sebaiknya dirancang OS-agnostic sejak awal agar aman dipakai di dua environment.
+- `CustomTkinter` membuat arsitektur lebih sederhana dibanding web UI lokal untuk tool ini.
+- Namun `PyInstaller` tetap harus dibuild per OS target.
+- Jadi strategi terbaik adalah: develop lintas OS, build final sesuai target OS, dan validasi distribusi utama di Windows.

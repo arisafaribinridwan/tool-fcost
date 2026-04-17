@@ -1,10 +1,10 @@
 Plan komprehensif yang saya sarankan:
 
 Rapikan baseline proyek
-Pastikan template diubah ke templates, run.py benar-benar masuk struktur kerja, dan dokumen inti sinkron untuk versi Python serta asumsi runtime.
+Pastikan entrypoint desktop, helper path runtime, dan dokumen inti sinkron untuk versi Python serta asumsi runtime.
 
-Bangun skeleton Flask minimal
-Buat app factory, route /, template index.html, file CSS/JS placeholder, dan run.py yang bisa menjalankan app lokal.
+Bangun skeleton CustomTkinter minimal
+Buat app desktop dasar, window utama, layout panel input/log/status, dan entrypoint yang bisa menjalankan app lokal.
 
 Tetapkan fondasi path dan runtime
 Buat helper path untuk configs/, masters/, uploads/, outputs/ dengan pendekatan portable lintas OS sejak awal.
@@ -24,8 +24,8 @@ Mulai dari select columns, rename, filter, merge dasar, grouping/agregasi, lalu 
 Implement output writer baseline
 Tulis hasil ke .xlsx multi-sheet dengan header sederhana, styling default, freeze pane, dan nama file unik.
 
-Hubungkan alur web end-to-end
-Upload source, pilih config, klik execute, tampilkan log/status, dan sediakan link download hasil.
+Hubungkan alur desktop end-to-end
+Pilih source, pilih config, klik execute, tampilkan log/status, dan sediakan tombol buka hasil.
 
 Tambahkan test baseline
 Buat fixture kecil dan test untuk config loader, source/master reader, transform dasar, output writer, plus 1 integration test happy path.
@@ -36,7 +36,7 @@ Tambahkan validasi error non-teknis, case sensitivity, path traversal, konflik f
 Urutan implementasi yang paling sehat menurut saya:
 
 baseline repo
-skeleton Flask
+skeleton CustomTkinter
 config loader
 source reader
 master loader

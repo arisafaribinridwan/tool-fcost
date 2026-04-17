@@ -1,19 +1,14 @@
 from __future__ import annotations
 
-import os
+from app import ensure_runtime_dirs
 
-from app import create_app
-
-app = create_app()
-
-
-def _is_debug_enabled() -> bool:
-    return os.getenv("FLASK_DEBUG", "0") == "1"
 
 
 if __name__ == "__main__":
-    app.run(
-        host=os.getenv("HOST", "127.0.0.1"),
-        port=int(os.getenv("PORT", "5000")),
-        debug=_is_debug_enabled(),
-    )
+    paths = ensure_runtime_dirs()
+    print("Excel Automation Tool desktop skeleton belum dibuat.")
+    print(f"Project root : {paths.project_root}")
+    print(f"Configs dir  : {paths.configs_dir}")
+    print(f"Masters dir  : {paths.masters_dir}")
+    print(f"Uploads dir  : {paths.uploads_dir}")
+    print(f"Outputs dir  : {paths.outputs_dir}")

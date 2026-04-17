@@ -1,44 +1,40 @@
 from __future__ import annotations
 
-import os
+from dataclasses import dataclass
 from pathlib import Path
 
-from flask import Flask
+
+@dataclass(frozen=True)
+class AppPaths:
+    project_root: Path
+    configs_dir: Path
+    masters_dir: Path
+    uploads_dir: Path
+    outputs_dir: Path
 
 
-def create_app(test_config: dict | None = None) -> Flask:
-    app = Flask(
-        __name__,
-        instance_relative_config=True,
-        template_folder="web/templates",
-        static_folder="web/static",
+def get_project_root() -> Path:
+    return Path(__file__).resolve().parent.parent
+
+
+def get_app_paths(project_root: Path | None = None) -> AppPaths:
+    root = project_root or get_project_root()
+    return AppPaths(
+        project_root=root,
+        configs_dir=root / "configs",
+        masters_dir=root / "masters",
+        uploads_dir=root / "uploads",
+        outputs_dir=root / "outputs",
     )
 
-    project_root = Path(__file__).resolve().parent.parent
-    runtime_dirs = {
-        "CONFIGS_DIR": project_root / "configs",
-        "MASTERS_DIR": project_root / "masters",
-        "UPLOADS_DIR": project_root / "uploads",
-        "OUTPUTS_DIR": project_root / "outputs",
-    }
-    runtime_dir_keys = tuple(runtime_dirs.keys())
 
-    app.config.from_mapping(
-        APP_NAME="Excel Automation Tool",
-        PROJECT_ROOT=project_root,
-        SECRET_KEY=os.getenv("SECRET_KEY", "dev-only-change-me"),
-        **runtime_dirs,
-    )
-
-    if test_config:
-        app.config.update(test_config)
-
-    for key in runtime_dir_keys:
-        folder_path = Path(app.config[key])
-        app.config[key] = folder_path
-        folder_path.mkdir(parents=True, exist_ok=True)
-
-    from app.web.routes import web_bp
-
-    app.register_blueprint(web_bp)
-    return app
+def ensure_runtime_dirs(paths: AppPaths | None = None) -> AppPaths:
+    app_paths = paths or get_app_paths()
+    for directory in (
+        app_paths.configs_dir,
+        app_paths.masters_dir,
+        app_paths.uploads_dir,
+        app_paths.outputs_dir,
+    ):
+        directory.mkdir(parents=True, exist_ok=True)
+    return app_paths

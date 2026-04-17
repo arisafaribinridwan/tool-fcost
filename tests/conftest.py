@@ -2,20 +2,16 @@ from __future__ import annotations
 
 import pytest
 
-from app import create_app
+from app import AppPaths, ensure_runtime_dirs
 
 
 @pytest.fixture()
-def app(tmp_path):
-    runtime_dirs = {
-        "CONFIGS_DIR": tmp_path / "configs",
-        "MASTERS_DIR": tmp_path / "masters",
-        "UPLOADS_DIR": tmp_path / "uploads",
-        "OUTPUTS_DIR": tmp_path / "outputs",
-    }
-    return create_app({"TESTING": True, **runtime_dirs})
-
-
-@pytest.fixture()
-def client(app):
-    return app.test_client()
+def app_paths(tmp_path):
+    paths = AppPaths(
+        project_root=tmp_path,
+        configs_dir=tmp_path / "configs",
+        masters_dir=tmp_path / "masters",
+        uploads_dir=tmp_path / "uploads",
+        outputs_dir=tmp_path / "outputs",
+    )
+    return ensure_runtime_dirs(paths)

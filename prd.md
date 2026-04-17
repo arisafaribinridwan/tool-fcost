@@ -1,17 +1,17 @@
 # PRD - Excel Automation Tool
 
-**Versi:** 2.3
+**Versi:** 2.4
 **Status:** Siap mulai coding MVP
 **Platform:** Windows 10/11 64-bit, portable tanpa install
-**Stack:** Python 3.14 + Flask + pandas + openpyxl + PyYAML + PyInstaller
+**Stack:** Python 3.14 + CustomTkinter + pandas + openpyxl + PyYAML + PyInstaller
 
 ---
 
 ## 1. Tujuan
 
-Membuat tool lokal berbasis web untuk mengotomatisasi proses olah file Excel/CSV menjadi output Excel yang sudah ditransformasi dan diformat, tanpa proses manual berulang di Excel.
+Membuat tool desktop lokal untuk mengotomatisasi proses olah file Excel/CSV menjadi output Excel yang sudah ditransformasi dan diformat, tanpa proses manual berulang di Excel.
 
-Tool ini ditujukan untuk alur kerja personal di Windows dan didistribusikan sebagai folder portable yang bisa langsung dijalankan lewat `run.bat`.
+Tool ini ditujukan untuk alur kerja personal dan dikembangkan dengan prioritas pengalaman development yang mulus di Linux maupun Windows, sementara distribusi final tetap berupa aplikasi portable untuk Windows.
 
 ---
 
@@ -30,22 +30,31 @@ Masalah utama:
 - Sulit dijaga konsisten antar periode
 - Sulit diulang dengan cara yang sama tanpa checklist jelas
 
+Tambahan masalah teknis yang ingin dihindari sejak awal:
+
+- Alur web lokal menambah kompleksitas browser, port, dan static asset
+- Packaging UI web lokal cenderung lebih ribet saat dibundle portable
+- Development lintas OS lebih nyaman jika UI langsung berupa desktop app Python
+
 ---
 
 ## 3. Pengguna dan Konteks
 
 - Pengguna utama: 1 orang, personal use
-- Sistem operasi: Windows 10/11 64-bit
+- Sistem operasi target runtime final: Windows 10/11 64-bit
+- Sistem operasi development: Linux atau Windows
 - Koneksi internet: tidak diperlukan setelah folder aplikasi dikopi
 - Admin permission: tidak diperlukan
-- Distribusi: folder portable
+- Distribusi: folder portable hasil build PyInstaller
 
 ---
 
 ## 4. Alur Kerja Utama MVP
 
 ```txt
-Upload file sumber (.xlsx / .csv)
+Buka aplikasi desktop
+        ->
+Pilih file sumber (.xlsx / .csv)
         ->
 Load data master otomatis dari folder masters/
         ->
@@ -53,14 +62,17 @@ Pilih config resep (.yaml)
         ->
 Klik Execute
         ->
-Download file output (.xlsx)
+Lihat log proses
+        ->
+Ambil file output (.xlsx) dari folder outputs/
 ```
 
 Catatan:
 
-- File master tidak diupload per sesi; cukup diletakkan di folder `masters/`
+- File master tidak dipilih per sesi; cukup diletakkan di folder `masters/`
 - Satu resep boleh memakai lebih dari satu file master
 - Satu use case awal difokuskan ke `1 source -> 1 output utama`
+- Hasil output disimpan ke folder `outputs/` dan bisa dibuka dari aplikasi
 
 ---
 
@@ -81,12 +93,13 @@ ExcelAutoTool/
 Cara pakai di PC tujuan:
 
 1. Copy folder `ExcelAutoTool/`
-2. Jalankan `run.bat`
+2. Jalankan `run.bat` atau `ExcelAutoTool.exe`
 3. Letakkan file master di folder `masters/`
-4. Upload file sumber
-5. Pilih config YAML
-6. Klik `Execute`
-7. Download hasil
+4. Buka aplikasi desktop
+5. Pilih file sumber
+6. Pilih config YAML
+7. Klik `Execute`
+8. Ambil hasil dari folder `outputs/`
 
 Target distribusi:
 
@@ -94,6 +107,7 @@ Target distribusi:
 - Tanpa install library tambahan
 - Tanpa internet
 - Tanpa admin permission
+- Packaging portable yang konsisten dengan `PyInstaller`
 
 ---
 
@@ -101,7 +115,7 @@ Target distribusi:
 
 ### Wajib ada
 
-- Upload file sumber `.xlsx` dan `.csv`
+- Pilih file sumber `.xlsx` dan `.csv` dari desktop app
 - Load master otomatis dari folder `masters/`
 - Config resep berbasis file YAML
 - Filter data
@@ -113,10 +127,10 @@ Target distribusi:
 - Output 1 file `.xlsx` multi-sheet
 - Header laporan berisi judul dan info periode
 - Styling dasar Excel: warna header, border, font, number/date format, freeze pane
-- Web UI sederhana: upload, pilih config, execute, log, download
+- Desktop UI sederhana berbasis `CustomTkinter`: pilih source, pilih config, execute, log, buka folder output
 - Log proses yang jelas
 - Error message yang mudah dipahami
-- Packaging portable Windows
+- Packaging portable Windows dengan `PyInstaller`
 
 ### Tidak dikerjakan di MVP
 
@@ -124,7 +138,8 @@ Target distribusi:
 - Visual config builder
 - Logo/gambar di header
 - Output multi-file terpisah
-- Support Mac/Linux
+- Native installer `.msi` atau `.pkg`
+- Support runtime final Mac/Linux
 - Deploy ke server/cloud
 - Multi-user concurrency
 
@@ -144,6 +159,7 @@ Target distribusi:
 - Isi output: multi-sheet
 - Bentuk output: custom spesifik mengikuti use case nyata pertama
 - Nama file output sebaiknya unik untuk menghindari konflik overwrite
+- Output fisik disimpan ke folder `outputs/`
 
 ---
 
@@ -205,15 +221,16 @@ Keputusan awal yang sudah jelas:
 
 ## 9. Arsitektur Teknis
 
-- Web UI: HTML + JavaScript vanilla
-- Backend: Flask
-- Transformasi data: pandas
-- Baca/tulis Excel: openpyxl
-- Parsing config: PyYAML
-- Packaging: PyInstaller onedir
+- Desktop UI: `CustomTkinter`
+- Orkestrasi aplikasi: Python modular app
+- Transformasi data: `pandas`
+- Baca/tulis Excel: `openpyxl`
+- Parsing config: `PyYAML`
+- Packaging: `PyInstaller` `onedir`
 
 Struktur modul yang diharapkan:
 
+- `app/ui/` untuk komponen `CustomTkinter`
 - `config_loader`
 - `source_reader`
 - `master_loader`
@@ -221,14 +238,25 @@ Struktur modul yang diharapkan:
 - `formula_engine`
 - `output_writer`
 - `logger`
+- `app_context` atau helper path runtime
+
+Prinsip arsitektur:
+
+- Logic bisnis harus terpisah dari layer UI
+- UI hanya menangani input user, status proses, dan navigasi folder/file
+- Resolusi path harus portable di Linux dan Windows
+- Packaging harus mempertimbangkan mode source dan mode bundle PyInstaller
 
 ---
 
 ## 10. Constraint Teknis
 
-- Hanya untuk Windows 10/11 64-bit
+- Target distribusi final tetap Windows 10/11 64-bit
+- Development harian harus nyaman dilakukan di Linux maupun Windows
+- Build tidak dianggap truly cross-build; binary final harus dibuild di OS targetnya
+- Jika nanti ingin distribusi Linux atau macOS, build dilakukan terpisah di OS masing-masing
 - Target ukuran data sekitar 20 ribu baris, diproses in-memory
-- Log di UI cukup polling per awal dan akhir sub-tugas
+- Log di UI cukup polling internal atau callback per awal dan akhir sub-tugas
 - Kolom opsional yang hilang tidak boleh membuat sistem crash; cukup warning jika memang tidak kritikal
 - Error umum harus tampil jelas ke user non-teknis
 - Aplikasi harus tetap berjalan lokal tanpa internet
@@ -243,7 +271,9 @@ Struktur modul yang diharapkan:
 - Satu resep bisa memakai banyak master file
 - Kebutuhan lookup dan conditional dipastikan ada, tetapi rule detailnya akan diisi saat breakdown sub-tugas
 - Output target pertama adalah format custom spesifik, bukan sekadar summary generik
-- Browser lokal dibuka dari aplikasi portable untuk mengakses UI
+- Runtime directory `configs/`, `masters/`, `uploads/`, `outputs/` tetap dipakai agar konsisten di source mode maupun build mode
+- UI tidak memerlukan browser lokal, web server, atau port tertentu
+- Build final Windows dibuat di Windows; build Linux hanya bila memang ingin binary Linux terpisah
 
 ---
 
@@ -251,15 +281,16 @@ Struktur modul yang diharapkan:
 
 MVP dianggap sukses jika:
 
-- User bisa upload file `.xlsx` atau `.csv`
+- User bisa memilih file `.xlsx` atau `.csv`
 - User bisa memilih config `.yaml`
 - Sistem bisa load banyak master file dari folder `masters/`
 - Sistem bisa menjalankan transformasi utama sesuai config dan use case nyata
 - Sistem menghasilkan file `.xlsx` multi-sheet yang bisa dibuka di Excel
 - Output punya header dan styling dasar
-- UI menampilkan log proses dan error yang jelas
-- Hasil bisa didownload
+- UI desktop menampilkan log proses dan error yang jelas
+- Hasil tersimpan ke folder `outputs/` dengan nama unik
 - Aplikasi bisa dibundle dan dijalankan di PC Windows lain tanpa install Python
+- Struktur kode tetap nyaman didevelop di Linux maupun Windows
 - Minimal 1 use case nyata lolos validasi user
 
 ---
@@ -273,6 +304,7 @@ Bagian ini memang belum dirinci final di PRD karena akan diturunkan saat breakdo
 - Formula lanjutan di luar aritmatika sederhana
 - Kolom wajib per use case nyata
 - Bentuk layout output custom final per sheet
+- Detail polish UI desktop di luar kebutuhan alur MVP
 
 Pendekatannya:
 
@@ -288,9 +320,11 @@ Dokumen dianggap cukup siap untuk mulai coding jika:
 
 - Scope MVP tetap seperti di dokumen ini
 - Struktur folder runtime disepakati: `configs/`, `masters/`, `uploads/`, `outputs/`
+- Arsitektur UI disepakati: `CustomTkinter`, bukan web UI
 - `task-plan.md` dipakai sebagai checklist implementasi utama
 - Rule bisnis detail boleh menyusul per sub-tugas, selama arsitektur dasar sudah mendukungnya
+- Strategi build lintas OS dipahami: develop bebas lintas OS, build final per target OS
 
 ---
 
-*Dokumen ini adalah PRD v2.2 yang disederhanakan dan diperjelas untuk mulai coding MVP.*
+*Dokumen ini adalah PRD v2.4 yang diperbarui untuk pendekatan desktop app `CustomTkinter` dan packaging `PyInstaller` yang lebih mulus untuk development serta build lintas OS.*
