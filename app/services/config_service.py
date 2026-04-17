@@ -7,6 +7,9 @@ import yaml
 
 
 REQUIRED_ROOT_FIELDS = ("name", "source_sheet", "header", "outputs")
+SUPPORTED_MASTER_STRATEGIES = {"lookup", "ordered_rules"}
+SUPPORTED_MATCHER_MODES = {"equals", "contains"}
+SUPPORTED_KEY_NORMALIZERS = {"compact_text"}
 
 
 @dataclass(frozen=True)
@@ -72,13 +75,91 @@ def validate_config_payload(payload: object) -> tuple[str, ...]:
                         f"masters[{idx}] harus berupa object berisi file, key, dan columns."
                     )
                     continue
-                for required in ("file", "key"):
+                strategy = item.get("strategy", "lookup")
+                if not isinstance(strategy, str) or strategy not in SUPPORTED_MASTER_STRATEGIES:
+                    errors.append(
+                        f"masters[{idx}].strategy harus salah satu dari: {', '.join(sorted(SUPPORTED_MASTER_STRATEGIES))}."
+                    )
+                    continue
+                if "sheet_name" in item and not isinstance(item.get("sheet_name"), str):
+                    errors.append(f"masters[{idx}].sheet_name harus berupa string.")
+
+                if strategy == "lookup":
+                    has_shared_key = "key" in item
+                    has_split_keys = "source_key" in item or "master_key" in item
+                    if not has_shared_key and not has_split_keys:
+                        errors.append(
+                            f"masters[{idx}] wajib memiliki field 'key' atau pasangan 'source_key' dan 'master_key'."
+                        )
+                    if has_split_keys:
+                        for required in ("source_key", "master_key"):
+                            if required not in item:
+                                errors.append(
+                                    f"masters[{idx}] wajib memiliki field '{required}' saat memakai key terpisah."
+                                )
+                    if "columns" in item and not isinstance(item.get("columns"), list):
+                        errors.append(f"masters[{idx}].columns harus berupa list.")
+                    if "rename_columns" in item:
+                        rename_columns = item.get("rename_columns")
+                        if not isinstance(rename_columns, dict) or not all(
+                            isinstance(key, str) and isinstance(value, str)
+                            for key, value in rename_columns.items()
+                        ):
+                            errors.append(
+                                f"masters[{idx}].rename_columns harus berupa object string-to-string."
+                            )
+                    if "key_aliases" in item:
+                        key_aliases = item.get("key_aliases")
+                        if not isinstance(key_aliases, dict) or not all(
+                            isinstance(key, str) and isinstance(value, str)
+                            for key, value in key_aliases.items()
+                        ):
+                            errors.append(
+                                f"masters[{idx}].key_aliases harus berupa object string-to-string."
+                            )
+                    if "key_normalizer" in item:
+                        normalizer = item.get("key_normalizer")
+                        if (
+                            not isinstance(normalizer, str)
+                            or normalizer not in SUPPORTED_KEY_NORMALIZERS
+                        ):
+                            errors.append(
+                                f"masters[{idx}].key_normalizer harus salah satu dari: {', '.join(sorted(SUPPORTED_KEY_NORMALIZERS))}."
+                            )
+                    continue
+
+                for required in ("file", "sheet_name", "target_column", "value_column", "matchers"):
                     if required not in item:
                         errors.append(
-                            f"masters[{idx}] wajib memiliki field '{required}'."
+                            f"masters[{idx}] wajib memiliki field '{required}' untuk strategy 'ordered_rules'."
                         )
-                if "columns" in item and not isinstance(item.get("columns"), list):
-                    errors.append(f"masters[{idx}].columns harus berupa list.")
+
+                matchers = item.get("matchers")
+                if "matchers" in item:
+                    if not isinstance(matchers, list) or len(matchers) == 0:
+                        errors.append(
+                            f"masters[{idx}].matchers harus berupa list dan minimal 1 item."
+                        )
+                    else:
+                        for matcher_idx, matcher in enumerate(matchers):
+                            if not isinstance(matcher, dict):
+                                errors.append(
+                                    f"masters[{idx}].matchers[{matcher_idx}] harus berupa object."
+                                )
+                                continue
+                            for required in ("source", "master", "mode"):
+                                if required not in matcher:
+                                    errors.append(
+                                        f"masters[{idx}].matchers[{matcher_idx}] wajib memiliki field '{required}'."
+                                    )
+                            mode = matcher.get("mode")
+                            if mode is not None and (
+                                not isinstance(mode, str)
+                                or mode not in SUPPORTED_MATCHER_MODES
+                            ):
+                                errors.append(
+                                    f"masters[{idx}].matchers[{matcher_idx}].mode harus salah satu dari: {', '.join(sorted(SUPPORTED_MATCHER_MODES))}."
+                                )
 
     styling = payload.get("styling")
     if styling is not None and not isinstance(styling, dict):

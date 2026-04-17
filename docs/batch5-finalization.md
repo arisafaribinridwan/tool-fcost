@@ -4,12 +4,14 @@ Dokumen ini merangkum temuan lengkap untuk update terbaru pada workbook referens
 
 - `sub-15` add `action`
 - `sub-16` add `defect_category`
+- `sub-17` add `defect` (ekstensi repo, belum tertulis di workbook proses)
 
 Status saat ini:
 
 - sumber evidence sudah cukup untuk memetakan gap
-- `sub-15` sudah cukup jelas arah implementasinya
-- `sub-16` belum cukup jelas untuk dikunci implementasinya tanpa keputusan tambahan
+- `sub-15` sudah diimplementasikan di repo
+- `sub-16` sudah dikunci implementasinya di repo
+- `sub-17` sudah dikunci implementasinya di repo
 
 ## Sumber Evidence
 
@@ -27,6 +29,15 @@ Pada `example/Auto Monthly Report.xlsx` ditemukan update utama berikut:
 
 - `Sheet1!C23` = `sub15 - add column "action"`
 - `Sheet1!C24` = `sub16 - add column "defect_category"`
+
+Belum ditemukan entry workbook untuk `sub-17`.
+
+`sub-17` di dokumen ini dicatat sebagai keputusan implementasi repo tambahan berdasarkan kebutuhan lanjutan:
+
+- lookup dari kolom `action`
+- baca master sheet `defect_category`
+- ambil nilai kolom `Defect`
+- tulis ke kolom `defect`
 
 Rincian sub-step di sheet `sub_function`:
 
@@ -115,22 +126,20 @@ Berdasarkan isi master, pattern `repair_comment` paling masuk akal dibaca sepert
 
 Artinya implementasi batch 5 tidak bisa berdiri sendiri; ia harus dijalankan setelah step yang menghasilkan `part_name`.
 
-### Tingkat Kejelasan
+### Kontrak Final `sub-15`
 
-`sub-15` dinilai cukup jelas untuk mulai diimplementasikan.
+Implementasi repo untuk `sub-15` dikunci dengan kontrak berikut:
 
-Yang masih perlu diputuskan hanya detail teknis kecil:
-
-- apakah matching `repair_comment` bersifat substring atau exact setelah normalisasi
-- apakah matching case-insensitive
-- apa output default jika tidak ada rule yang cocok: kosong atau `N/A`
-
-Default aman yang direkomendasikan:
-
-- normalisasi trim
-- case-insensitive
+- master dibaca dari sheet `action`
+- rule dievaluasi dari atas ke bawah
+- `part_name` di-match dengan normalisasi trim + case-insensitive equality
+- `repair_comment` di-match dengan normalisasi trim + case-insensitive contains
+- karakter `*` pada pattern `repair_comment` diperlakukan sebagai wildcard ringan dan diabaikan saat pencarian token
+- field master yang kosong diperlakukan sebagai wildcard
 - first match wins
-- jika tidak ada match, biarkan kosong
+- jika tidak ada rule yang cocok, nilai `action` dibiarkan kosong
+
+Implementasi ini sejalan dengan evidence workbook dan cukup aman untuk kebutuhan batch 5 saat ini.
 
 ## Temuan Sub-16
 
@@ -163,75 +172,60 @@ Contoh isi master:
 | `Cancel` | `N/A` | `N/A` | `N/A` |
 | `External` | `N/A` | `N/A` | `N/A` |
 
-### Ambiguitas Utama
+### Kontrak Final `sub-16`
 
-Workbook proses hanya mengatakan:
+Keputusan final untuk `sub-16` adalah:
 
-- tambah kolom `defect_category`
-- isi berdasarkan master sheet `defect_category`
+- input lookup memakai kolom `action`
+- master dibaca dari sheet `defect_category`
+- key master yang dipakai adalah `Repair Action`
+- hasil yang diambil adalah kolom `Category`
+- hasil akhir ditulis ke kolom `defect_category`
 
-Namun master yang tersedia tidak punya kolom bernama `defect_category`.
+Secara implementasi, `sub-16` diperlakukan sebagai lookup sederhana `vlookup` dengan normalisasi key ringan:
 
-Sebaliknya, master ini menyediakan tiga kandidat output turunan:
+- trim whitespace
+- case-insensitive
+- abaikan spasi, underscore, dan karakter non-alphanumeric ringan
 
-- `Category`
-- `Defect`
-- `Code`
+Dengan normalisasi ini, pasangan seperti berikut bisa match tanpa ubah data master:
 
-Karena itu, nama target `defect_category` belum cukup untuk menentukan implementasi yang benar.
+- `replace_panel` -> `Replace Panel`
+- `factory_reset` -> `Factory Reset`
+- `replace_main_unit` -> `Replace Main Unit`
+- `external` -> `External`
 
-### Interpretasi Yang Mungkin
+Jika tidak ada key yang cocok, nilai `defect_category` dibiarkan kosong.
 
-Ada beberapa kemungkinan arti `defect_category`:
+### Catatan Kontrak Data
 
-1. `defect_category` = nilai kolom `Category`
-2. `defect_category` = nilai kolom `Defect`
-3. `defect_category` = gabungan `Category` + `Defect`
-4. `defect_category` = label bisnis turunan yang belum tertulis eksplisit di master
+Ada satu mismatch data referensi yang ditangani dengan alias lookup eksplisit:
 
-Dari nama kolom target saja, kemungkinan 1 dan 2 sama-sama masuk akal.
+- `replace_remote_control` dari sheet `action`
+- `Replace Remote` pada sheet `defect_category`
 
-### Ketergantungan Yang Paling Logis
+Alias ini dikunci di implementasi batch 5 agar row remote tetap menghasilkan `defect_category` yang sesuai tanpa harus menunggu perubahan master.
 
-Master `defect_category` memakai kolom `Repair Action` sebagai input.
+## Temuan Sub-17
 
-Ini memberi indikasi kuat bahwa:
+### Kontrak Final `sub-17`
 
-- `sub-16` kemungkinan besar bergantung pada hasil `sub-15`
-- `action` perlu terlebih dahulu dinormalisasi atau dipetakan ke label bisnis seperti `Replace Panel`, `Factory Reset`, `External`, `Cancel`
+Keputusan final untuk `sub-17` adalah:
 
-Masalahnya, label hasil master `action` saat ini memakai gaya snake_case / lowercase:
+- input lookup memakai kolom `action`
+- master dibaca dari sheet `defect_category`
+- key master yang dipakai adalah `Repair Action`
+- hasil yang diambil adalah kolom `Defect`
+- hasil akhir ditulis ke kolom `defect`
 
-- `replace_power_unit`
-- `replace_panel`
-- `replace_main_unit`
-- `factory_reset`
-- `external`
-- `cancel`
+Semantik lookup untuk `sub-17` mengikuti kontrak `sub-16`:
 
-Sedangkan master `defect_category` memakai gaya Title Case:
+- trim whitespace
+- case-insensitive
+- abaikan spasi, underscore, dan karakter non-alphanumeric ringan
+- gunakan alias eksplisit `replace_remote_control` -> `Replace Remote`
 
-- `Replace Power Unit`
-- `Replace Panel`
-- `Replace Main Unit`
-- `Factory Reset`
-- `External`
-- `Cancel`
-
-Artinya ada gap kontrak antar master:
-
-- belum jelas apakah `sub-15` harus menghasilkan label final Title Case
-- atau ada normalisasi tambahan dari `action` ke `Repair Action`
-- atau sheet `action` sendiri belum final
-
-### Tingkat Kejelasan
-
-`sub-16` belum aman untuk dikunci implementasinya.
-
-Blokernya ada dua:
-
-1. output mana yang harus diisikan ke kolom `defect_category`
-2. bagaimana memetakan hasil `sub-15` ke key `Repair Action`
+Jika tidak ada key yang cocok, nilai `defect` dibiarkan kosong.
 
 ## Evidence Dari Sample Output
 
@@ -239,6 +233,8 @@ Pada `example/result.xlsx` sheet `result`, header row sudah menyiapkan kolom:
 
 - `AF1 = action`
 - `AG1 = defect_category`
+
+Belum ada header sample workbook yang membuktikan kolom `defect`, karena `sub-17` belum tertulis di workbook proses referensi.
 
 Namun pada beberapa row sample yang diperiksa:
 
@@ -254,45 +250,62 @@ Sebaliknya, sample output hanya mengonfirmasi bahwa:
 
 ## Temuan Pada Kode Repo Saat Ini
 
-### Engine Transformasi Belum Mendukung Batch 5
+### Engine Transformasi Sekarang Mendukung Batch 5
 
-Implementasi di `app/services/transform_service.py` saat ini masih berbasis:
+Implementasi di `app/services/transform_service.py` sekarang mendukung dua mode master:
 
-- lookup master generik dengan satu `key`
-- merge `m:1`
-- penambahan kolom dari hasil join langsung
+- lookup generik berbasis `key` seperti sebelumnya
+- `ordered_rules` untuk rule top-to-bottom berbasis beberapa kolom source
 
-Ini belum cukup untuk batch 5 karena:
+Tambahan perilaku yang sudah aktif:
 
-- `sub-15` butuh rule engine ordered matching
-- `sub-15` bukan merge satu key
-- `sub-16` kemungkinan butuh mapping lanjutan dari hasil `action`
-- pembacaan master `.xlsx` saat ini juga belum dibangun eksplisit untuk memilih sheet tertentu pada config master generik
+- pembacaan `sheet_name` untuk file master `.xlsx`
+- evaluasi multi-matcher dari atas ke bawah
+- overwrite langsung ke kolom target seperti `action`
+- lookup dengan `source_key` dan `master_key` berbeda
+- normalisasi key lookup ringan untuk kasus `action` -> `Repair Action`
+- rename kolom hasil lookup seperti `Category` -> `defect_category`
+- alias lookup eksplisit untuk mismatch semantik tertentu
 
-### Schema Config Belum Mewadahi Rule Batch 5
+### Schema Config Sekarang Sudah Mewadahi Batch 5
 
-Validasi config di `app/services/config_service.py` saat ini baru mengenal field:
+Validasi config di `app/services/config_service.py` sekarang mendukung bentuk berikut untuk `sub-15`:
 
-- `file`
-- `key`
-- `columns`
-
-Belum ada bentuk schema untuk:
-
+- `strategy: ordered_rules`
 - `sheet_name`
-- rule top-to-bottom
-- multi-source input
-- wildcard/substring matching
-- first-match-wins
-- output turunan dari beberapa kolom master
+- `target_column`
+- `value_column`
+- `matchers`
 
-### Test Coverage Belum Menyentuh Batch 5
+Setiap item `matchers` memakai:
 
-Test suite saat ini masih lolos penuh pada baseline repo, tetapi belum ada coverage untuk:
+- `source`
+- `master`
+- `mode`
 
+Mode yang saat ini didukung:
+
+- `equals`
+- `contains`
+
+Untuk `sub-16`, config lookup sekarang juga mendukung:
+
+- `source_key`
+- `master_key`
+- `key_normalizer`
+- `rename_columns`
+- `key_aliases`
+
+### Test Coverage Sudah Menyentuh Batch 5
+
+Test suite sekarang sudah menambah coverage untuk:
+
+- validasi schema `ordered_rules`
 - rule `action`
-- mapping `defect_category`
-- pembacaan sheet master batch 5
+- pembacaan sheet master `action`
+- lookup `defect_category` dari `action`
+- lookup `defect` dari `action`
+- preserve nilai literal seperti `N/A` dari master
 
 ## Ringkasan Gap Yang Sudah Pasti
 
@@ -300,56 +313,37 @@ Test suite saat ini masih lolos penuh pada baseline repo, tetapi belum ada cover
 
 - workbook proses memang menambah `sub-15` dan `sub-16`
 - master workbook memang menambah sheet `action` dan `defect_category`
-- repo saat ini belum mengimplementasikan batch 5
-- repo saat ini belum mendokumentasikan batch 5
+- repo saat ini sudah mengimplementasikan `sub-15`
+- repo saat ini sudah mengimplementasikan `sub-16`
 - sample output belum memberi bukti final nilai hasil batch 5
 
 ### Sudah cukup jelas untuk coding
 
 - `sub-15` membutuhkan rule engine berbasis `part_name` dan `repair_comment`
+- `sub-17` cukup memakai kontrak lookup yang sama dengan `sub-16`, tetapi mengambil kolom `Defect`
 
-### Belum cukup jelas untuk coding aman
+### Residual Risk Yang Masih Perlu Dipantau
 
-- definisi final kolom `defect_category`
-- kontrak antara output `action` dan key `Repair Action`
-
-## Rekomendasi Keputusan Sebelum Implementasi
-
-Sebelum batch 5 diimplementasikan, keputusan berikut perlu dikunci:
-
-1. `sub-15`
-
-- apakah `repair_comment` di-match sebagai substring case-insensitive
-- apakah `*` di awal/akhir dianggap wildcard
-- apa nilai default jika tidak match
-- apakah output `action` final mengikuti snake_case atau Title Case
-
-2. `sub-16`
-
-- apakah `defect_category` harus diisi dari `Category`, `Defect`, atau bentuk gabungan
-- apakah kolom `Code` juga perlu disimpan di masa depan
-- apakah input lookup memakai hasil `action` apa adanya atau label `Repair Action` yang sudah dinormalisasi
+- kemungkinan ada mismatch semantik lain antar sheet master yang belum muncul di sample data
+- kemungkinan kebutuhan kolom turunan lain dari master `defect_category` seperti `Defect` atau `Code` di batch berikutnya
 
 ## Rekomendasi Arah Implementasi
 
-Jika ingin meminimalkan rework, urutan kerja yang direkomendasikan adalah:
+Batch 5 sekarang sudah cukup stabil untuk dipakai.
 
-1. Kunci spesifikasi `sub-15`
-2. Kunci arti final `defect_category`
-3. Tambahkan dokumen final batch 5 yang mengikat kontrak rule
-4. Baru implementasikan engine rule dan test
+Jika ingin melanjutkan refinement, urutan kerja yang direkomendasikan adalah:
+
+1. Review apakah mismatch `replace_remote_control` perlu alias khusus
+2. Putuskan apakah sheet `defect_category` nantinya juga perlu expose kolom `Defect` atau `Code`
 
 ## Kesimpulan
 
-Batch 5 sudah nyata di workbook referensi, tetapi belum siap langsung diimplementasikan penuh tanpa keputusan tambahan.
+Batch 5 sudah nyata di workbook referensi dan sekarang sudah terimplementasi di repo.
 
 Status final per sub-task:
 
-- `sub-15` hampir siap dikunci
-- `sub-16` masih ambigu
+- `sub-15` selesai diimplementasikan
+- `sub-16` selesai diimplementasikan
+- `sub-17` selesai diimplementasikan
 
-Dengan kondisi evidence saat ini, tindakan paling aman adalah:
-
-- dokumentasikan temuan lebih dulu
-- kunci kontrak `sub-16`
-- baru lanjut ke coding dan test
+Dengan kondisi evidence saat ini, tindakan paling aman berikutnya adalah memantau mismatch data lintas master dan menambah alias hanya jika memang dibutuhkan oleh data aktual.
