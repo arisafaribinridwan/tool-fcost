@@ -4,6 +4,12 @@ Dokumen ini adalah checklist implementasi utama untuk MVP.
 Fokusnya dibuat sederhana, jelas, dan bisa dipakai monitoring progress harian.
 Dokumen ini mengikuti keputusan baru bahwa UI memakai `CustomTkinter`, sementara strategi kerja tetap mengutamakan development lintas OS dan build per OS target dengan `PyInstaller`.
 
+Status sinkronisasi terakhir:
+
+- Checklist sudah diselaraskan dengan skeleton desktop `CustomTkinter` dan helper dasar yang saat ini ada di repo.
+- Item yang dicentang berarti sudah terimplementasi atau sudah diverifikasi lewat test dasar.
+- Item yang masih kosong berarti belum selesai, belum terhubung end-to-end, atau belum divalidasi lintas OS target runtime final.
+
 ## Cara Pakai
 
 - Centang item yang sudah selesai.
@@ -102,28 +108,28 @@ source .venv/bin/activate
 ## 4. Struktur Proyek
 
 - [x] Buat folder `app/`.
-- [ ] Buat folder `app/ui/`.
-- [ ] Buat folder `app/ui/components/` jika diperlukan.
-- [ ] Buat folder `app/services/`.
-- [ ] Buat folder `app/utils/`.
+- [x] Buat folder `app/ui/`.
+- [x] Buat folder `app/ui/components/` jika diperlukan.
+- [x] Buat folder `app/services/`.
+- [x] Buat folder `app/utils/`.
 - [x] Buat folder `configs/`.
 - [x] Buat folder `masters/`.
 - [x] Buat folder `uploads/`.
 - [x] Buat folder `outputs/`.
 - [x] Buat folder `tests/`.
-- [ ] Buat file entrypoint desktop, misalnya `run.py` atau `main.py`.
+- [x] Buat file entrypoint desktop, misalnya `run.py` atau `main.py`.
 - [ ] Siapkan folder atau file config khusus packaging per OS bila diperlukan.
-- [ ] Siapkan helper path runtime agar source mode dan bundle mode konsisten.
+- [x] Siapkan helper path runtime agar source mode dan bundle mode konsisten.
 
 ## 5. Breakdown Fase Implementasi
 
 ### Fase 1 - Skeleton aplikasi
 
-- [ ] Buat app `CustomTkinter` dasar.
-- [ ] Buat window utama.
-- [ ] Buat layout dasar panel input, log, dan status.
+- [x] Buat app `CustomTkinter` dasar.
+- [x] Buat window utama.
+- [x] Buat layout dasar panel input, log, dan status.
 - [ ] Pastikan app bisa dijalankan lokal di Linux dan Windows.
-- [ ] Pastikan bootstrap path dan lokasi file runtime tidak bergantung separator OS.
+- [x] Pastikan bootstrap path dan lokasi file runtime tidak bergantung separator OS.
 
 Definition of done:
 
@@ -131,43 +137,43 @@ Definition of done:
 
 ### Fase 2 - Desktop UI dasar
 
-- [ ] Buat tombol pilih file source.
-- [ ] Buat dropdown/list config YAML.
-- [ ] Buat tombol `Execute`.
-- [ ] Buat area log proses.
-- [ ] Buat area hasil dan tombol buka folder output.
-- [ ] Tambahkan validasi input sederhana.
-- [ ] Pastikan pemilihan file dan pembukaan folder memakai mekanisme yang aman lintas OS.
+- [x] Buat tombol pilih file source.
+- [x] Buat dropdown/list config YAML.
+- [x] Buat tombol `Execute`.
+- [x] Buat area log proses.
+- [x] Buat area hasil dan tombol buka folder output.
+- [x] Tambahkan validasi input sederhana.
+- [x] Pastikan pemilihan file dan pembukaan folder memakai mekanisme yang aman lintas OS.
 
 Definition of done:
 
-- [ ] User bisa melihat alur dasar dari desktop UI walau backend belum lengkap.
+- [x] User bisa melihat alur dasar dari desktop UI walau backend belum lengkap.
 
 ### Fase 3 - Config loader dan schema dasar
 
-- [ ] Baca semua file `.yaml` dari folder `configs/`.
-- [ ] Parse YAML.
-- [ ] Validasi field root minimum.
-- [ ] Validasi struktur `masters`.
-- [ ] Validasi struktur `outputs`.
-- [ ] Validasi struktur `styling`.
+- [x] Baca semua file `.yaml` dari folder `configs/`.
+- [x] Parse YAML.
+- [x] Validasi field root minimum.
+- [x] Validasi struktur `masters`.
+- [x] Validasi struktur `outputs`.
+- [x] Validasi struktur `styling`.
 - [ ] Normalisasi dan validasi path config agar tetap aman di Linux dan Windows.
-- [ ] Buat error message yang mudah dipahami.
-- [ ] Buat minimal 2 config contoh.
+- [x] Buat error message yang mudah dipahami.
+- [x] Buat minimal 2 config contoh.
 
 Definition of done:
 
-- [ ] Config valid bisa dibaca.
-- [ ] Config invalid menghasilkan error jelas.
+- [x] Config valid bisa dibaca.
+- [x] Config invalid menghasilkan error jelas.
 
 ### Fase 4 - Source reader
 
 - [ ] Implement reader `.xlsx`.
 - [ ] Implement reader `.csv`.
-- [ ] Validasi ekstensi file.
+- [x] Validasi ekstensi file.
 - [ ] Validasi sheet source untuk Excel.
 - [ ] Validasi file kosong atau rusak.
-- [ ] Salin source ke folder `uploads/` bila memang dipakai sebagai jejak runtime.
+- [x] Salin source ke folder `uploads/` bila memang dipakai sebagai jejak runtime.
 - [ ] Validasi kolom minimum jika dibutuhkan config.
 - [ ] Uji nama file/sheet dengan variasi huruf besar-kecil agar aman lintas OS.
 
@@ -244,27 +250,27 @@ Definition of done:
 
 ### Fase 9 - Logging dan progress
 
-- [ ] Buat logger proses per langkah.
-- [ ] Log awal sub-tugas.
+- [x] Buat logger proses per langkah.
+- [x] Log awal sub-tugas.
 - [ ] Log akhir sub-tugas.
 - [ ] Log warning.
 - [ ] Log error.
-- [ ] Hubungkan log ke widget UI secara aman tanpa freeze.
+- [x] Hubungkan log ke widget UI secara aman tanpa freeze.
 - [ ] Siapkan mekanisme progress dasar untuk proses yang berjalan agak lama.
 
 Definition of done:
 
-- [ ] User bisa melihat progress proses utama dari desktop UI.
+- [x] User bisa melihat progress proses utama dari desktop UI.
 
 ### Fase 10 - Integrasi end-to-end
 
-- [ ] Hubungkan pilih source + pilih config + execute.
+- [x] Hubungkan pilih source + pilih config + execute.
 - [ ] Load source saat execute.
 - [ ] Load semua master saat execute.
 - [ ] Jalankan transformasi sesuai config.
 - [ ] Tulis output Excel.
-- [ ] Tampilkan status sukses/gagal.
-- [ ] Aktifkan tombol buka file atau buka folder hasil.
+- [x] Tampilkan status sukses/gagal.
+- [x] Aktifkan tombol buka file atau buka folder hasil.
 - [ ] Verifikasi alur lokal di environment development utama.
 
 Definition of done:
@@ -273,15 +279,15 @@ Definition of done:
 
 ### Fase 11 - Hardening dan error handling
 
-- [ ] Tangani file source tidak valid.
-- [ ] Tangani config invalid.
+- [x] Tangani file source tidak valid.
+- [x] Tangani config invalid.
 - [ ] Tangani master file hilang.
 - [ ] Tangani sheet source tidak ditemukan.
 - [ ] Tangani kolom wajib hilang.
 - [ ] Tangani rule formula/conditional invalid.
 - [ ] Tangani nama sheet invalid.
 - [ ] Tangani file output gagal ditulis karena sedang dibuka.
-- [ ] Pastikan pesan error mudah dipahami user non-teknis.
+- [x] Pastikan pesan error mudah dipahami user non-teknis.
 - [ ] Pastikan UI tidak crash diam-diam saat exception terjadi di proses background.
 
 Definition of done:
@@ -293,7 +299,7 @@ Definition of done:
 - [ ] Buat fixture kecil untuk source.
 - [ ] Buat fixture kecil untuk master.
 - [ ] Buat fixture kecil untuk YAML.
-- [ ] Buat unit test config loader.
+- [x] Buat unit test config loader.
 - [ ] Buat unit test source reader.
 - [ ] Buat unit test master loader.
 - [ ] Buat unit test transform engine.
@@ -301,9 +307,9 @@ Definition of done:
 - [ ] Buat unit test output writer.
 - [ ] Buat test UI minimal untuk helper logic yang bisa diuji tanpa full window interaktif.
 - [ ] Buat minimal 1 integration test.
-- [ ] Jalankan test rutin minimal di 1 environment development.
+- [x] Jalankan test rutin minimal di 1 environment development.
 - [ ] Jika memungkinkan, ulangi test penting di Linux dan Windows.
-- [ ] Tambahkan test atau checklist untuk path handling dan case sensitivity.
+- [x] Tambahkan test atau checklist untuk path handling dan case sensitivity.
 
 Definition of done:
 
