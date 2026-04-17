@@ -1,0 +1,28 @@
+name: "Laporan Penjualan"
+source_sheet: "Sheet1"
+
+header:
+  title: "Laporan Penjualan"
+  period_from_column: "tanggal"
+
+masters:
+  - file: "masters/produk.xlsx"
+    key: "kode_produk"
+    columns:
+      - "nama_produk"
+      - "kategori"
+
+outputs:
+  - sheet_name: "Detail"
+    columns:
+      - "tanggal"
+      - "kode_produk"
+      - "qty"
+      - "harga"
+
+styling:
+  header_color: "4472C4"
+  font: "Arial"
+  number_format: "#,##0"
+  date_format: "DD/MM/YYYY"
+  freeze_pane: "A2"
