@@ -142,3 +142,65 @@ def test_validate_config_payload_accepts_lookup_for_defect_output():
     }
 
     assert validate_config_payload(payload) == ()
+
+
+def test_validate_config_payload_accepts_transforms_and_group_by_output():
+    payload = {
+        "name": "Transform Config",
+        "source_sheet": "Sheet1",
+        "header": {},
+        "transforms": [
+            {"type": "ensure_optional_columns", "columns": {"catatan": ""}},
+            {"type": "filter_rows", "column": "qty", "gte": 5},
+            {
+                "type": "formula",
+                "target": "total",
+                "operation": "multiply",
+                "operands": [{"column": "qty"}, {"column": "harga"}],
+            },
+            {
+                "type": "conditional",
+                "target": "bucket",
+                "cases": [
+                    {
+                        "when": {"column": "total", "gte": 50000},
+                        "value": "besar",
+                    }
+                ],
+                "default": "kecil",
+            },
+        ],
+        "outputs": [
+            {"sheet_name": "Detail", "columns": ["qty", "harga", "total", "bucket"]},
+            {
+                "sheet_name": "Summary",
+                "group_by": {
+                    "by": "bucket",
+                    "aggregations": {"qty": "sum", "total": "sum"},
+                },
+                "columns": ["bucket", "qty", "total"],
+            },
+        ],
+    }
+
+    assert validate_config_payload(payload) == ()
+
+
+def test_validate_config_payload_rejects_invalid_formula_operation():
+    payload = {
+        "name": "Invalid Formula",
+        "source_sheet": "Sheet1",
+        "header": {},
+        "transforms": [
+            {
+                "type": "formula",
+                "target": "total",
+                "operation": "power",
+                "operands": [{"column": "qty"}],
+            }
+        ],
+        "outputs": [{"sheet_name": "Detail", "columns": ["qty", "total"]}],
+    }
+
+    errors = validate_config_payload(payload)
+    assert any("operation harus salah satu" in item for item in errors)

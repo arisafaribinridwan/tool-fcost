@@ -198,13 +198,13 @@ Definition of done:
 
 ### Fase 6 - Transform engine dasar
 
-- [ ] Implement filter data.
+- [x] Implement filter data.
 - [x] Implement pilih kolom output.
 - [x] Implement rename kolom bila diperlukan.
 - [x] Implement merge/mapping ala lookup.
-- [ ] Implement group by dan agregasi.
+- [x] Implement group by dan agregasi.
 - [x] Implement pivot table.
-- [ ] Tambahkan warning untuk kolom opsional yang hilang.
+- [x] Tambahkan warning untuk kolom opsional yang hilang.
 
 Definition of done:
 
@@ -212,11 +212,11 @@ Definition of done:
 
 ### Fase 7 - Formula dan conditional engine
 
-- [ ] Implement formula aritmatika sederhana.
-- [ ] Siapkan struktur untuk conditional rule.
+- [x] Implement formula aritmatika sederhana.
+- [x] Siapkan struktur untuk conditional rule.
 - [ ] Siapkan struktur untuk lookup rule lanjutan.
 - [ ] Validasi rule agar tidak unsafe.
-- [ ] Buat pesan error formula/rule yang jelas.
+- [x] Buat pesan error formula/rule yang jelas.
 
 Sub-tugas rule bisnis yang akan diisi nanti:
 
@@ -284,7 +284,7 @@ Definition of done:
 - [x] Tangani master file hilang.
 - [x] Tangani sheet source tidak ditemukan.
 - [x] Tangani kolom wajib hilang.
-- [ ] Tangani rule formula/conditional invalid.
+- [x] Tangani rule formula/conditional invalid.
 - [x] Tangani nama sheet invalid.
 - [x] Tangani file output gagal ditulis karena sedang dibuka.
 - [x] Pastikan pesan error mudah dipahami user non-teknis.
@@ -303,7 +303,7 @@ Definition of done:
 - [x] Buat unit test source reader.
 - [x] Buat unit test master loader.
 - [x] Buat unit test transform engine.
-- [ ] Buat unit test formula/rule engine.
+- [x] Buat unit test formula/rule engine.
 - [x] Buat unit test output writer.
 - [ ] Buat test UI minimal untuk helper logic yang bisa diuji tanpa full window interaktif.
 - [x] Buat minimal 1 integration test.
@@ -439,7 +439,7 @@ Bagian ini sengaja disiapkan sebagai placeholder agar saat sample nyata datang, 
 - [x] Buat source reader
 - [x] Buat master loader
 - [x] Buat transform engine dasar
-- [ ] Buat formula/conditional engine dasar
+- [x] Buat formula/conditional engine dasar
 - [x] Buat output writer
 - [x] Tambahkan logging dan integrasi end-to-end
 - [x] Tambahkan testing
