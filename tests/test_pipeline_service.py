@@ -504,3 +504,214 @@ def test_run_pipeline_supports_transforms_and_group_by_output(app_paths):
     assert summary_df["qty"].tolist() == [10, 5]
     assert summary_df["total"].tolist() == [100000, 40000]
     assert any("Apply transform rules" in item for item in logs)
+
+
+def test_run_pipeline_supports_monthly_step_recipe_end_to_end(app_paths):
+    source_path = app_paths.project_root / "monthly_source.xlsx"
+
+    gqs_df = pd.DataFrame(
+        [
+            {
+                "Notification": "123456789",
+                "Job Sheet Section": 2,
+                "Malfunction Start Date": "2026-02-15",
+                "Basic Finish Date": "2026-02-20",
+                "Model Name": "ABC42ZZ",
+                "Category": "LCD SEID",
+                "Serial Number": "ABCDE12345",
+                "Symptom Code": "S1",
+                "Symptom Code (Description)": "Desc 1",
+                "PMActType": "PMA",
+                "PMActType (Description)": "PMA Desc",
+                "Symptom Comment": "vertical line",
+                "Repair Comment": "replace screen",
+                "Description": "desc gqs 1",
+                "Warranty": "Yes",
+                "Planner Group": "PG1",
+                "cabang": "JKT",
+                "Purchased Date": "2026-01-01",
+                "Labor Cost": 10,
+                "Transportation Cost": 1,
+                "Parts Cost": 20,
+                "Part used": "PNL01",
+            },
+            {
+                "Notification": "123456789",
+                "Job Sheet Section": 1,
+                "Malfunction Start Date": "2026-02-15",
+                "Basic Finish Date": "2026-02-20",
+                "Model Name": "ABC42ZZ",
+                "Category": "LCD SEID",
+                "Serial Number": "ABCDE12345",
+                "Symptom Code": "S2",
+                "Symptom Code (Description)": "Desc 2",
+                "PMActType": "PMA",
+                "PMActType (Description)": "PMA Desc",
+                "Symptom Comment": "adhesive issue",
+                "Repair Comment": "tape adjust",
+                "Description": "desc gqs 2",
+                "Warranty": "Yes",
+                "Planner Group": "PG1",
+                "cabang": "JKT",
+                "Purchased Date": "2026-01-01",
+                "Labor Cost": 5,
+                "Transportation Cost": 2,
+                "Parts Cost": 30,
+                "Part used": "TAP01",
+            },
+        ]
+    )
+
+    sass_df = pd.DataFrame(
+        [
+            {
+                "No Claim": "SASS00000001",
+                "QTY Claim": 1,
+                "Receive": "2026-02-15",
+                "Finish": "2026-02-18",
+                "Model": "LX32ZZ",
+                "Category": "LCD SEID",
+                "Serial No": "VWXYZ98765",
+                "Damage": "boot loop",
+                "Part Replacement": "factor reset",
+                "Branch": "JKT",
+                "Purchase": "2024-01-01",
+                "Service Fee": 5,
+                "Transport Cost": 1,
+                "Part": 400,
+                "Part Code": "MAIN1",
+            },
+            {
+                "No Claim": "SASS00000001",
+                "QTY Claim": 2,
+                "Receive": "2026-02-15",
+                "Finish": "2026-02-18",
+                "Model": "LX32ZZ",
+                "Category": "LCD SEID",
+                "Serial No": "VWXYZ98765",
+                "Damage": "no power",
+                "Part Replacement": "replace board",
+                "Branch": "JKT",
+                "Purchase": "2024-01-01",
+                "Service Fee": 6,
+                "Transport Cost": 2,
+                "Part": 100,
+                "Part Code": "PWR01",
+            },
+        ]
+    )
+
+    with pd.ExcelWriter(source_path) as writer:
+        gqs_df.to_excel(writer, index=False, sheet_name="GQS Mar26", startrow=1)
+        sass_df.to_excel(writer, index=False, sheet_name="SASS Mar26", startrow=4)
+
+    master_path = app_paths.masters_dir / "master_table.xlsx"
+    with pd.ExcelWriter(master_path) as writer:
+        pd.DataFrame(
+            [
+                {"part_used": "PNL01", "part_name": "PANEL"},
+                {"part_used": "TAP01", "part_name": "TAPE"},
+                {"part_used": "MAIN1", "part_name": "MAIN_UNIT"},
+                {"part_used": "PWR01", "part_name": "POWER_UNIT"},
+            ]
+        ).to_excel(writer, index=False, sheet_name="part_list")
+        pd.DataFrame([{"unused": "x"}]).to_excel(writer, index=False, sheet_name="panel_usage")
+        pd.DataFrame(
+            [
+                {"model_name": "ABC42ZZ", "factory": "Factory A"},
+                {"model_name": "LX32ZZ", "factory": "Factory B"},
+            ]
+        ).to_excel(writer, index=False, sheet_name="factory")
+        pd.DataFrame(
+            [
+                {"part_name": "PANEL", "symptom_comment": "*line", "symptom": "LINE"},
+                {"part_name": "TAPE", "symptom_comment": "*", "symptom": "TAPE_GENERIC"},
+                {"part_name": "MAIN_UNIT", "symptom_comment": "*boot", "symptom": "BOOT"},
+                {"part_name": "POWER_UNIT", "symptom_comment": "*power", "symptom": "POWER"},
+            ]
+        ).to_excel(writer, index=False, sheet_name="symptom")
+        pd.DataFrame([{"init": "JKT", "branch": "Jakarta"}]).to_excel(
+            writer, index=False, sheet_name="branch"
+        )
+        pd.DataFrame(
+            [
+                {"part_name": "PANEL", "repair_comment": "*", "action": "replace_panel"},
+                {"part_name": "TAPE", "repair_comment": "*", "action": "cancel"},
+                {"part_name": "", "repair_comment": "*factor", "action": "factory_reset"},
+                {"part_name": "POWER_UNIT", "repair_comment": "*", "action": "replace_power_unit"},
+            ]
+        ).to_excel(writer, index=False, sheet_name="action")
+        pd.DataFrame(
+            [
+                {
+                    "Repair Action": "Replace Panel",
+                    "Category": "Defect",
+                    "Defect": "Panel",
+                },
+                {
+                    "Repair Action": "Cancel",
+                    "Category": "N/A",
+                    "Defect": "N/A",
+                },
+                {
+                    "Repair Action": "Factory Reset",
+                    "Category": "Software",
+                    "Defect": "Software",
+                },
+                {
+                    "Repair Action": "Replace Power Unit",
+                    "Category": "Defect",
+                    "Defect": "Power",
+                },
+            ]
+        ).to_excel(writer, index=False, sheet_name="defect_category")
+
+    recipe_path = app_paths.configs_dir / "monthly-report-recipe.yaml"
+    recipe_path.write_text(
+        Path("docs/monthly-report-recipe.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    logs: list[str] = []
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=recipe_path,
+        log=logs.append,
+    )
+
+    detail_df = pd.read_excel(
+        result.output_path,
+        sheet_name="result",
+        skiprows=3,
+        keep_default_na=False,
+    )
+
+    assert detail_df["notification"].tolist() == [
+        "123456789",
+        "123456789",
+        "SASS00000001",
+        "SASS00000001",
+    ]
+    assert detail_df["section"].tolist() == ["GQS", "GQS", "SASS", "SASS"]
+    assert detail_df["part_name"].tolist() == ["PANEL", "TAPE", "MAIN_UNIT", "POWER_UNIT"]
+    assert detail_df["job_sheet_section"].tolist() == [1, 0, 1, 0]
+    assert detail_df["labor_cost"].tolist() == [1500, 0, 11, 0]
+    assert detail_df["transportation_cost"].tolist() == [300, 0, 3, 0]
+    assert detail_df["parts_cost"].tolist() == [5000, 0, 400, 100]
+    assert detail_df["total_cost"].tolist() == [6800, 0, 414, 100]
+    assert detail_df["prod_month"].astype(str).tolist() == ["123", "123", "987", "987"]
+    assert detail_df["inch"].astype(str).tolist() == ["42", "42", "32", "32"]
+    assert detail_df["panel_usage"].tolist() == ["< 1 Year", "< 1 Year", "2 - 3 Years", "2 - 3 Years"]
+    assert detail_df["factory"].tolist() == ["Factory A", "Factory A", "Factory B", "Factory B"]
+    assert detail_df["symptom"].tolist() == ["LINE", "TAPE_GENERIC", "BOOT", "POWER"]
+    assert detail_df["branch"].tolist() == ["Jakarta", "Jakarta", "Jakarta", "Jakarta"]
+    assert detail_df["action"].tolist() == [
+        "replace_panel",
+        "cancel",
+        "factory_reset",
+        "replace_power_unit",
+    ]
+    assert detail_df["defect_category"].tolist() == ["Defect", "N/A", "Software", "Defect"]
+    assert detail_df["defect"].tolist() == ["Panel", "N/A", "Software", "Power"]
+    assert any("duplicate group rewrite" in item.lower() for item in logs)
