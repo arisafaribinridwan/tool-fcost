@@ -1,0 +1,26 @@
+priority,part_name,match_type,pattern,symptom,notes
+10,POWER_UNIT,wildcard,*,TOTAL_OFF,Default untuk POWER_UNIT
+20,PANEL,contains_any,PECAH,BROKEN,Kasus layar pecah
+30,PANEL,contains_any,PIXEL|DEAD PIXEL|DEATH PIXEL|DOT|BINTIK|VOLKADOT,DOT,Pixel dot bintik
+40,PANEL,contains_any,BULATAN HITAM,SPOT,Titik/bulatan hitam lokal
+50,PANEL,contains_any,SETENGAH|SEBELAH,HALF,Gambar hilang setengah/sebelah
+60,PANEL,contains_any,GARIS|LINE,LINE,Garis vertikal horizontal cross line
+70,PANEL,contains_any,GELAP,DARK,Gambar gelap
+80,PANEL,contains_any,BERBAYANG|BAYANG|BURAM|BLUR|TIDAK JELAS,BLUR,Gambar bayang blur buram
+90,PANEL,contains_any,BERKEDIP|KEDIP,BLINKING,Layar berkedip
+100,PANEL,contains_any,MERAH|BERMASALAH|BEMASALAH|DELAY|BLUE SCREEN|PUTIH|GOYANG|BERGERAK|KUALITAS GAMBAR|RUSAK PANEL|PANEL RUSAK|PESAN PANEL|GANTI PANEL|SLOW MOTION|UNGU,DISPLAY_NG,Gambar merah delay dan kualitas tampilan bermasalah
+110,PANEL,contains_any,TIDAK ADA GAMBAR|TDK ADA GAMBAR|X ADA GAMBAR,BLANK,Tidak ada gambar pada panel
+120,PANEL,contains_any,BLANK,BLANK,Kata blank eksplisit
+130,PANEL,contains_any,HANYA SUARA|SUARA SAJA,BLANK,Hanya suara tanpa gambar
+140,PANEL,contains_any,LAYAR MATI|MATI|MATI TOTAL|TIDAK BISA HIDUP|TIDAK BS HIDUP,TOTAL_OFF,Panel mati mengikuti sample sebagai total off
+150,MAIN_UNIT,contains_any,HDMI,HDMI_NG,Masalah HDMI
+160,MAIN_UNIT,contains_any,REMOTE|REMOT|SENSOR,SENSOR_NG,Masalah sensor/remote dan didahulukan atas no picture
+170,MAIN_UNIT,contains_any,TIDAK ADA SUARA|SUARA TIDAK JELAS|SEMBER,SOUND_NG,Masalah audio/speaker
+180,MAIN_UNIT,contains_any,LOGO|STUCK,LOGO_FREEZE,Stuck di logo
+190,MAIN_UNIT,contains_any,SIARAN|SINYAL|SIGNAL|CHANNEL|CHANEL|ANTENE,NO_CHANNEL,Masalah siaran/sinyal/channel termasuk error siaran digital
+200,MAIN_UNIT,contains_any,TIDAK ADA GAMBAR|TDK ADA GAMBAR|LAYAR BLANK|NO PICTURE|TUNER PATAH|BLANK,NO_PICTURE,Masalah gambar hilang karena main unit
+210,MAIN_UNIT,contains_any,INDIKATOR KEDIP|PROTECT,PROTECT,Protect atau indikator kedip
+220,MAIN_UNIT,contains_any,STANDBY|STAND BY|STANBY|STANDY,STANDBY,Masalah standby
+230,MAIN_UNIT,contains_any,ERROR|EROR|SAFE MODE|NETFLIX|GOOGLE|PROGRAM,ERROR,Error aplikasi/sistem
+240,MAIN_UNIT,contains_any,MERAH|BERGARIS|DISPLAY|TAMPILAN|BLUR|DELAY|DISPLAY KEDIP|LAYAR SERING BERKEDIP|VERTIKAL BLOK,PICTURE_NG,Masalah kualitas tampilan dari main unit termasuk layar/display kedip
+250,MAIN_UNIT,contains_any,MATI TOTAL|TIDAK BISA HIDUP|TIDAK BS HIDUP|HIDUP MATI|MATI|ATI TOTAL|MATOL|MATOT|TIDAK BISA NYALA|TDK BS TV|TOMBOL POWER|TOMBOL ON/OFF|KENA PETIR|KONSLET|LISTRIK TURUN|INDIKATOR HIDUP|CEK FUNGSI|PESAN MODUL|STOP KONTAK ANTENA ADA KERUSAKAN|KABEL DIGIGIT TIKUS|LAYAR MATI,TOTAL_OFF,Unit mati total mengikuti variasi sample
