@@ -410,3 +410,97 @@ def test_run_pipeline_supports_lookup_for_defect_from_action(app_paths):
         "N/A",
         "",
     ]
+
+
+def test_run_pipeline_supports_transforms_and_group_by_output(app_paths):
+    source_path = app_paths.project_root / "source.csv"
+    pd.DataFrame(
+        [
+            {"kategori": "Cat 1", "qty": 10, "harga": 10000},
+            {"kategori": "Cat 2", "qty": 5, "harga": 8000},
+            {"kategori": "Cat 3", "qty": 2, "harga": 12000},
+        ]
+    ).to_csv(source_path, index=False)
+
+    config_path = app_paths.configs_dir / "transform_report.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Transform Report"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Transform Report"',
+                "transforms:",
+                '  - type: "ensure_optional_columns"',
+                "    columns:",
+                '      catatan: ""',
+                '  - type: "filter_rows"',
+                '    column: "qty"',
+                "    gte: 5",
+                '  - type: "formula"',
+                '    target: "total"',
+                '    operation: "multiply"',
+                "    operands:",
+                '      - column: "qty"',
+                '      - column: "harga"',
+                '  - type: "conditional"',
+                '    target: "bucket"',
+                "    cases:",
+                "      - when:",
+                '          column: "total"',
+                "          gte: 50000",
+                '        value: "besar"',
+                '    default: "kecil"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "kategori"',
+                '      - "qty"',
+                '      - "harga"',
+                '      - "catatan"',
+                '      - "total"',
+                '      - "bucket"',
+                '  - sheet_name: "Summary"',
+                "    group_by:",
+                '      by: "bucket"',
+                "      aggregations:",
+                '        qty: "sum"',
+                '        total: "sum"',
+                "    columns:",
+                '      - "bucket"',
+                '      - "qty"',
+                '      - "total"',
+            ]
+        ),
+    )
+
+    logs: list[str] = []
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=logs.append,
+    )
+
+    detail_df = pd.read_excel(
+        result.output_path,
+        sheet_name="Detail",
+        skiprows=3,
+        keep_default_na=False,
+    )
+    summary_df = pd.read_excel(
+        result.output_path,
+        sheet_name="Summary",
+        skiprows=3,
+        keep_default_na=False,
+    )
+
+    assert detail_df["qty"].tolist() == [10, 5]
+    assert detail_df["catatan"].tolist() == ["", ""]
+    assert detail_df["total"].tolist() == [100000, 40000]
+    assert detail_df["bucket"].tolist() == ["besar", "kecil"]
+    assert summary_df["bucket"].tolist() == ["besar", "kecil"]
+    assert summary_df["qty"].tolist() == [10, 5]
+    assert summary_df["total"].tolist() == [100000, 40000]
+    assert any("Apply transform rules" in item for item in logs)

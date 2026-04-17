@@ -11,7 +11,11 @@ from app.services.dataframe_io_service import read_tabular_file
 from app.services.output_service import write_output_workbook
 from app.services.pipeline_types import PipelineError, PipelineResult
 from app.services.source_service import copy_source_to_uploads, validate_source_file
-from app.services.transform_service import apply_master_lookups, build_output_sheets
+from app.services.transform_service import (
+    apply_master_lookups,
+    apply_transform_steps,
+    build_output_sheets,
+)
 
 
 LogFn = Callable[[str], None]
@@ -70,6 +74,16 @@ def run_pipeline(
             masters_config=config.get("masters"),
             project_root=paths.project_root,
             masters_dir=paths.masters_dir,
+            log=log,
+        )
+    except ValueError as exc:
+        raise PipelineError(str(exc)) from exc
+
+    log("Apply transform rules")
+    try:
+        transformed_df = apply_transform_steps(
+            data_df=transformed_df,
+            transforms_cfg=config.get("transforms"),
             log=log,
         )
     except ValueError as exc:
