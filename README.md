@@ -1,6 +1,6 @@
 # Excel Automation Tool
 
-Repo ini berisi fondasi untuk MVP tool automasi Excel berbasis Python desktop, `CustomTkinter`, `pandas`, dan `openpyxl`.
+Repo ini berisi fondasi MVP tool automasi Excel berbasis desktop app `CustomTkinter`, `pandas`, dan `openpyxl`.
 
 ## Setup Singkat
 
@@ -45,10 +45,10 @@ pip install -r requirements.txt
 
 - User membuka aplikasi desktop.
 - User memilih file source `.xlsx` atau `.csv`.
-- Aplikasi memuat config `.yaml` dari folder `configs/`.
-- Aplikasi memuat master dari folder `masters/`.
-- User menjalankan proses transformasi.
-- Hasil `.xlsx` disimpan ke folder `outputs/`.
+- Aplikasi memuat config `.yaml` valid dari folder `configs/`.
+- User menjalankan `Execute`.
+- Progress ditampilkan di panel log.
+- Folder `outputs/` bisa dibuka langsung dari UI.
 
 ## Dependency Utama
 
@@ -63,7 +63,23 @@ pip install -r requirements.txt
 
 - Buat dan aktifkan virtual environment.
 - Install dependency dari `requirements.txt`.
-- Jalankan entrypoint aplikasi desktop yang dipakai project, misalnya `python run.py` atau `python main.py` setelah file entrypoint final dibuat.
+- Jalankan desktop app:
+
+```bash
+python run.py
+```
+
+### Struktur runtime penting
+
+- `configs/` untuk file YAML recipe
+- `masters/` untuk file master
+- `uploads/` untuk jejak source (opsional, disiapkan helper)
+- `outputs/` untuk hasil output
+
+Repo sudah menyertakan 2 contoh config:
+
+- `configs/sample_sales.yaml`
+- `configs/sample_summary.yaml`
 
 ## Build Portable
 
@@ -73,7 +89,6 @@ pip install -r requirements.txt
 
 ## Status Saat Ini
 
-- Virtual environment `.venv` sudah dipakai untuk setup lokal.
-- Dependency utama sudah didaftarkan di `requirements.txt`.
-- Dokumen perencanaan sudah diarahkan ke desktop app `CustomTkinter`.
-- Struktur folder inti sudah disiapkan untuk runtime `configs/`, `masters/`, `uploads/`, dan `outputs/`.
+- Skeleton UI desktop `CustomTkinter` sudah aktif (`pilih source`, `pilih config`, `execute`, `log`, `buka outputs`).
+- Validasi dasar source dan config YAML sudah tersedia di layer service.
+- Runtime path sudah disiapkan untuk mode source dan mode bundle (`PyInstaller`).

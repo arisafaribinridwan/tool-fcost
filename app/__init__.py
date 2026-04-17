@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import sys
 
 
 @dataclass(frozen=True)
@@ -17,8 +18,16 @@ def get_project_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def get_runtime_root(project_root: Path | None = None) -> Path:
+    if project_root is not None:
+        return project_root
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return get_project_root()
+
+
 def get_app_paths(project_root: Path | None = None) -> AppPaths:
-    root = project_root or get_project_root()
+    root = get_runtime_root(project_root)
     return AppPaths(
         project_root=root,
         configs_dir=root / "configs",
@@ -38,3 +47,12 @@ def ensure_runtime_dirs(paths: AppPaths | None = None) -> AppPaths:
     ):
         directory.mkdir(parents=True, exist_ok=True)
     return app_paths
+
+
+__all__ = [
+    "AppPaths",
+    "ensure_runtime_dirs",
+    "get_app_paths",
+    "get_project_root",
+    "get_runtime_root",
+]
