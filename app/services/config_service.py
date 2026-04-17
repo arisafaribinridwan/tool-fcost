@@ -22,6 +22,16 @@ SUPPORTED_TRANSFORM_TYPES = {
     "filter_rows",
     "formula",
 }
+SUPPORTED_RECIPE_STEP_TYPES = {
+    "derive_column",
+    "duplicate_group_rewrite",
+    "extract_sheet",
+    "lookup_exact",
+    "lookup_exact_replace",
+    "lookup_rules",
+    "map_ranges",
+    "update_columns",
+}
 
 
 @dataclass(frozen=True)
@@ -318,10 +328,102 @@ def _validate_transform_items(transforms: object, errors: list[str]) -> None:
                     errors.append(f"{case_path}.value wajib diisi.")
 
 
+def is_step_recipe_payload(payload: object) -> bool:
+    return isinstance(payload, dict) and "steps" in payload and "datasets" in payload
+
+
+def _validate_step_recipe_payload(payload: dict, errors: list[str]) -> None:
+    for field in ("name", "datasets", "steps", "outputs"):
+        if field not in payload:
+            errors.append(f"Field recipe wajib belum lengkap: {field}")
+
+    datasets = payload.get("datasets")
+    if not isinstance(datasets, dict):
+        errors.append("Field 'datasets' pada recipe harus berupa object.")
+    else:
+        if "working_dataset" not in datasets or not isinstance(
+            datasets.get("working_dataset"), str
+        ):
+            errors.append("datasets.working_dataset wajib berupa string.")
+        canonical_columns = datasets.get("canonical_columns")
+        if not isinstance(canonical_columns, list) or not all(
+            isinstance(item, str) for item in canonical_columns
+        ):
+            errors.append("datasets.canonical_columns wajib berupa list string.")
+
+    if "outputs" in payload:
+        _validate_output_items(payload.get("outputs"), errors)
+
+    steps = payload.get("steps")
+    if not isinstance(steps, list) or len(steps) == 0:
+        errors.append("Field 'steps' pada recipe harus berupa list dan minimal 1 item.")
+    else:
+        for idx, step in enumerate(steps):
+            path = f"steps[{idx}]"
+            if not isinstance(step, dict):
+                errors.append(f"{path} harus berupa object.")
+                continue
+            step_type = step.get("type")
+            if not isinstance(step_type, str) or step_type not in SUPPORTED_RECIPE_STEP_TYPES:
+                errors.append(
+                    f"{path}.type harus salah satu dari: {', '.join(sorted(SUPPORTED_RECIPE_STEP_TYPES))}."
+                )
+                continue
+            if "id" not in step or not isinstance(step.get("id"), str):
+                errors.append(f"{path}.id wajib berupa string.")
+
+            if step_type == "extract_sheet":
+                for field in ("sheet_selector", "header_locator", "select", "write_to"):
+                    if field not in step:
+                        errors.append(f"{path}.{field} wajib diisi.")
+                continue
+
+            if step_type == "derive_column":
+                for field in ("target", "expression"):
+                    if field not in step:
+                        errors.append(f"{path}.{field} wajib diisi.")
+                continue
+
+            if step_type == "update_columns":
+                for field in ("when", "updates"):
+                    if field not in step:
+                        errors.append(f"{path}.{field} wajib diisi.")
+                continue
+
+            if step_type in {"lookup_exact", "lookup_exact_replace"}:
+                for field in ("source_column", "target_column", "master"):
+                    if field not in step:
+                        errors.append(f"{path}.{field} wajib diisi.")
+                continue
+
+            if step_type == "lookup_rules":
+                for field in ("inputs", "target_column", "master", "matching"):
+                    if field not in step:
+                        errors.append(f"{path}.{field} wajib diisi.")
+                continue
+
+            if step_type == "map_ranges":
+                for field in ("source_column", "target_column", "ranges"):
+                    if field not in step:
+                        errors.append(f"{path}.{field} wajib diisi.")
+                continue
+
+            for field in ("group_by", "section_column", "dispatch"):
+                if field not in step:
+                    errors.append(f"{path}.{field} wajib diisi.")
+
+
 def validate_config_payload(payload: object) -> tuple[str, ...]:
     errors: list[str] = []
     if not isinstance(payload, dict):
         return ("Isi YAML harus berupa object/dictionary di level root.",)
+
+    if is_step_recipe_payload(payload):
+        _validate_step_recipe_payload(payload, errors)
+        styling = payload.get("styling")
+        if styling is not None and not isinstance(styling, dict):
+            errors.append("Field 'styling' harus berupa object jika diisi.")
+        return tuple(errors)
 
     missing_fields = [field for field in REQUIRED_ROOT_FIELDS if field not in payload]
     if missing_fields:

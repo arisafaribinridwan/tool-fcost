@@ -6,10 +6,11 @@ from pathlib import Path
 import re
 
 from app import AppPaths
-from app.services.config_service import load_config_payload
+from app.services.config_service import is_step_recipe_payload, load_config_payload
 from app.services.dataframe_io_service import read_tabular_file
 from app.services.output_service import write_output_workbook
 from app.services.pipeline_types import PipelineError, PipelineResult
+from app.services.recipe_service import execute_step_recipe
 from app.services.source_service import copy_source_to_uploads, validate_source_file
 from app.services.transform_service import (
     apply_master_lookups,
@@ -46,54 +47,69 @@ def run_pipeline(
     except ValueError as exc:
         raise PipelineError(str(exc)) from exc
 
-    source_sheet = config["source_sheet"]
-    log(f"Read source: {source_path.name}")
-    try:
-        if source_path.suffix.lower() == ".xlsx":
-            source_df = read_tabular_file(source_path, sheet_name=str(source_sheet))
-        else:
-            source_df = read_tabular_file(source_path)
-    except ValueError as exc:
-        raise PipelineError(str(exc)) from exc
-
-    if source_df.empty:
-        log("Warning: source kosong, output akan tetap dibuat.")
-    else:
-        log(f"Source loaded: {len(source_df)} baris, {len(source_df.columns)} kolom.")
-
     log("Salin source ke folder uploads/")
     try:
         source_copy = copy_source_to_uploads(source_path, paths.uploads_dir)
     except OSError as exc:
         raise PipelineError(f"Gagal menyalin source ke uploads/: {exc}") from exc
 
-    log("Load master & apply lookup")
-    try:
-        transformed_df = apply_master_lookups(
-            source_df=source_df,
-            masters_config=config.get("masters"),
-            project_root=paths.project_root,
-            masters_dir=paths.masters_dir,
-            log=log,
-        )
-    except ValueError as exc:
-        raise PipelineError(str(exc)) from exc
+    if is_step_recipe_payload(config):
+        log(f"Read source workbook: {source_path.name}")
+        try:
+            recipe_result = execute_step_recipe(
+                source_path=source_path,
+                recipe_cfg=config,
+                project_root=paths.project_root,
+                masters_dir=paths.masters_dir,
+                log=log,
+            )
+        except ValueError as exc:
+            raise PipelineError(str(exc)) from exc
+        source_df = recipe_result.source_df_for_header
+        output_sheets = recipe_result.output_sheets
+    else:
+        source_sheet = config["source_sheet"]
+        log(f"Read source: {source_path.name}")
+        try:
+            if source_path.suffix.lower() == ".xlsx":
+                source_df = read_tabular_file(source_path, sheet_name=str(source_sheet))
+            else:
+                source_df = read_tabular_file(source_path)
+        except ValueError as exc:
+            raise PipelineError(str(exc)) from exc
 
-    log("Apply transform rules")
-    try:
-        transformed_df = apply_transform_steps(
-            data_df=transformed_df,
-            transforms_cfg=config.get("transforms"),
-            log=log,
-        )
-    except ValueError as exc:
-        raise PipelineError(str(exc)) from exc
+        if source_df.empty:
+            log("Warning: source kosong, output akan tetap dibuat.")
+        else:
+            log(f"Source loaded: {len(source_df)} baris, {len(source_df.columns)} kolom.")
 
-    log("Build output sheets")
-    try:
-        output_sheets = build_output_sheets(config["outputs"], transformed_df, log)
-    except ValueError as exc:
-        raise PipelineError(str(exc)) from exc
+        log("Load master & apply lookup")
+        try:
+            transformed_df = apply_master_lookups(
+                source_df=source_df,
+                masters_config=config.get("masters"),
+                project_root=paths.project_root,
+                masters_dir=paths.masters_dir,
+                log=log,
+            )
+        except ValueError as exc:
+            raise PipelineError(str(exc)) from exc
+
+        log("Apply transform rules")
+        try:
+            transformed_df = apply_transform_steps(
+                data_df=transformed_df,
+                transforms_cfg=config.get("transforms"),
+                log=log,
+            )
+        except ValueError as exc:
+            raise PipelineError(str(exc)) from exc
+
+        log("Build output sheets")
+        try:
+            output_sheets = build_output_sheets(config["outputs"], transformed_df, log)
+        except ValueError as exc:
+            raise PipelineError(str(exc)) from exc
 
     config_name = str(config.get("name", config_path.stem))
     output_file_name = (

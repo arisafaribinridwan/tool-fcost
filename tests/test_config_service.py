@@ -204,3 +204,30 @@ def test_validate_config_payload_rejects_invalid_formula_operation():
 
     errors = validate_config_payload(payload)
     assert any("operation harus salah satu" in item for item in errors)
+
+
+def test_validate_config_payload_accepts_step_recipe_schema():
+    payload = {
+        "name": "Monthly Report Final Recipe",
+        "datasets": {
+            "working_dataset": "result",
+            "canonical_columns": ["notification", "section"],
+        },
+        "steps": [
+            {
+                "id": "sub_1_copy_gqs",
+                "type": "extract_sheet",
+                "sheet_selector": {"contains": "GQS"},
+                "header_locator": {
+                    "type": "required_columns",
+                    "scan_rows": [1, 15],
+                    "required": ["Notification", "Category"],
+                },
+                "select": {"Notification": "notification"},
+                "write_to": "result",
+            }
+        ],
+        "outputs": [{"sheet_name": "result", "columns": ["notification", "section"]}],
+    }
+
+    assert validate_config_payload(payload) == ()
