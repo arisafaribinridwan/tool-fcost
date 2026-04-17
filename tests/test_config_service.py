@@ -15,6 +15,8 @@ def test_discover_configs_reads_valid_and_invalid_yaml(tmp_path):
                 "header: {}",
                 "outputs:",
                 "  - sheet_name: Detail",
+                "    columns:",
+                "      - col_a",
             ]
         ),
         encoding="utf-8",

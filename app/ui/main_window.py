@@ -2,12 +2,20 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+from queue import Empty, Queue
+from threading import Thread
 from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
 from app import AppPaths
-from app.services import ConfigSummary, discover_configs, validate_source_file
+from app.services import (
+    ConfigSummary,
+    PipelineResult,
+    discover_configs,
+    run_pipeline,
+    validate_source_file,
+)
 from app.utils import open_in_file_manager
 
 
@@ -17,6 +25,8 @@ class DesktopApp(ctk.CTk):
         self.paths = paths
         self.source_path: Path | None = None
         self.config_by_label: dict[str, ConfigSummary] = {}
+        self._worker_queue: Queue[tuple[str, object]] | None = None
+        self._worker_thread: Thread | None = None
 
         self.title("Excel Automation Tool - CustomTkinter")
         self.geometry("1120x720")
@@ -238,6 +248,10 @@ class DesktopApp(ctk.CTk):
         return selected
 
     def _update_execute_state(self) -> None:
+        worker_running = self._worker_thread is not None and self._worker_thread.is_alive()
+        if worker_running:
+            self.execute_button.configure(state="disabled")
+            return
         if self.source_path is not None and self._selected_config() is not None:
             self.execute_button.configure(state="normal")
         else:
@@ -252,25 +266,80 @@ class DesktopApp(ctk.CTk):
             )
             return
 
+        worker_running = self._worker_thread is not None and self._worker_thread.is_alive()
+        if worker_running:
+            return
+
         self.execute_button.configure(state="disabled")
         self._set_status("Running")
         self._append_log("Eksekusi dimulai.")
-        self.after(80, lambda: self._run_execute_stub(config))
-
-    def _run_execute_stub(self, config: ConfigSummary) -> None:
-        output_name = (
-            f"{config.path.stem}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        self._worker_queue = Queue()
+        self._worker_thread = Thread(
+            target=self._run_pipeline_worker,
+            args=(self.source_path, config.path, self._worker_queue),
+            daemon=True,
         )
-        output_path = self.paths.outputs_dir / output_name
+        self._worker_thread.start()
+        self.after(120, self._poll_worker_events)
 
-        self._append_log("1/4 Validasi input selesai.")
-        self._append_log("2/4 Load config selesai.")
-        self._append_log("3/4 Load masters (placeholder).")
-        self._append_log("4/4 Transform + write output (placeholder).")
-        self.last_output_var.set(str(output_path))
-        self._set_status("Selesai (skeleton)")
-        self._append_log("Skeleton CustomTkinter aktif. Engine transform belum diisi.")
-        self._update_execute_state()
+    def _run_pipeline_worker(
+        self,
+        source_path: Path,
+        config_path: Path,
+        event_queue: Queue[tuple[str, object]],
+    ) -> None:
+        def worker_log(message: str) -> None:
+            event_queue.put(("log", message))
+
+        try:
+            result = run_pipeline(
+                paths=self.paths,
+                source_path=source_path,
+                config_path=config_path,
+                log=worker_log,
+            )
+            event_queue.put(("success", result))
+        except Exception as exc:
+            event_queue.put(("error", str(exc)))
+        finally:
+            event_queue.put(("done", None))
+
+    def _poll_worker_events(self) -> None:
+        if self._worker_queue is None:
+            return
+
+        done_received = False
+        while True:
+            try:
+                kind, payload = self._worker_queue.get_nowait()
+            except Empty:
+                break
+
+            if kind == "log":
+                self._append_log(str(payload))
+            elif kind == "success":
+                result = payload
+                if isinstance(result, PipelineResult):
+                    self.last_output_var.set(str(result.output_path))
+                    self._set_status("Sukses")
+                    self._append_log(
+                        f"Output berhasil dibuat ({result.sheets_written} sheet)."
+                    )
+            elif kind == "error":
+                error_message = str(payload)
+                self._set_status("Gagal")
+                self._append_log(f"Error: {error_message}")
+                messagebox.showerror("Eksekusi gagal", error_message)
+            elif kind == "done":
+                done_received = True
+
+        if done_received:
+            self._worker_queue = None
+            self._worker_thread = None
+            self._update_execute_state()
+            return
+
+        self.after(120, self._poll_worker_events)
 
     def _open_outputs_dir(self) -> None:
         try:
