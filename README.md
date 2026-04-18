@@ -1,6 +1,6 @@
 # Excel Automation Tool
 
-Repo ini berisi fondasi MVP tool automasi Excel berbasis desktop app `CustomTkinter`, `pandas`, dan `openpyxl`.
+Repo ini berisi aplikasi desktop automasi Excel berbasis `CustomTkinter`, `pandas`, dan `openpyxl`.
 
 ## Setup Singkat
 
@@ -14,6 +14,8 @@ source .venv/bin/activate
 python3 -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
+
+Catatan Linux desktop: Python yang dipakai untuk menjalankan app atau build bundle harus punya dukungan Tk/Tcl. Pada Ubuntu atau Linux Mint biasanya ini berarti perlu paket `python3-tk`.
 
 ### Windows PowerShell
 
@@ -37,7 +39,7 @@ pip install -r requirements.txt
 
 - Development harian bisa dilakukan di Linux atau Windows.
 - Binary final tetap dibuild per OS target dengan `PyInstaller`.
-- Untuk distribusi MVP saat ini, runtime final, build `PyInstaller`, dan validasi portable tetap dilakukan di Windows.
+- Repo ini menyiapkan packaging portable untuk Windows dan Linux.
 - Hindari hardcode path OS tertentu. Gunakan `pathlib` atau `os.path`.
 - Jaga nama file konsisten huruf besar-kecil agar aman lintas OS.
 
@@ -83,13 +85,48 @@ Repo sudah menyertakan 2 contoh config:
 
 ## Build Portable
 
-- Build Windows `.exe` dilakukan di Windows.
-- Jika nanti ingin binary Linux native, build dilakukan lagi di Linux.
-- Jangan mengandalkan cross-build `PyInstaller` untuk menghasilkan `.exe` Windows dari Linux.
-- Spec build Windows disiapkan di `packaging/windows/ExcelAutoTool.spec`.
-- Script build Windows disiapkan di `packaging/windows/build.ps1`.
-- `run.bat` tersedia di root repo dan disalin ke folder `dist/ExcelAutoTool/` oleh script build Windows.
-- Folder runtime `configs/`, `masters/`, `uploads/`, dan `outputs/` dibuat otomatis saat first run. Script build Windows juga menyiapkan folder-folder ini di hasil `dist/`.
+- Build harus dilakukan di OS targetnya masing-masing.
+- Jangan mengandalkan cross-build `PyInstaller` untuk menghasilkan binary OS lain.
+- Folder runtime `configs/`, `masters/`, `uploads/`, dan `outputs/` dibuat otomatis saat first run. Script build juga menyiapkan folder-folder ini di hasil `dist/`.
+
+### Build di Linux
+
+```bash
+chmod +x packaging/linux/build.sh
+./packaging/linux/build.sh
+```
+
+Jika ingin memakai Python lain:
+
+```bash
+./packaging/linux/build.sh /path/to/python3
+```
+
+Hasil build akan tersedia di:
+
+```txt
+dist/ExcelAutoTool/
+|- ExcelAutoTool
+|- run.sh
+|- configs/
+|- masters/
+|- uploads/
+`- outputs/
+```
+
+Script Linux juga membuat archive portable:
+
+```txt
+dist/ExcelAutoTool-linux-x86_64.tar.gz
+```
+
+Untuk pemakaian harian di Linux, simpan bundle di folder yang writable oleh user, misalnya `~/Apps/ExcelAutoTool`, lalu jalankan `./run.sh`.
+
+- Spec build Linux disiapkan di `packaging/linux/ExcelAutoTool.spec`.
+- Script build Linux disiapkan di `packaging/linux/build.sh`.
+- Launcher bundle Linux disiapkan di `packaging/linux/run.sh`.
+- Isi folder `configs/` dari repo akan disalin ke hasil build Linux.
+- Script build Linux akan gagal lebih awal jika Python yang dipakai belum punya modul `tkinter`.
 
 ### Build di Windows
 
@@ -119,6 +156,8 @@ dist\ExcelAutoTool\
 
 ## Status Saat Ini
 
-- Skeleton UI desktop `CustomTkinter` sudah aktif (`pilih source`, `pilih config`, `execute`, `log`, `buka outputs`).
-- Validasi dasar source dan config YAML sudah tersedia di layer service.
+- UI desktop `CustomTkinter` sudah aktif (`pilih source`, `pilih config`, `execute`, `log`, `buka outputs`).
+- Pipeline transform dan penulisan output `.xlsx` sudah berjalan dan ditest.
+- Validasi source, config YAML, lookup master, transform, dan output workbook sudah tersedia di layer service.
 - Runtime path sudah disiapkan untuk mode source dan mode bundle (`PyInstaller`).
+- Packaging portable sudah tersedia untuk Windows dan Linux.
