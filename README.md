@@ -86,6 +86,36 @@ Repo sudah menyertakan 2 contoh config:
 - Build Windows `.exe` dilakukan di Windows.
 - Jika nanti ingin binary Linux native, build dilakukan lagi di Linux.
 - Jangan mengandalkan cross-build `PyInstaller` untuk menghasilkan `.exe` Windows dari Linux.
+- Spec build Windows disiapkan di `packaging/windows/ExcelAutoTool.spec`.
+- Script build Windows disiapkan di `packaging/windows/build.ps1`.
+- `run.bat` tersedia di root repo dan disalin ke folder `dist/ExcelAutoTool/` oleh script build Windows.
+- Folder runtime `configs/`, `masters/`, `uploads/`, dan `outputs/` dibuat otomatis saat first run. Script build Windows juga menyiapkan folder-folder ini di hasil `dist/`.
+
+### Build di Windows
+
+PowerShell:
+
+```powershell
+.\packaging\windows\build.ps1
+```
+
+Jika ingin memakai Python lain:
+
+```powershell
+.\packaging\windows\build.ps1 -PythonExe "C:\Path\To\python.exe"
+```
+
+Hasil build akan tersedia di:
+
+```txt
+dist\ExcelAutoTool\
+|- ExcelAutoTool.exe
+|- run.bat
+|- configs\
+|- masters\
+|- uploads\
+`- outputs\
+```
 
 ## Status Saat Ini
 

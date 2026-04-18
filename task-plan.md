@@ -118,7 +118,7 @@ source .venv/bin/activate
 - [x] Buat folder `outputs/`.
 - [x] Buat folder `tests/`.
 - [x] Buat file entrypoint desktop, misalnya `run.py` atau `main.py`.
-- [ ] Siapkan folder atau file config khusus packaging per OS bila diperlukan.
+- [x] Siapkan folder atau file config khusus packaging per OS bila diperlukan.
 - [x] Siapkan helper path runtime agar source mode dan bundle mode konsisten.
 
 ## 5. Breakdown Fase Implementasi
@@ -317,10 +317,10 @@ Definition of done:
 
 ### Fase 13 - Packaging portable
 
-- [ ] Buat konfigurasi `PyInstaller` untuk Windows.
-- [ ] Pastikan asset non-code ikut terbundle jika ada.
-- [ ] Pastikan folder runtime tersedia atau dibuat otomatis saat first run.
-- [ ] Buat `run.bat`.
+- [x] Buat konfigurasi `PyInstaller` untuk Windows.
+- [x] Pastikan asset non-code ikut terbundle jika ada.
+- [x] Pastikan folder runtime tersedia atau dibuat otomatis saat first run.
+- [x] Buat `run.bat`.
 - [ ] Uji jalan dari source mode dan bundle mode.
 - [ ] Lakukan build final `PyInstaller` Windows di Windows, bukan Linux.
 - [ ] Uji `run.bat` dan `ExcelAutoTool.exe` di Windows target.
