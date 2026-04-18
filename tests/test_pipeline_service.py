@@ -839,6 +839,16 @@ def test_run_pipeline_supports_monthly_step_recipe_end_to_end(app_paths):
     )
 
     with pd.ExcelWriter(source_path) as writer:
+        pd.DataFrame(
+            [
+                ["February 20", None, None],
+                [None, None, None],
+                [None, "SEID WARRANTY COST ORIGINAL", None],
+                [None, "[3] WARRANTY COST TRANSITION - Monthly Base", None],
+                [None, "Product Category", "Apr'19"],
+                [None, "LCD TV SEID", 0.01],
+            ]
+        ).to_excel(writer, index=False, header=False, sheet_name="GQS vs SASS")
         gqs_df.to_excel(writer, index=False, sheet_name="GQS Mar26", startrow=1)
         sass_df.to_excel(writer, index=False, sheet_name="SASS Mar26", startrow=4)
 

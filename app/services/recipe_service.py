@@ -307,7 +307,7 @@ def _load_excel_raw_sheet(source_path: Path, sheet_name: str) -> pd.DataFrame:
     return pd.read_excel(source_path, sheet_name=sheet_name, header=None, keep_default_na=False)
 
 
-def _resolve_sheet_name(source_path: Path, selector_cfg: dict) -> str:
+def _resolve_sheet_names(source_path: Path, selector_cfg: dict) -> list[str]:
     if source_path.suffix.lower() != ".xlsx":
         raise ValueError("Recipe step 'extract_sheet' hanya mendukung source .xlsx.")
 
@@ -323,7 +323,7 @@ def _resolve_sheet_name(source_path: Path, selector_cfg: dict) -> str:
 
     if not candidates:
         raise ValueError(f"Sheet dengan selector '{contains}' tidak ditemukan pada source.")
-    return candidates[0]
+    return candidates
 
 
 def _normalize_header(value: object, *, case_sensitive: bool, normalize: bool) -> str:
@@ -362,19 +362,32 @@ def _detect_header_row(raw_df: pd.DataFrame, header_cfg: dict, label: str) -> in
 
 
 def _build_sheet_dataframe(source_path: Path, step_cfg: dict, log: LogFn) -> pd.DataFrame:
-    sheet_name = _resolve_sheet_name(source_path, step_cfg["sheet_selector"])
-    raw_df = _load_excel_raw_sheet(source_path, sheet_name)
     header_cfg = step_cfg["header_locator"]
-    header_index = _detect_header_row(raw_df, header_cfg, sheet_name)
+    candidate_sheets = _resolve_sheet_names(source_path, step_cfg["sheet_selector"])
+    last_error: ValueError | None = None
 
-    header_row = raw_df.iloc[header_index].tolist()
-    data_rows = raw_df.iloc[header_index + 1 :].reset_index(drop=True).copy()
-    data_rows.columns = header_row
-    data_rows = data_rows.dropna(how="all")
-    data_rows = data_rows.loc[:, [column for column in data_rows.columns if str(column).strip() != ""]]
+    for sheet_name in candidate_sheets:
+        raw_df = _load_excel_raw_sheet(source_path, sheet_name)
+        try:
+            header_index = _detect_header_row(raw_df, header_cfg, sheet_name)
+        except ValueError as exc:
+            last_error = exc
+            continue
 
-    log(f"Sheet '{sheet_name}' dipakai untuk step '{step_cfg['id']}'.")
-    return data_rows.reset_index(drop=True)
+        header_row = raw_df.iloc[header_index].tolist()
+        data_rows = raw_df.iloc[header_index + 1 :].reset_index(drop=True).copy()
+        data_rows.columns = header_row
+        data_rows = data_rows.dropna(how="all")
+        data_rows = data_rows.loc[
+            :, [column for column in data_rows.columns if str(column).strip() != ""]
+        ]
+
+        log(f"Sheet '{sheet_name}' dipakai untuk step '{step_cfg['id']}'.")
+        return data_rows.reset_index(drop=True)
+
+    if last_error is not None:
+        raise last_error
+    raise ValueError(f"Sheet valid untuk step '{step_cfg['id']}' tidak ditemukan.")
 
 
 def _apply_extract_filters(data_df: pd.DataFrame, filters_cfg: list[dict] | None) -> pd.DataFrame:
