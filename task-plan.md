@@ -7,6 +7,8 @@ Dokumen ini mengikuti keputusan baru bahwa UI memakai `CustomTkinter`, sementara
 Status sinkronisasi terakhir:
 
 - Checklist diselaraskan dengan progres implementasi terbaru termasuk engine `Execute` real (lihat PR #9).
+- Alur build Linux sekarang sudah punya bootstrap env khusus, smoke test GUI, checklist build machine, dan workflow CI packaging Linux.
+- Validasi end-to-end build Linux lokal masih tertahan kebutuhan paket sistem `python3-tk` dan `python3.12-venv` di mesin build.
 - Item yang dicentang berarti sudah terimplementasi atau sudah diverifikasi lewat test dasar.
 - Item yang masih kosong berarti belum selesai, belum terhubung end-to-end, atau belum divalidasi lintas OS target runtime final.
 
@@ -308,6 +310,7 @@ Definition of done:
 - [ ] Buat test UI minimal untuk helper logic yang bisa diuji tanpa full window interaktif.
 - [x] Buat minimal 1 integration test.
 - [x] Jalankan test rutin minimal di 1 environment development.
+- [x] Tambahkan guardrail CI untuk lint dan test rutin Linux.
 - [ ] Jika memungkinkan, ulangi test penting di Linux dan Windows.
 - [x] Tambahkan test atau checklist untuk path handling dan case sensitivity.
 
@@ -325,7 +328,12 @@ Definition of done:
 - [ ] Lakukan build final `PyInstaller` Windows di Windows, bukan Linux.
 - [ ] Uji `run.bat` dan `ExcelAutoTool.exe` di Windows target.
 - [ ] Uji hasil build di Windows lain.
-- [ ] Jika ingin distribusi Linux native, buat file spec atau langkah build Linux terpisah.
+- [x] Jika ingin distribusi Linux native, buat file spec atau langkah build Linux terpisah.
+- [x] Tambahkan bootstrap env build Linux terpisah berbasis Python distro.
+- [x] Tambahkan smoke test launcher GUI Linux.
+- [x] Tambahkan checklist build machine Linux.
+- [x] Tambahkan workflow CI untuk packaging Linux.
+- [ ] Verifikasi build Linux end-to-end di mesin lokal setelah paket sistem `python3-tk` dan `python3.12-venv` terpasang.
 
 Definition of done:
 

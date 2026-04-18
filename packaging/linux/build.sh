@@ -5,11 +5,27 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SPEC_PATH="$SCRIPT_DIR/ExcelAutoTool.spec"
-PYTHON_EXE="${1:-$PROJECT_ROOT/.venv/bin/python}"
 
-if [[ ! -x "$PYTHON_EXE" ]]; then
-  PYTHON_EXE="python3"
+if [[ $# -gt 0 ]]; then
+  PYTHON_EXE="$1"
+else
+  for candidate in \
+    "$PROJECT_ROOT/.venv-linux-build/bin/python" \
+    "$PROJECT_ROOT/.venv/bin/python" \
+    "python3"; do
+    if [[ "$candidate" == */* ]]; then
+      if [[ -x "$candidate" ]]; then
+        PYTHON_EXE="$candidate"
+        break
+      fi
+    elif command -v "$candidate" >/dev/null 2>&1; then
+      PYTHON_EXE="$candidate"
+      break
+    fi
+  done
 fi
+
+: "${PYTHON_EXE:=python3}"
 
 if ! "$PYTHON_EXE" - <<'PY'
 import importlib

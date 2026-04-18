@@ -91,6 +91,23 @@ Repo sudah menyertakan 2 contoh config:
 
 ### Build di Linux
 
+Best practice yang direkomendasikan untuk Linux desktop/build machine:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y python3-tk python3.12-venv
+./packaging/linux/bootstrap-build-env.sh
+./packaging/linux/build.sh
+./packaging/linux/smoke-test.sh
+```
+
+Catatan:
+
+- Build Linux sebaiknya memakai interpreter distro (`/usr/bin/python3.12`) dalam virtualenv build terpisah seperti `.venv-linux-build`.
+- Script `packaging/linux/build.sh` akan otomatis memprioritaskan `.venv-linux-build` bila tersedia.
+
+Alternatif manual:
+
 ```bash
 chmod +x packaging/linux/build.sh
 ./packaging/linux/build.sh
@@ -100,6 +117,14 @@ Jika ingin memakai Python lain:
 
 ```bash
 ./packaging/linux/build.sh /path/to/python3
+```
+
+Jika ingin menyiapkan env build secara eksplisit:
+
+```bash
+./packaging/linux/bootstrap-build-env.sh /usr/bin/python3.12 /path/to/.venv-linux-build
+./packaging/linux/build.sh /path/to/.venv-linux-build/bin/python
+./packaging/linux/smoke-test.sh
 ```
 
 Hasil build akan tersedia di:
@@ -123,8 +148,11 @@ dist/ExcelAutoTool-linux-x86_64.tar.gz
 Untuk pemakaian harian di Linux, simpan bundle di folder yang writable oleh user, misalnya `~/Apps/ExcelAutoTool`, lalu jalankan `./run.sh`.
 
 - Spec build Linux disiapkan di `packaging/linux/ExcelAutoTool.spec`.
+- Bootstrap env build Linux disiapkan di `packaging/linux/bootstrap-build-env.sh`.
 - Script build Linux disiapkan di `packaging/linux/build.sh`.
+- Smoke test bundle Linux disiapkan di `packaging/linux/smoke-test.sh`.
 - Launcher bundle Linux disiapkan di `packaging/linux/run.sh`.
+- Checklist build machine Linux disiapkan di `docs/linux-build-checklist.md`.
 - Isi folder `configs/` dari repo akan disalin ke hasil build Linux.
 - Script build Linux akan gagal lebih awal jika Python yang dipakai belum punya modul `tkinter`.
 
