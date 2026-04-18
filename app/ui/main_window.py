@@ -9,6 +9,7 @@ from tkinter import filedialog, messagebox
 import customtkinter as ctk
 
 from app import AppPaths
+from app.runtime_info import get_build_info, get_stale_bundle_warning
 from app.services import (
     ConfigSummary,
     PipelineResult,
@@ -23,12 +24,13 @@ class DesktopApp(ctk.CTk):
     def __init__(self, paths: AppPaths) -> None:
         super().__init__()
         self.paths = paths
+        self.build_info = get_build_info(paths.project_root)
         self.source_path: Path | None = None
         self.config_by_label: dict[str, ConfigSummary] = {}
         self._worker_queue: Queue[tuple[str, object]] | None = None
         self._worker_thread: Thread | None = None
 
-        self.title("Excel Automation Tool - CustomTkinter")
+        self.title(f"Excel Automation Tool - {self.build_info.mode}")
         self.geometry("1120x720")
         self.minsize(960, 620)
 
@@ -40,7 +42,11 @@ class DesktopApp(ctk.CTk):
 
         self._build_layout()
         self.refresh_configs(initial=True)
-        self._append_log("Aplikasi siap digunakan.")
+        self._append_log(f"Aplikasi siap digunakan. Runtime: {self.build_info.summary()}")
+        stale_warning = get_stale_bundle_warning(paths.project_root)
+        if stale_warning:
+            self._append_log(stale_warning)
+            self.after(50, lambda: messagebox.showwarning("Bundle stale", stale_warning))
 
     def _build_layout(self) -> None:
         self.grid_columnconfigure(0, weight=0)
