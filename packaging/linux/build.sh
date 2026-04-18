@@ -5,6 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SPEC_PATH="$SCRIPT_DIR/ExcelAutoTool.spec"
+BUILD_INFO_PATH="$PROJECT_ROOT/build-info.json"
 
 if [[ $# -gt 0 ]]; then
   PYTHON_EXE="$1"
@@ -26,6 +27,23 @@ else
 fi
 
 : "${PYTHON_EXE:=python3}"
+
+GIT_COMMIT="$(git -C "$PROJECT_ROOT" rev-parse HEAD 2>/dev/null || true)"
+GIT_DIRTY="false"
+if [[ -n "$GIT_COMMIT" ]] && [[ -n "$(git -C "$PROJECT_ROOT" status --porcelain --untracked-files=no 2>/dev/null)" ]]; then
+  GIT_DIRTY="true"
+fi
+
+cat >"$BUILD_INFO_PATH" <<EOF
+{
+  "mode": "bundle",
+  "commit": "${GIT_COMMIT}",
+  "built_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "dirty": ${GIT_DIRTY},
+  "python": "${PYTHON_EXE}"
+}
+EOF
+trap 'rm -f "$BUILD_INFO_PATH"' EXIT
 
 if ! "$PYTHON_EXE" - <<'PY'
 import importlib
@@ -72,6 +90,10 @@ install -d "$DIST_ROOT/configs" "$DIST_ROOT/masters" "$DIST_ROOT/uploads" "$DIST
 
 if [[ -d "$PROJECT_ROOT/configs" ]]; then
   cp -a "$PROJECT_ROOT/configs/." "$DIST_ROOT/configs/"
+fi
+
+if [[ -d "$PROJECT_ROOT/masters" ]]; then
+  cp -a "$PROJECT_ROOT/masters/." "$DIST_ROOT/masters/"
 fi
 
 tar -C "$PROJECT_ROOT/dist" -czf "$ARCHIVE_PATH" ExcelAutoTool

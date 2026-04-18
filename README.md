@@ -153,7 +153,7 @@ Untuk pemakaian harian di Linux, simpan bundle di folder yang writable oleh user
 - Smoke test bundle Linux disiapkan di `packaging/linux/smoke-test.sh`.
 - Launcher bundle Linux disiapkan di `packaging/linux/run.sh`.
 - Checklist build machine Linux disiapkan di `docs/linux-build-checklist.md`.
-- Isi folder `configs/` dari repo akan disalin ke hasil build Linux.
+- Isi folder `configs/` dan `masters/` dari repo akan disalin ke hasil build Linux.
 - Script build Linux akan gagal lebih awal jika Python yang dipakai belum punya modul `tkinter`.
 
 ### Build di Windows
