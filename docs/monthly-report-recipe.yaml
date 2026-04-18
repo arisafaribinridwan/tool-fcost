@@ -290,6 +290,57 @@ steps:
           - priority: 50
             parts_signature: ["LVDS_WIRE", "PANEL", "PART_KIT", "TCON_UNIT"]
             winner_part_name: "PANEL"
+          - priority: 60
+            parts_signature: ["MAIN_UNIT", "PANEL", "TAPE"]
+            winner_part_name: "PANEL"
+          - priority: 70
+            parts_signature: ["LED_BAR", "MAIN_UNIT"]
+            winner_part_name: "MAIN_UNIT"
+          - priority: 80
+            parts_signature: ["MAIN_UNIT", "REMOTE_CONTROL"]
+            winner_part_name: "MAIN_UNIT"
+          - priority: 90
+            parts_signature: ["IC_", "LED_BAR"]
+            winner_part_name: "LED_BAR"
+          - priority: 100
+            parts_signature: ["MAIN_UNIT", "PART_KIT"]
+            winner_part_name: "MAIN_UNIT"
+          - priority: 110
+            parts_signature: ["PANEL", "TCON_UNIT"]
+            winner_part_name: "PANEL"
+          - priority: 120
+            parts_signature: ["PANEL", "REMOTE_CONTROL"]
+            winner_part_name: "PANEL"
+          - priority: 130
+            parts_signature: ["LVDS_WIRE", "PANEL"]
+            winner_part_name: "PANEL"
+          - priority: 140
+            parts_signature: ["LVDS_WIRE", "MAIN_UNIT", "PANEL", "PART_KIT", "TCON_UNIT"]
+            winner_part_name: "PANEL"
+          - priority: 150
+            parts_signature: ["POWER_UNIT", "SPEAKER"]
+            winner_part_name: "POWER_UNIT"
+          - priority: 160
+            parts_signature: ["PANEL"]
+            winner_part_name: "PANEL"
+          - priority: 170
+            parts_signature: ["PANEL", "REMOTE_CONTROL", "TAPE"]
+            winner_part_name: "PANEL"
+          - priority: 180
+            parts_signature: ["PANEL", "PFRAME"]
+            winner_part_name: "PANEL"
+          - priority: 190
+            parts_signature: ["MAIN_UNIT", "TAPE"]
+            winner_part_name: "MAIN_UNIT"
+          - priority: 200
+            parts_signature: ["LVDS_WIRE", "MAIN_UNIT", "PANEL"]
+            winner_part_name: "PANEL"
+          - priority: 210
+            parts_signature: ["LED_BAR", "POWER_UNIT"]
+            winner_part_name: "POWER_UNIT"
+          - priority: 220
+            parts_signature: ["LED_BAR", "MAIN_UNIT", "PANEL"]
+            winner_part_name: "PANEL"
         winner_updates:
           "job_sheet_section":
             set: 1
