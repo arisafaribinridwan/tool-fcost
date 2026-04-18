@@ -157,7 +157,7 @@ Definition of done:
 - [x] Validasi struktur `masters`.
 - [x] Validasi struktur `outputs`.
 - [x] Validasi struktur `styling`.
-- [ ] Normalisasi dan validasi path config agar tetap aman di Linux dan Windows.
+- [x] Normalisasi dan validasi path config agar tetap aman di Linux dan Windows.
 - [x] Buat error message yang mudah dipahami.
 - [x] Buat minimal 2 config contoh.
 
@@ -172,10 +172,10 @@ Definition of done:
 - [x] Implement reader `.csv`.
 - [x] Validasi ekstensi file.
 - [x] Validasi sheet source untuk Excel.
-- [ ] Validasi file kosong atau rusak.
+- [x] Validasi file kosong atau rusak.
 - [x] Salin source ke folder `uploads/` bila memang dipakai sebagai jejak runtime.
-- [ ] Validasi kolom minimum jika dibutuhkan config.
-- [ ] Uji nama file/sheet dengan variasi huruf besar-kecil agar aman lintas OS.
+- [x] Validasi kolom minimum jika dibutuhkan config.
+- [x] Uji nama file/sheet dengan variasi huruf besar-kecil agar aman lintas OS.
 
 Definition of done:
 
@@ -215,7 +215,7 @@ Definition of done:
 - [x] Implement formula aritmatika sederhana.
 - [x] Siapkan struktur untuk conditional rule.
 - [ ] Siapkan struktur untuk lookup rule lanjutan.
-- [ ] Validasi rule agar tidak unsafe.
+- [x] Validasi rule agar tidak unsafe.
 - [x] Buat pesan error formula/rule yang jelas.
 
 Sub-tugas rule bisnis yang akan diisi nanti:

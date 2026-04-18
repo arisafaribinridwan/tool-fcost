@@ -5,6 +5,7 @@ from pathlib import Path
 
 import yaml
 
+from app.utils.path_safety import normalize_relative_path_string
 from app.services.transform_service import (
     SUPPORTED_FORMULA_OPERATIONS,
     SUPPORTED_GROUPBY_AGGFUNCS,
@@ -16,12 +17,56 @@ REQUIRED_ROOT_FIELDS = ("name", "source_sheet", "header", "outputs")
 SUPPORTED_MASTER_STRATEGIES = {"lookup", "ordered_rules"}
 SUPPORTED_MATCHER_MODES = {"equals", "contains"}
 SUPPORTED_KEY_NORMALIZERS = {"compact_text"}
+SUPPORTED_RECIPE_MATCHING_ORDERS = {"top_to_bottom"}
 SUPPORTED_TRANSFORM_TYPES = {
     "conditional",
     "ensure_optional_columns",
     "filter_rows",
     "formula",
 }
+
+
+def _is_supported_literal(value: object) -> bool:
+    return value is None or isinstance(value, str | int | float | bool)
+
+
+def _validate_master_file_path(
+    raw_path: object,
+    *,
+    path: str,
+    errors: list[str],
+) -> None:
+    if not isinstance(raw_path, str) or not raw_path.strip():
+        errors.append(f"{path} harus berupa string path relatif.")
+        return
+
+    try:
+        normalized = normalize_relative_path_string(raw_path)
+    except ValueError as exc:
+        errors.append(f"{path} tidak valid: {exc}")
+        return
+
+    parts = normalized.split("/")
+    if parts[0].casefold() != "masters":
+        errors.append(f"{path} wajib berada di bawah folder masters/.")
+
+    if Path(parts[-1]).suffix.lower() not in {".csv", ".xlsx"}:
+        errors.append(f"{path} hanya mendukung file .csv atau .xlsx.")
+
+
+def _normalize_master_file_references(payload: dict) -> None:
+    if is_step_recipe_payload(payload):
+        for step in payload.get("steps", []):
+            if not isinstance(step, dict):
+                continue
+            master_cfg = step.get("master")
+            if isinstance(master_cfg, dict) and isinstance(master_cfg.get("file"), str):
+                master_cfg["file"] = normalize_relative_path_string(master_cfg["file"])
+        return
+
+    for master_cfg in payload.get("masters", []) or []:
+        if isinstance(master_cfg, dict) and isinstance(master_cfg.get("file"), str):
+            master_cfg["file"] = normalize_relative_path_string(master_cfg["file"])
 SUPPORTED_RECIPE_STEP_TYPES = {
     "derive_column",
     "duplicate_group_rewrite",
@@ -74,6 +119,18 @@ def _validate_condition_rule(
     operator = operators[0]
     if operator in {"in", "not_in"} and not isinstance(rule.get(operator), list):
         errors.append(f"{path}.{operator} harus berupa list.")
+    if operator in {"in", "not_in"} and isinstance(rule.get(operator), list):
+        invalid_items = [item for item in rule.get(operator, []) if not _is_supported_literal(item)]
+        if invalid_items:
+            errors.append(
+                f"{path}.{operator} hanya boleh berisi nilai literal sederhana."
+            )
+    if operator not in {"in", "not_in", "is_blank", "is_not_blank"} and not _is_supported_literal(
+        rule.get(operator)
+    ):
+        errors.append(
+            f"{path}.{operator} hanya boleh memakai nilai literal sederhana."
+        )
     if operator in {"is_blank", "is_not_blank"} and not isinstance(rule.get(operator), bool):
         errors.append(f"{path}.{operator} harus berupa boolean.")
     if "case_sensitive" in rule and not isinstance(rule.get("case_sensitive"), bool):
@@ -93,6 +150,8 @@ def _validate_output_items(outputs: object, errors: list[str]) -> None:
             continue
         if "sheet_name" not in item:
             errors.append(f"outputs[{idx}] wajib memiliki field 'sheet_name'.")
+        elif not isinstance(item.get("sheet_name"), str):
+            errors.append(f"outputs[{idx}].sheet_name harus berupa string.")
 
         has_columns = "columns" in item
         has_pivot = "pivot" in item
@@ -152,6 +211,14 @@ def _validate_master_items(masters: object, errors: list[str]) -> None:
                 f"masters[{idx}] harus berupa object berisi file, key, dan columns."
             )
             continue
+        if "file" not in item:
+            errors.append(f"masters[{idx}].file wajib diisi.")
+        else:
+            _validate_master_file_path(
+                item.get("file"),
+                path=f"masters[{idx}].file",
+                errors=errors,
+            )
         strategy = item.get("strategy", "lookup")
         if not isinstance(strategy, str) or strategy not in SUPPORTED_MASTER_STRATEGIES:
             errors.append(
@@ -292,6 +359,10 @@ def _validate_transform_items(transforms: object, errors: list[str]) -> None:
                         )
                     if has_column and not isinstance(operand.get("column"), str):
                         errors.append(f"{operand_path}.column harus berupa string.")
+                    if has_value and not _is_supported_literal(operand.get("value")):
+                        errors.append(
+                            f"{operand_path}.value hanya boleh memakai nilai literal sederhana."
+                        )
             if "null_as_zero" in item and not isinstance(item.get("null_as_zero"), bool):
                 errors.append(f"{path}.null_as_zero harus berupa boolean.")
             continue
@@ -326,6 +397,68 @@ def _validate_transform_items(transforms: object, errors: list[str]) -> None:
                         errors.append(f"{case_path}.when harus berupa object atau list object.")
                 if "value" not in case:
                     errors.append(f"{case_path}.value wajib diisi.")
+                elif not _is_supported_literal(case.get("value")):
+                    errors.append(
+                        f"{case_path}.value hanya boleh memakai nilai literal sederhana."
+                    )
+        if "default" in item and not _is_supported_literal(item.get("default")):
+            errors.append(f"{path}.default hanya boleh memakai nilai literal sederhana.")
+
+
+def _validate_recipe_matching_config(matching: object, *, path: str, errors: list[str]) -> None:
+    if not isinstance(matching, dict):
+        errors.append(f"{path} harus berupa object.")
+        return
+
+    matchers = matching.get("matchers")
+    if not isinstance(matchers, list) or len(matchers) == 0:
+        errors.append(f"{path}.matchers harus berupa list dan minimal 1 item.")
+    else:
+        for idx, matcher in enumerate(matchers):
+            matcher_path = f"{path}.matchers[{idx}]"
+            if not isinstance(matcher, dict):
+                errors.append(f"{matcher_path} harus berupa object.")
+                continue
+            for field in ("source", "master", "mode"):
+                if field not in matcher or not isinstance(matcher.get(field), str):
+                    errors.append(f"{matcher_path}.{field} wajib berupa string.")
+            mode = matcher.get("mode")
+            if isinstance(mode, str) and mode not in SUPPORTED_MATCHER_MODES:
+                errors.append(
+                    f"{matcher_path}.mode harus salah satu dari: {', '.join(sorted(SUPPORTED_MATCHER_MODES))}."
+                )
+            normalize_cfg = matcher.get("normalize")
+            if normalize_cfg is not None:
+                if not isinstance(normalize_cfg, dict):
+                    errors.append(f"{matcher_path}.normalize harus berupa object.")
+                else:
+                    allowed_keys = {
+                        "trim",
+                        "case_sensitive",
+                        "wildcard",
+                        "blank_as_wildcard",
+                        "alternative_separator",
+                    }
+                    unknown_keys = sorted(set(normalize_cfg) - allowed_keys)
+                    if unknown_keys:
+                        errors.append(
+                            f"{matcher_path}.normalize memiliki field tidak didukung: {', '.join(unknown_keys)}."
+                        )
+                    for bool_key in ("trim", "case_sensitive", "blank_as_wildcard"):
+                        if bool_key in normalize_cfg and not isinstance(normalize_cfg.get(bool_key), bool):
+                            errors.append(f"{matcher_path}.normalize.{bool_key} harus berupa boolean.")
+                    for str_key in ("wildcard", "alternative_separator"):
+                        if str_key in normalize_cfg and not isinstance(normalize_cfg.get(str_key), str):
+                            errors.append(f"{matcher_path}.normalize.{str_key} harus berupa string.")
+
+    if "order" in matching:
+        order = matching.get("order")
+        if not isinstance(order, str) or order not in SUPPORTED_RECIPE_MATCHING_ORDERS:
+            errors.append(
+                f"{path}.order harus salah satu dari: {', '.join(sorted(SUPPORTED_RECIPE_MATCHING_ORDERS))}."
+            )
+    if "first_match_wins" in matching and not isinstance(matching.get("first_match_wins"), bool):
+        errors.append(f"{path}.first_match_wins harus berupa boolean.")
 
 
 def is_step_recipe_payload(payload: object) -> bool:
@@ -394,12 +527,55 @@ def _validate_step_recipe_payload(payload: dict, errors: list[str]) -> None:
                 for field in ("source_column", "target_column", "master"):
                     if field not in step:
                         errors.append(f"{path}.{field} wajib diisi.")
+                master_cfg = step.get("master")
+                if isinstance(master_cfg, dict):
+                    for field in ("file", "sheet", "key", "value"):
+                        if field not in master_cfg or not isinstance(master_cfg.get(field), str):
+                            errors.append(f"{path}.master.{field} wajib berupa string.")
+                    if "file" in master_cfg:
+                        _validate_master_file_path(
+                            master_cfg.get("file"),
+                            path=f"{path}.master.file",
+                            errors=errors,
+                        )
+                else:
+                    errors.append(f"{path}.master harus berupa object.")
+                matching = step.get("matching")
+                if matching is not None and not isinstance(matching, dict):
+                    errors.append(f"{path}.matching harus berupa object jika diisi.")
                 continue
 
             if step_type == "lookup_rules":
                 for field in ("inputs", "target_column", "master", "matching"):
                     if field not in step:
                         errors.append(f"{path}.{field} wajib diisi.")
+                inputs = step.get("inputs")
+                if not isinstance(inputs, list) or len(inputs) == 0 or not all(
+                    isinstance(item, str) for item in inputs
+                ):
+                    errors.append(f"{path}.inputs harus berupa list string dan minimal 1 item.")
+                master_cfg = step.get("master")
+                if isinstance(master_cfg, dict):
+                    for field in ("file", "sheet", "value"):
+                        if field not in master_cfg or not isinstance(master_cfg.get(field), str):
+                            errors.append(f"{path}.master.{field} wajib berupa string.")
+                    if "file" in master_cfg:
+                        _validate_master_file_path(
+                            master_cfg.get("file"),
+                            path=f"{path}.master.file",
+                            errors=errors,
+                        )
+                else:
+                    errors.append(f"{path}.master harus berupa object.")
+                _validate_recipe_matching_config(
+                    step.get("matching"),
+                    path=f"{path}.matching",
+                    errors=errors,
+                )
+                if "on_missing_match" in step and not _is_supported_literal(step.get("on_missing_match")):
+                    errors.append(
+                        f"{path}.on_missing_match hanya boleh memakai nilai literal sederhana."
+                    )
                 continue
 
             if step_type == "map_ranges":
@@ -429,6 +605,22 @@ def validate_config_payload(payload: object) -> tuple[str, ...]:
     if missing_fields:
         errors.append(
             "Field wajib belum lengkap: " + ", ".join(sorted(missing_fields))
+        )
+    elif not isinstance(payload.get("name"), str):
+        errors.append("Field 'name' harus berupa string.")
+    elif not isinstance(payload.get("source_sheet"), str):
+        errors.append("Field 'source_sheet' harus berupa string.")
+    elif not isinstance(payload.get("header"), dict):
+        errors.append("Field 'header' harus berupa object.")
+
+    required_source_columns = payload.get("required_source_columns")
+    if required_source_columns is not None and (
+        not isinstance(required_source_columns, list)
+        or len(required_source_columns) == 0
+        or not all(isinstance(item, str) for item in required_source_columns)
+    ):
+        errors.append(
+            "Field 'required_source_columns' harus berupa list string dan minimal 1 item jika diisi."
         )
 
     if "outputs" in payload:
@@ -503,4 +695,5 @@ def load_config_payload(path: Path) -> dict:
     errors = validate_config_payload(payload)
     if errors:
         raise ValueError("Config tidak valid: " + "; ".join(errors))
+    _normalize_master_file_references(payload)
     return payload

@@ -100,6 +100,51 @@ def test_run_pipeline_happy_path_csv_with_master_and_pivot(app_paths):
     assert summary_df.loc[summary_df["kategori"] == "Cat 2", "qty"].iloc[0] == 5
 
 
+def test_run_pipeline_supports_casefold_master_path_and_sheet_name(app_paths):
+    source_path = app_paths.project_root / "source.csv"
+    pd.DataFrame([{"kode_produk": "A", "qty": 1}]).to_csv(source_path, index=False)
+
+    master_path = app_paths.masters_dir / "Produk.CSV"
+    pd.DataFrame([{"kode_produk": "A", "nama_produk": "Produk A"}]).to_csv(
+        master_path,
+        index=False,
+    )
+
+    config_path = app_paths.configs_dir / "casefold_master.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Casefold Master"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Casefold Master"',
+                "masters:",
+                '  - file: "masters\\\\produk.csv"',
+                '    key: "kode_produk"',
+                "    columns:",
+                '      - "nama_produk"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "kode_produk"',
+                '      - "nama_produk"',
+                '      - "qty"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _: None,
+    )
+
+    detail_df = pd.read_excel(result.output_path, sheet_name="Detail", skiprows=3)
+    assert detail_df["nama_produk"].tolist() == ["Produk A"]
+
+
 def test_run_pipeline_raises_when_master_missing(app_paths):
     source_path = app_paths.project_root / "source.csv"
     pd.DataFrame(
@@ -168,6 +213,108 @@ def test_run_pipeline_raises_when_excel_sheet_missing(app_paths):
     )
 
     with pytest.raises(PipelineError, match="Sheet 'SheetTidakAda' tidak ditemukan"):
+        run_pipeline(
+            paths=app_paths,
+            source_path=source_path,
+            config_path=config_path,
+            log=lambda _: None,
+        )
+
+
+def test_run_pipeline_matches_excel_sheet_name_case_insensitively(app_paths):
+    source_path = app_paths.project_root / "source.xlsx"
+    pd.DataFrame([{"tanggal": "2026-04-01", "qty": 1}]).to_excel(
+        source_path,
+        index=False,
+        sheet_name="SheetAktual",
+    )
+
+    config_path = app_paths.configs_dir / "sheet_casefold.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Sheet Casefold"',
+                'source_sheet: "sheetaktual"',
+                "header:",
+                '  title: "Sheet Casefold"',
+                '  period_from_column: "tanggal"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "tanggal"',
+                '      - "qty"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _: None,
+    )
+
+    detail_df = pd.read_excel(result.output_path, sheet_name="Detail", skiprows=3)
+    assert detail_df["qty"].tolist() == [1]
+
+
+def test_run_pipeline_raises_when_required_source_columns_missing(app_paths):
+    source_path = app_paths.project_root / "source.csv"
+    pd.DataFrame([{"qty": 10, "harga": 2000}]).to_csv(source_path, index=False)
+
+    config_path = app_paths.configs_dir / "required_columns.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Required Columns"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Required Columns"',
+                "required_source_columns:",
+                '  - "tanggal"',
+                '  - "qty"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "qty"',
+                '      - "harga"',
+            ]
+        ),
+    )
+
+    with pytest.raises(PipelineError, match="Kolom wajib source tidak ditemukan: tanggal"):
+        run_pipeline(
+            paths=app_paths,
+            source_path=source_path,
+            config_path=config_path,
+            log=lambda _: None,
+        )
+
+
+def test_run_pipeline_raises_when_source_file_empty(app_paths):
+    source_path = app_paths.project_root / "source.csv"
+    source_path.write_text("", encoding="utf-8")
+
+    config_path = app_paths.configs_dir / "empty_source.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Empty Source"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Empty Source"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "qty"',
+            ]
+        ),
+    )
+
+    with pytest.raises(PipelineError, match="File source kosong"):
         run_pipeline(
             paths=app_paths,
             source_path=source_path,
