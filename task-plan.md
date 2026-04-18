@@ -214,7 +214,7 @@ Definition of done:
 
 - [x] Implement formula aritmatika sederhana.
 - [x] Siapkan struktur untuk conditional rule.
-- [ ] Siapkan struktur untuk lookup rule lanjutan.
+- [x] Siapkan struktur untuk lookup rule lanjutan.
 - [x] Validasi rule agar tidak unsafe.
 - [x] Buat pesan error formula/rule yang jelas.
 
@@ -227,7 +227,7 @@ Sub-tugas rule bisnis yang akan diisi nanti:
 
 Definition of done:
 
-- [ ] Engine siap menampung rule bisnis nyata tanpa bongkar arsitektur dasar.
+- [x] Engine siap menampung rule bisnis nyata tanpa bongkar arsitektur dasar.
 
 ### Fase 8 - Output writer Excel
 

@@ -122,6 +122,53 @@ def test_validate_config_payload_accepts_ordered_rules_master():
     assert validate_config_payload(payload) == ()
 
 
+def test_validate_config_payload_accepts_lookup_rules_master():
+    payload = {
+        "name": "Batch 5 Lookup Rules",
+        "source_sheet": "result",
+        "header": {},
+        "masters": [
+            {
+                "file": "masters/master_table.xlsx",
+                "sheet_name": "action",
+                "strategy": "lookup_rules",
+                "target_column": "action",
+                "value_column": "action",
+                "matching": {
+                    "order": "top_to_bottom",
+                    "first_match_wins": True,
+                    "matchers": [
+                        {
+                            "source": "part_name",
+                            "master": "part_name",
+                            "mode": "equals",
+                            "normalize": {
+                                "trim": True,
+                                "case_sensitive": False,
+                                "blank_as_wildcard": True,
+                            },
+                        },
+                        {
+                            "source": "repair_comment",
+                            "master": "repair_comment",
+                            "mode": "contains",
+                            "normalize": {
+                                "trim": True,
+                                "case_sensitive": False,
+                                "wildcard": "*",
+                            },
+                        },
+                    ],
+                },
+                "on_missing_match": None,
+            }
+        ],
+        "outputs": [{"sheet_name": "Detail", "columns": ["part_name", "action"]}],
+    }
+
+    assert validate_config_payload(payload) == ()
+
+
 def test_validate_config_payload_rejects_invalid_ordered_rules_matchers():
     payload = {
         "name": "Batch 5 Invalid",
@@ -144,6 +191,42 @@ def test_validate_config_payload_rejects_invalid_ordered_rules_matchers():
 
     errors = validate_config_payload(payload)
     assert any("mode harus salah satu" in item for item in errors)
+
+
+def test_validate_config_payload_rejects_invalid_lookup_rules_master_matching():
+    payload = {
+        "name": "Batch 5 Lookup Rules Invalid",
+        "source_sheet": "result",
+        "header": {},
+        "masters": [
+            {
+                "file": "masters/master_table.xlsx",
+                "sheet_name": "action",
+                "strategy": "lookup_rules",
+                "target_column": "action",
+                "value_column": "action",
+                "matching": {
+                    "order": "bottom_to_top",
+                    "matchers": [
+                        {
+                            "source": "part_name",
+                            "master": "part_name",
+                            "mode": "equals",
+                            "normalize": {"trim": "yes"},
+                        }
+                    ],
+                },
+            }
+        ],
+        "outputs": [{"sheet_name": "Detail", "columns": ["part_name", "action"]}],
+    }
+
+    errors = validate_config_payload(payload)
+    assert any("masters[0].matching.order harus salah satu" in item for item in errors)
+    assert any(
+        "masters[0].matching.matchers[0].normalize.trim harus berupa boolean." in item
+        for item in errors
+    )
 
 
 def test_validate_config_payload_accepts_lookup_with_split_keys_and_normalizer():
