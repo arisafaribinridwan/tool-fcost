@@ -69,6 +69,27 @@ def _blank_mask(series: pd.Series) -> pd.Series:
     return series.isna() | _normalized_series(series, case_sensitive=True).eq("")
 
 
+def _normalize_with_options(value: object, normalize_cfg: dict | None) -> str:
+    config = normalize_cfg or {}
+    trim = bool(config.get("trim", True))
+    case_sensitive = bool(config.get("case_sensitive", False))
+    alternative_separator = config.get("alternative_separator")
+
+    if pd.isna(value):
+        normalized = ""
+    else:
+        normalized = str(value)
+        if trim:
+            normalized = " ".join(normalized.strip().split())
+        if isinstance(alternative_separator, str) and alternative_separator:
+            normalized = normalized.replace(alternative_separator, " ")
+            normalized = " ".join(normalized.split())
+
+    if not case_sensitive:
+        normalized = normalized.casefold()
+    return normalized
+
+
 def _normalize_lookup_key(value: object, normalizer: str | None) -> str:
     normalized = _normalize_text(value)
     if normalizer is None:
@@ -106,6 +127,27 @@ def _match_rule_value(source_value: object, master_value: object, mode: str) -> 
         if not token:
             return True
         return token in normalized_source
+    raise ValueError(f"Mode matcher tidak didukung: '{mode}'.")
+
+
+def _matcher_matches(source_value: object, master_value: object, matcher_cfg: dict) -> bool:
+    normalize_cfg = matcher_cfg.get("normalize")
+    blank_as_wildcard = bool((normalize_cfg or {}).get("blank_as_wildcard", False))
+    source_normalized = _normalize_with_options(source_value, normalize_cfg)
+    master_normalized = _normalize_with_options(master_value, normalize_cfg)
+
+    if blank_as_wildcard and not master_normalized:
+        return True
+
+    mode = str(matcher_cfg["mode"])
+    if mode == "equals":
+        return source_normalized == master_normalized
+    if mode == "contains":
+        wildcard = str((normalize_cfg or {}).get("wildcard", "*"))
+        token = master_normalized.replace(wildcard, "")
+        if not token:
+            return True
+        return token in source_normalized
     raise ValueError(f"Mode matcher tidak didukung: '{mode}'.")
 
 
@@ -408,6 +450,77 @@ def _apply_ordered_rules_master(
     return merged_df
 
 
+def _apply_lookup_rules_master(
+    merged_df: pd.DataFrame,
+    master_cfg: dict,
+    project_root: Path,
+    masters_dir: Path,
+    log: LogFn,
+    idx: int,
+) -> pd.DataFrame:
+    master_path, master_df = _read_master_dataframe(master_cfg, project_root, masters_dir)
+    target_column = str(master_cfg["target_column"])
+    value_column = str(master_cfg["value_column"])
+    matching_cfg = master_cfg["matching"]
+    matchers = matching_cfg["matchers"]
+    first_match_wins = bool(matching_cfg.get("first_match_wins", True))
+    on_missing_match = master_cfg.get("on_missing_match")
+
+    required_master_cols = [value_column]
+    missing_source_cols: list[str] = []
+    for matcher in matchers:
+        source_col = str(matcher["source"])
+        master_col = str(matcher["master"])
+        if source_col not in merged_df.columns:
+            missing_source_cols.append(source_col)
+        required_master_cols.append(master_col)
+
+    if missing_source_cols:
+        unique_missing = sorted(set(missing_source_cols))
+        raise ValueError(
+            "Kolom source untuk lookup rules tidak ditemukan: "
+            + ", ".join(unique_missing)
+        )
+
+    missing_master_cols = [
+        col for col in required_master_cols if col not in master_df.columns
+    ]
+    if missing_master_cols:
+        raise ValueError(
+            f"Kolom master hilang di '{master_path.name}': {', '.join(sorted(set(missing_master_cols)))}"
+        )
+
+    selected_master = master_df.loc[:, list(dict.fromkeys(required_master_cols))].copy()
+    selected_master = selected_master[selected_master[value_column].notna()].reset_index(
+        drop=True
+    )
+
+    output_values: list[object] = []
+    for _, source_row in merged_df.iterrows():
+        resolved_value = on_missing_match
+        for _, rule_row in selected_master.iterrows():
+            if all(
+                _matcher_matches(
+                    source_value=source_row[str(matcher["source"])],
+                    master_value=rule_row[str(matcher["master"])],
+                    matcher_cfg=matcher,
+                )
+                for matcher in matchers
+            ):
+                resolved_value = rule_row[value_column]
+                if first_match_wins:
+                    break
+        output_values.append("" if pd.isna(resolved_value) else resolved_value)
+
+    merged_df = merged_df.copy()
+    merged_df[target_column] = output_values
+    log(
+        f"Master {idx} lookup rules loaded: {master_path.name} "
+        f"({len(selected_master)} rules -> kolom '{target_column}')."
+    )
+    return merged_df
+
+
 def apply_master_lookups(
     source_df: pd.DataFrame,
     masters_config: list[dict] | None,
@@ -434,6 +547,16 @@ def apply_master_lookups(
             continue
         if strategy == "ordered_rules":
             merged_df = _apply_ordered_rules_master(
+                merged_df=merged_df,
+                master_cfg=master_cfg,
+                project_root=project_root,
+                masters_dir=masters_dir,
+                log=log,
+                idx=idx,
+            )
+            continue
+        if strategy == "lookup_rules":
+            merged_df = _apply_lookup_rules_master(
                 merged_df=merged_df,
                 master_cfg=master_cfg,
                 project_root=project_root,

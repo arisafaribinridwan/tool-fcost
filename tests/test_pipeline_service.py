@@ -401,6 +401,96 @@ def test_run_pipeline_supports_ordered_rules_master_for_action(app_paths):
     ]
 
 
+def test_run_pipeline_supports_lookup_rules_master_for_action(app_paths):
+    source_path = app_paths.project_root / "source.csv"
+    pd.DataFrame(
+        [
+            {"part_name": "ac_cord", "repair_comment": "need ext support"},
+            {"part_name": "panel", "repair_comment": "replace unit"},
+            {"part_name": "MAIN_UNIT", "repair_comment": "UPGRADE firmware"},
+            {"part_name": "Other", "repair_comment": "dibawa customer"},
+            {"part_name": "Other", "repair_comment": "unknown"},
+        ]
+    ).to_csv(source_path, index=False)
+
+    master_path = app_paths.masters_dir / "master_table.xlsx"
+    with pd.ExcelWriter(master_path) as writer:
+        pd.DataFrame(
+            [
+                {"part_name": None, "repair_comment": "*ext", "action": "external"},
+                {"part_name": "PANEL", "repair_comment": "*", "action": "replace_panel"},
+                {
+                    "part_name": "MAIN_UNIT",
+                    "repair_comment": "*",
+                    "action": "replace_main_unit",
+                },
+                {"part_name": None, "repair_comment": "*bawa", "action": "ZY"},
+                {"part_name": None, "repair_comment": "UPGRADE", "action": "upgrade"},
+            ]
+        ).to_excel(writer, index=False, sheet_name="action")
+
+    config_path = app_paths.configs_dir / "batch5_action_lookup_rules.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Batch 5 Action Lookup Rules"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Batch 5 Action Lookup Rules"',
+                "masters:",
+                '  - file: "masters/master_table.xlsx"',
+                '    sheet_name: "action"',
+                '    strategy: "lookup_rules"',
+                '    target_column: "action"',
+                '    value_column: "action"',
+                "    matching:",
+                '      order: "top_to_bottom"',
+                "      first_match_wins: true",
+                "      matchers:",
+                '        - source: "part_name"',
+                '          master: "part_name"',
+                '          mode: "equals"',
+                "          normalize:",
+                "            trim: true",
+                "            case_sensitive: false",
+                "            blank_as_wildcard: true",
+                '        - source: "repair_comment"',
+                '          master: "repair_comment"',
+                '          mode: "contains"',
+                "          normalize:",
+                "            trim: true",
+                "            case_sensitive: false",
+                '            wildcard: "*"',
+                "            blank_as_wildcard: true",
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "part_name"',
+                '      - "repair_comment"',
+                '      - "action"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _: None,
+    )
+
+    detail_df = pd.read_excel(result.output_path, sheet_name="Detail", skiprows=3)
+
+    assert detail_df["action"].fillna("").tolist() == [
+        "external",
+        "replace_panel",
+        "replace_main_unit",
+        "ZY",
+        "",
+    ]
+
+
 def test_run_pipeline_supports_lookup_for_defect_category_from_action(app_paths):
     source_path = app_paths.project_root / "source.csv"
     pd.DataFrame(

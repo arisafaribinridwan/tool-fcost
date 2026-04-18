@@ -14,7 +14,7 @@ from app.services.transform_service import (
 
 
 REQUIRED_ROOT_FIELDS = ("name", "source_sheet", "header", "outputs")
-SUPPORTED_MASTER_STRATEGIES = {"lookup", "ordered_rules"}
+SUPPORTED_MASTER_STRATEGIES = {"lookup", "lookup_rules", "ordered_rules"}
 SUPPORTED_MATCHER_MODES = {"equals", "contains"}
 SUPPORTED_KEY_NORMALIZERS = {"compact_text"}
 SUPPORTED_RECIPE_MATCHING_ORDERS = {"top_to_bottom"}
@@ -67,6 +67,8 @@ def _normalize_master_file_references(payload: dict) -> None:
     for master_cfg in payload.get("masters", []) or []:
         if isinstance(master_cfg, dict) and isinstance(master_cfg.get("file"), str):
             master_cfg["file"] = normalize_relative_path_string(master_cfg["file"])
+
+
 SUPPORTED_RECIPE_STEP_TYPES = {
     "derive_column",
     "duplicate_group_rewrite",
@@ -200,6 +202,77 @@ def _validate_output_items(outputs: object, errors: list[str]) -> None:
                 )
 
 
+def _validate_matching_config(
+    matching: object,
+    *,
+    path: str,
+    errors: list[str],
+) -> None:
+    if not isinstance(matching, dict):
+        errors.append(f"{path} harus berupa object.")
+        return
+
+    matchers = matching.get("matchers")
+    if not isinstance(matchers, list) or len(matchers) == 0:
+        errors.append(f"{path}.matchers harus berupa list dan minimal 1 item.")
+    else:
+        for idx, matcher in enumerate(matchers):
+            matcher_path = f"{path}.matchers[{idx}]"
+            if not isinstance(matcher, dict):
+                errors.append(f"{matcher_path} harus berupa object.")
+                continue
+            for field in ("source", "master", "mode"):
+                if field not in matcher or not isinstance(matcher.get(field), str):
+                    errors.append(f"{matcher_path}.{field} wajib berupa string.")
+            mode = matcher.get("mode")
+            if isinstance(mode, str) and mode not in SUPPORTED_MATCHER_MODES:
+                errors.append(
+                    f"{matcher_path}.mode harus salah satu dari: {', '.join(sorted(SUPPORTED_MATCHER_MODES))}."
+                )
+            normalize_cfg = matcher.get("normalize")
+            if normalize_cfg is not None:
+                if not isinstance(normalize_cfg, dict):
+                    errors.append(f"{matcher_path}.normalize harus berupa object.")
+                else:
+                    allowed_keys = {
+                        "trim",
+                        "case_sensitive",
+                        "wildcard",
+                        "blank_as_wildcard",
+                        "alternative_separator",
+                    }
+                    unknown_keys = sorted(set(normalize_cfg) - allowed_keys)
+                    if unknown_keys:
+                        errors.append(
+                            f"{matcher_path}.normalize memiliki field tidak didukung: {', '.join(unknown_keys)}."
+                        )
+                    for bool_key in ("trim", "case_sensitive", "blank_as_wildcard"):
+                        if bool_key in normalize_cfg and not isinstance(
+                            normalize_cfg.get(bool_key), bool
+                        ):
+                            errors.append(
+                                f"{matcher_path}.normalize.{bool_key} harus berupa boolean."
+                            )
+                    for str_key in ("wildcard", "alternative_separator"):
+                        if str_key in normalize_cfg and not isinstance(
+                            normalize_cfg.get(str_key), str
+                        ):
+                            errors.append(
+                                f"{matcher_path}.normalize.{str_key} harus berupa string."
+                            )
+
+    if "order" in matching:
+        order = matching.get("order")
+        if not isinstance(order, str) or order not in SUPPORTED_RECIPE_MATCHING_ORDERS:
+            errors.append(
+                f"{path}.order harus salah satu dari: {', '.join(sorted(SUPPORTED_RECIPE_MATCHING_ORDERS))}."
+            )
+    if "first_match_wins" in matching and not isinstance(
+        matching.get("first_match_wins"), bool
+    ):
+        errors.append(f"{path}.first_match_wins harus berupa boolean.")
+
+
 def _validate_master_items(masters: object, errors: list[str]) -> None:
     if not isinstance(masters, list):
         errors.append("Field 'masters' harus berupa list jika diisi.")
@@ -267,6 +340,30 @@ def _validate_master_items(masters: object, errors: list[str]) -> None:
                     errors.append(
                         f"masters[{idx}].key_normalizer harus salah satu dari: {', '.join(sorted(SUPPORTED_KEY_NORMALIZERS))}."
                     )
+            continue
+
+        if strategy == "lookup_rules":
+            for required in ("file", "sheet_name", "target_column", "value_column", "matching"):
+                if required not in item:
+                    errors.append(
+                        f"masters[{idx}] wajib memiliki field '{required}' untuk strategy 'lookup_rules'."
+                    )
+            if "target_column" in item and not isinstance(item.get("target_column"), str):
+                errors.append(f"masters[{idx}].target_column harus berupa string.")
+            if "value_column" in item and not isinstance(item.get("value_column"), str):
+                errors.append(f"masters[{idx}].value_column harus berupa string.")
+            if "matching" in item:
+                _validate_matching_config(
+                    item.get("matching"),
+                    path=f"masters[{idx}].matching",
+                    errors=errors,
+                )
+            if "on_missing_match" in item and not _is_supported_literal(
+                item.get("on_missing_match")
+            ):
+                errors.append(
+                    f"masters[{idx}].on_missing_match hanya boleh memakai nilai literal sederhana."
+                )
             continue
 
         for required in ("file", "sheet_name", "target_column", "value_column", "matchers"):
@@ -405,62 +502,6 @@ def _validate_transform_items(transforms: object, errors: list[str]) -> None:
             errors.append(f"{path}.default hanya boleh memakai nilai literal sederhana.")
 
 
-def _validate_recipe_matching_config(matching: object, *, path: str, errors: list[str]) -> None:
-    if not isinstance(matching, dict):
-        errors.append(f"{path} harus berupa object.")
-        return
-
-    matchers = matching.get("matchers")
-    if not isinstance(matchers, list) or len(matchers) == 0:
-        errors.append(f"{path}.matchers harus berupa list dan minimal 1 item.")
-    else:
-        for idx, matcher in enumerate(matchers):
-            matcher_path = f"{path}.matchers[{idx}]"
-            if not isinstance(matcher, dict):
-                errors.append(f"{matcher_path} harus berupa object.")
-                continue
-            for field in ("source", "master", "mode"):
-                if field not in matcher or not isinstance(matcher.get(field), str):
-                    errors.append(f"{matcher_path}.{field} wajib berupa string.")
-            mode = matcher.get("mode")
-            if isinstance(mode, str) and mode not in SUPPORTED_MATCHER_MODES:
-                errors.append(
-                    f"{matcher_path}.mode harus salah satu dari: {', '.join(sorted(SUPPORTED_MATCHER_MODES))}."
-                )
-            normalize_cfg = matcher.get("normalize")
-            if normalize_cfg is not None:
-                if not isinstance(normalize_cfg, dict):
-                    errors.append(f"{matcher_path}.normalize harus berupa object.")
-                else:
-                    allowed_keys = {
-                        "trim",
-                        "case_sensitive",
-                        "wildcard",
-                        "blank_as_wildcard",
-                        "alternative_separator",
-                    }
-                    unknown_keys = sorted(set(normalize_cfg) - allowed_keys)
-                    if unknown_keys:
-                        errors.append(
-                            f"{matcher_path}.normalize memiliki field tidak didukung: {', '.join(unknown_keys)}."
-                        )
-                    for bool_key in ("trim", "case_sensitive", "blank_as_wildcard"):
-                        if bool_key in normalize_cfg and not isinstance(normalize_cfg.get(bool_key), bool):
-                            errors.append(f"{matcher_path}.normalize.{bool_key} harus berupa boolean.")
-                    for str_key in ("wildcard", "alternative_separator"):
-                        if str_key in normalize_cfg and not isinstance(normalize_cfg.get(str_key), str):
-                            errors.append(f"{matcher_path}.normalize.{str_key} harus berupa string.")
-
-    if "order" in matching:
-        order = matching.get("order")
-        if not isinstance(order, str) or order not in SUPPORTED_RECIPE_MATCHING_ORDERS:
-            errors.append(
-                f"{path}.order harus salah satu dari: {', '.join(sorted(SUPPORTED_RECIPE_MATCHING_ORDERS))}."
-            )
-    if "first_match_wins" in matching and not isinstance(matching.get("first_match_wins"), bool):
-        errors.append(f"{path}.first_match_wins harus berupa boolean.")
-
-
 def is_step_recipe_payload(payload: object) -> bool:
     return isinstance(payload, dict) and "steps" in payload and "datasets" in payload
 
@@ -567,7 +608,7 @@ def _validate_step_recipe_payload(payload: dict, errors: list[str]) -> None:
                         )
                 else:
                     errors.append(f"{path}.master harus berupa object.")
-                _validate_recipe_matching_config(
+                _validate_matching_config(
                     step.get("matching"),
                     path=f"{path}.matching",
                     errors=errors,
