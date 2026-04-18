@@ -7,11 +7,15 @@ import re
 
 from app import AppPaths
 from app.services.config_service import is_step_recipe_payload, load_config_payload
-from app.services.dataframe_io_service import read_tabular_file
 from app.services.output_service import write_output_workbook
 from app.services.pipeline_types import PipelineError, PipelineResult
 from app.services.recipe_service import execute_step_recipe
-from app.services.source_service import copy_source_to_uploads, validate_source_file
+from app.services.source_service import (
+    copy_source_to_uploads,
+    load_source_dataframe,
+    validate_required_source_columns,
+    validate_source_file,
+)
 from app.services.transform_service import (
     apply_master_lookups,
     apply_transform_steps,
@@ -71,10 +75,18 @@ def run_pipeline(
         source_sheet = config["source_sheet"]
         log(f"Read source: {source_path.name}")
         try:
-            if source_path.suffix.lower() == ".xlsx":
-                source_df = read_tabular_file(source_path, sheet_name=str(source_sheet))
-            else:
-                source_df = read_tabular_file(source_path)
+            source_df = load_source_dataframe(
+                source_path,
+                source_sheet=str(source_sheet) if source_path.suffix.lower() == ".xlsx" else None,
+            )
+        except ValueError as exc:
+            raise PipelineError(str(exc)) from exc
+
+        try:
+            validate_required_source_columns(
+                source_df,
+                config.get("required_source_columns"),
+            )
         except ValueError as exc:
             raise PipelineError(str(exc)) from exc
 

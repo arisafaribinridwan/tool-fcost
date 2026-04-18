@@ -46,6 +46,54 @@ def test_validate_config_payload_rejects_non_dict_root():
     assert errors == ("Isi YAML harus berupa object/dictionary di level root.",)
 
 
+def test_validate_config_payload_rejects_unsafe_master_path():
+    payload = {
+        "name": "Invalid Master Path",
+        "source_sheet": "Sheet1",
+        "header": {},
+        "masters": [
+            {
+                "file": "../secret.csv",
+                "key": "kode_produk",
+            }
+        ],
+        "outputs": [{"sheet_name": "Detail", "columns": ["kode_produk"]}],
+    }
+
+    errors = validate_config_payload(payload)
+    assert any("tidak valid" in item for item in errors)
+
+
+def test_validate_config_payload_accepts_windows_style_master_path():
+    payload = {
+        "name": "Windows Path",
+        "source_sheet": "Sheet1",
+        "header": {},
+        "masters": [
+            {
+                "file": r"masters\\Produk.CSV",
+                "key": "kode_produk",
+            }
+        ],
+        "outputs": [{"sheet_name": "Detail", "columns": ["kode_produk"]}],
+    }
+
+    assert validate_config_payload(payload) == ()
+
+
+def test_validate_config_payload_rejects_invalid_required_source_columns():
+    payload = {
+        "name": "Invalid Required Columns",
+        "source_sheet": "Sheet1",
+        "header": {},
+        "required_source_columns": "qty",
+        "outputs": [{"sheet_name": "Detail", "columns": ["qty"]}],
+    }
+
+    errors = validate_config_payload(payload)
+    assert any("required_source_columns" in item for item in errors)
+
+
 def test_validate_config_payload_accepts_ordered_rules_master():
     payload = {
         "name": "Batch 5",
@@ -231,3 +279,42 @@ def test_validate_config_payload_accepts_step_recipe_schema():
     }
 
     assert validate_config_payload(payload) == ()
+
+
+def test_validate_config_payload_rejects_invalid_lookup_rules_matching_schema():
+    payload = {
+        "name": "Monthly Report Final Recipe",
+        "datasets": {
+            "working_dataset": "result",
+            "canonical_columns": ["notification", "section"],
+        },
+        "steps": [
+            {
+                "id": "sub_13_add_symptom",
+                "type": "lookup_rules",
+                "inputs": ["part_name"],
+                "target_column": "symptom",
+                "master": {
+                    "file": "masters/master_table.xlsx",
+                    "sheet": "symptom",
+                    "value": "symptom",
+                },
+                "matching": {
+                    "order": "bottom_to_top",
+                    "matchers": [
+                        {
+                            "source": "part_name",
+                            "master": "part_name",
+                            "mode": "equals",
+                            "normalize": {"trim": "yes"},
+                        }
+                    ],
+                },
+            }
+        ],
+        "outputs": [{"sheet_name": "result", "columns": ["notification", "section"]}],
+    }
+
+    errors = validate_config_payload(payload)
+    assert any(".matching.order harus salah satu" in item for item in errors)
+    assert any(".normalize.trim harus berupa boolean." in item for item in errors)
