@@ -28,6 +28,7 @@ Ya, perbedaan OS tetap berpengaruh, tetapi sekarang fokusnya bergeser dari brows
 - Cara aktivasi virtual environment
 - Line endings `LF` vs `CRLF`
 - Tampilan tema, font, atau perilaku kecil widget GUI
+- Backend dialog pilih file di Linux dapat mengikuti desktop environment jika helper native (`kdialog`/`zenity`) tersedia
 - Packaging `PyInstaller`
 - Cara membuka file/folder hasil dari aplikasi
 - Permission file tertentu

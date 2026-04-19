@@ -39,3 +39,5 @@ sudo apt-get install -y python3-tk python3.12-venv xvfb
 - Pisahkan env dev harian dari env packaging Linux
 - Gunakan `dist/ExcelAutoTool-linux-x86_64.tar.gz` sebagai artifact distribusi utama
 - Jika build machine berganti runner/image, validasi ulang modul `tkinter` sebelum build
+- Untuk dialog file Linux yang lebih native, install salah satu helper desktop: `kdialog` (KDE) atau `zenity` (GNOME/umum)
+- Jika helper tidak tersedia, aplikasi otomatis fallback ke dialog Tk

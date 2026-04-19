@@ -16,6 +16,7 @@ Jika jendela aplikasi muncul, tool siap dipakai.
 ## Langkah 2. Pilih File Source
 
 - Klik `Pilih Source`
+- Di Linux, dialog akan mencoba backend native desktop (`kdialog` lalu `zenity`) jika tersedia
 - Pilih file yang ingin diproses
 - Format yang didukung: `.xlsx` atau `.csv`
 

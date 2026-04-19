@@ -76,6 +76,8 @@ Langkah:
 
 Pass criteria:
 
+- Dialog `Pilih Source` muncul saat tombol diklik
+- Khusus Linux: jika `kdialog` atau `zenity` terpasang, dialog tampil native sesuai desktop
 - `Execute` aktif setelah source dan config valid
 - Log bergerak selama proses
 - Status berubah ke sukses
