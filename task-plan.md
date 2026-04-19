@@ -8,7 +8,9 @@ Status sinkronisasi terakhir:
 
 - Checklist diselaraskan dengan progres implementasi terbaru termasuk engine `Execute` real (lihat PR #9).
 - Alur build Linux sekarang sudah punya bootstrap env khusus, smoke test GUI, checklist build machine, dan workflow CI packaging Linux.
-- Validasi end-to-end build Linux lokal masih tertahan kebutuhan paket sistem `python3-tk` dan `python3.12-venv` di mesin build.
+- Validasi end-to-end build Linux lokal sudah dijalankan dan berhasil setelah paket sistem terpenuhi.
+- Build final Windows via `PyInstaller` sudah dijalankan di Windows 11 dan menghasilkan bundle `dist/ExcelAutoTool`.
+- Validasi bundle Windows sudah mencakup startup `run.bat`, mode source/bundle, dan uji di mesin Windows lain.
 - Item yang dicentang berarti sudah terimplementasi atau sudah diverifikasi lewat test dasar.
 - Item yang masih kosong berarti belum selesai, belum terhubung end-to-end, atau belum divalidasi lintas OS target runtime final.
 
@@ -27,7 +29,7 @@ Status sinkronisasi terakhir:
 - [x] Logic aplikasi tidak bergantung pada shell tertentu.
 - [x] Perbedaan line ending dan case sensitivity nama file ikut diperhatikan saat development.
 - [x] UI dipilih berbasis Python desktop agar lebih sederhana untuk dev lintas OS dibanding web lokal.
-- [ ] Build final `.exe`, `run.bat`, dan uji portable selalu dilakukan di Windows.
+- [x] Build final `.exe`, `run.bat`, dan uji portable selalu dilakukan di Windows.
 - [ ] Jika nanti butuh binary Linux atau macOS, build dilakukan lagi di OS target masing-masing.
 
 ## 1. Gate Awal
@@ -67,7 +69,7 @@ Status sinkronisasi terakhir:
 - [x] Python 3.14.x 64-bit
 - [x] Git
 - [x] VS Code atau editor lain
-- [ ] Mesin Windows 10/11 untuk build final dan validasi portable
+- [x] Mesin Windows 10/11 untuk build final dan validasi portable
 - [ ] Jika ingin build Linux native, siapkan environment Linux terpisah
 
 ### Library Python
@@ -324,21 +326,21 @@ Definition of done:
 - [x] Pastikan asset non-code ikut terbundle jika ada.
 - [x] Pastikan folder runtime tersedia atau dibuat otomatis saat first run.
 - [x] Buat `run.bat`.
-- [ ] Uji jalan dari source mode dan bundle mode.
-- [ ] Lakukan build final `PyInstaller` Windows di Windows, bukan Linux.
-- [ ] Uji `run.bat` dan `ExcelAutoTool.exe` di Windows target.
-- [ ] Uji hasil build di Windows lain.
+- [x] Uji jalan dari source mode dan bundle mode.
+- [x] Lakukan build final `PyInstaller` Windows di Windows, bukan Linux.
+- [x] Uji `run.bat` dan `ExcelAutoTool.exe` di Windows target.
+- [x] Uji hasil build di Windows lain.
 - [x] Jika ingin distribusi Linux native, buat file spec atau langkah build Linux terpisah.
 - [x] Tambahkan bootstrap env build Linux terpisah berbasis Python distro.
 - [x] Tambahkan smoke test launcher GUI Linux.
 - [x] Tambahkan checklist build machine Linux.
 - [x] Tambahkan workflow CI untuk packaging Linux.
-- [ ] Verifikasi build Linux end-to-end di mesin lokal setelah paket sistem `python3-tk` dan `python3.12-venv` terpasang.
+- [x] Verifikasi build Linux end-to-end di mesin lokal setelah paket sistem `python3-tk` dan `python3.12-venv` terpasang.
 
 Definition of done:
 
-- [ ] Folder hasil build bisa dipakai tanpa install Python.
-- [ ] Build final Windows tervalidasi sebagai target distribusi utama.
+- [x] Folder hasil build bisa dipakai tanpa install Python.
+- [x] Build final Windows tervalidasi sebagai target distribusi utama.
 
 ### Fase 14 - Validasi use case nyata
 
@@ -410,9 +412,9 @@ Bagian ini sengaja disiapkan sebagai placeholder agar saat sample nyata datang, 
 - [x] Desktop UI menampilkan log proses yang jelas.
 - [x] Error tampil jelas dan tidak membingungkan.
 - [x] Hasil tersimpan dan mudah dibuka dari folder output.
-- [ ] Aplikasi bisa dibundle menjadi folder portable Windows.
-- [ ] Hasil build bisa jalan tanpa install Python.
-- [ ] Validasi final folder runtime dan eksekusi lolos di Windows.
+- [x] Aplikasi bisa dibundle menjadi folder portable Windows.
+- [x] Hasil build bisa jalan tanpa install Python.
+- [x] Validasi final folder runtime dan eksekusi lolos di Windows.
 - [ ] Minimal 1 use case nyata lolos validasi user.
 
 ## 8. Skills AI yang Dibutuhkan
@@ -452,5 +454,5 @@ Bagian ini sengaja disiapkan sebagai placeholder agar saat sample nyata datang, 
 - [x] Tambahkan logging dan integrasi end-to-end
 - [x] Tambahkan testing
 - [ ] Jalankan validasi lintas OS seperlunya
-- [ ] Tambahkan packaging per target OS
+- [x] Tambahkan packaging per target OS
 - [ ] Validasi dengan sample nyata
