@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from queue import Empty, Queue
 from threading import Thread
-from tkinter import filedialog, messagebox
+from tkinter import messagebox
 
 import customtkinter as ctk
 
@@ -17,7 +17,7 @@ from app.services import (
     run_pipeline,
     validate_source_file,
 )
-from app.utils import open_in_file_manager
+from app.utils import open_in_file_manager, select_source_file
 
 
 class DesktopApp(ctk.CTk):
@@ -165,16 +165,7 @@ class DesktopApp(ctk.CTk):
         self.status_var.set(f"Status: {text}")
 
     def _select_source(self) -> None:
-        file_path = filedialog.askopenfilename(
-            title="Pilih file source",
-            initialdir=str(self.paths.project_root),
-            filetypes=[
-                ("Excel/CSV", "*.xlsx *.csv"),
-                ("Excel", "*.xlsx"),
-                ("CSV", "*.csv"),
-                ("All Files", "*.*"),
-            ],
-        )
+        file_path = select_source_file(self.paths.project_root)
         if not file_path:
             self._append_log("Pemilihan source dibatalkan.")
             return

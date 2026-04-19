@@ -128,6 +128,7 @@ Target distribusi:
 - Header laporan berisi judul dan info periode
 - Styling dasar Excel: warna header, border, font, number/date format, freeze pane
 - Desktop UI sederhana berbasis `CustomTkinter`: pilih source, pilih config, execute, log, buka folder output
+- Di Linux, dialog pilih source memprioritaskan helper native desktop (`kdialog`/`zenity`) dengan fallback otomatis ke Tk dialog
 - Log proses yang jelas
 - Error message yang mudah dipahami
 - Packaging portable Windows dengan `PyInstaller`

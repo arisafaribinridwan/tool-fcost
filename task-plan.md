@@ -148,6 +148,7 @@ Definition of done:
 - [x] Buat area hasil dan tombol buka folder output.
 - [x] Tambahkan validasi input sederhana.
 - [x] Pastikan pemilihan file dan pembukaan folder memakai mekanisme yang aman lintas OS.
+- [x] Khusus Linux, pemilihan source memprioritaskan dialog native (`kdialog` -> `zenity`) dengan fallback Tk jika helper tidak tersedia.
 
 Definition of done:
 
@@ -309,7 +310,7 @@ Definition of done:
 - [x] Buat unit test transform engine.
 - [x] Buat unit test formula/rule engine.
 - [x] Buat unit test output writer.
-- [ ] Buat test UI minimal untuk helper logic yang bisa diuji tanpa full window interaktif.
+- [x] Buat test UI minimal untuk helper logic yang bisa diuji tanpa full window interaktif.
 - [x] Buat minimal 1 integration test.
 - [x] Jalankan test rutin minimal di 1 environment development.
 - [x] Tambahkan guardrail CI untuk lint dan test rutin Linux.

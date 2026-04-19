@@ -17,6 +17,8 @@ pip install -r requirements.txt
 
 Catatan Linux desktop: Python yang dipakai untuk menjalankan app atau build bundle harus punya dukungan Tk/Tcl. Pada Ubuntu atau Linux Mint biasanya ini berarti perlu paket `python3-tk`.
 
+Untuk pengalaman dialog pilih file yang lebih native di Linux, install helper desktop opsional `kdialog` (KDE) atau `zenity` (GNOME/umum). Jika tidak tersedia, aplikasi otomatis fallback ke dialog Tk.
+
 ### Windows PowerShell
 
 ```powershell
@@ -95,7 +97,7 @@ Best practice yang direkomendasikan untuk Linux desktop/build machine:
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y python3-tk python3.12-venv
+sudo apt-get install -y python3-tk python3.12-venv zenity kdialog
 ./packaging/linux/bootstrap-build-env.sh
 ./packaging/linux/build.sh
 ./packaging/linux/smoke-test.sh
