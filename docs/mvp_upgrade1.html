@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MVP Upgrade 1 - HTML Slide</title>
+  <style>
+    :root {
+      --bg-1: #0f172a;
+      --bg-2: #1e293b;
+      --card: #111827cc;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #22c55e;
+      --accent-2: #f59e0b;
+      --danger: #ef4444;
+      --info: #38bdf8;
+      --border: #334155;
+      --shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      color: var(--text);
+      font-family: "Segoe UI", "Trebuchet MS", "Franklin Gothic Medium", sans-serif;
+      background:
+        radial-gradient(circle at 20% 20%, #1d4ed8 0%, transparent 35%),
+        radial-gradient(circle at 80% 0%, #0ea5e9 0%, transparent 25%),
+        linear-gradient(135deg, var(--bg-1), var(--bg-2));
+      overflow: hidden;
+    }
+
+    .deck {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+
+    .slide {
+      width: min(1100px, 100%);
+      height: min(700px, 100%);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      padding: 2rem 2.2rem 2.6rem;
+      display: none;
+      position: relative;
+      overflow: auto;
+      backdrop-filter: blur(4px);
+      animation: fadeIn 260ms ease;
+    }
+
+    .slide.active {
+      display: block;
+    }
+
+    .kicker {
+      font-size: 0.84rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--info);
+      margin-bottom: 0.7rem;
+      font-weight: 700;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0 0 0.8rem;
+      line-height: 1.2;
+    }
+
+    h1 {
+      font-size: clamp(1.7rem, 3.4vw, 2.7rem);
+    }
+
+    h2 {
+      font-size: clamp(1.3rem, 2.7vw, 2.1rem);
+    }
+
+    p {
+      margin: 0.4rem 0 0.8rem;
+      line-height: 1.55;
+      color: #dbe7f3;
+    }
+
+    ul,
+    ol {
+      margin: 0.4rem 0 0.9rem 1.2rem;
+      line-height: 1.55;
+    }
+
+    li {
+      margin-bottom: 0.33rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+      margin-top: 0.9rem;
+    }
+
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.8rem 0.9rem;
+      background: #0f172a99;
+    }
+
+    .tag {
+      display: inline-block;
+      border: 1px solid currentColor;
+      border-radius: 999px;
+      padding: 0.1rem 0.55rem;
+      font-size: 0.74rem;
+      font-weight: 700;
+      margin-right: 0.4rem;
+      margin-bottom: 0.35rem;
+    }
+
+    .p1 { color: var(--danger); }
+    .p2 { color: var(--accent-2); }
+    .p3 { color: var(--accent); }
+
+    .footer {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.6rem;
+      padding: 0.7rem 1rem;
+      background: #020617cc;
+      border-top: 1px solid #1f2937;
+    }
+
+    .progress-wrap {
+      flex: 1;
+      height: 8px;
+      border-radius: 999px;
+      background: #0b1220;
+      border: 1px solid #1f2937;
+      overflow: hidden;
+    }
+
+    .progress {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, #14b8a6, #22c55e, #84cc16);
+      transition: width 240ms ease;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    button {
+      border: 1px solid #334155;
+      background: #0b1220;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 0.45rem 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button:hover {
+      border-color: #60a5fa;
+    }
+
+    .counter {
+      min-width: 72px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    .note {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 860px) {
+      .slide {
+        padding: 1.2rem 1rem 1.8rem;
+        border-radius: 14px;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .footer {
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+
+      .progress-wrap {
+        order: 3;
+        width: 100%;
+        flex-basis: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck" id="deck">
+    <section class="slide active">
+      <div class="kicker">Roadmap Upgrade</div>
+      <h1>MVP Upgrade 1</h1>
+      <p>Interaktif, secure, dan UI/UX lebih baik untuk penggunaan harian user non-teknis.</p>
+      <div class="grid">
+        <div class="card">
+          <h3>Tujuan Utama</h3>
+          <ol>
+            <li>Mengurangi trial-error sebelum klik <code>Execute</code>.</li>
+            <li>Membuat proses lebih interaktif dan mudah dipahami.</li>
+            <li>Menurunkan risiko keamanan dan kesalahan operasional.</li>
+            <li>Meningkatkan kenyamanan UI/UX tanpa arsitektur berat.</li>
+          </ol>
+        </div>
+        <div class="card">
+          <h3>Prioritas MVP-minded</h3>
+          <p><span class="tag p1">P1</span> Wajib dulu - kurangi error dan naikkan rasa aman.</p>
+          <p><span class="tag p2">P2</span> Sangat disarankan - UX dan observabilitas.</p>
+          <p><span class="tag p3">P3</span> Nice-to-have - polish kualitas produk.</p>
+          <p class="note">Gunakan panah kiri/kanan atau tombol Next/Prev.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">P1 - Wajib</div>
+      <h2>1) Preflight Check Interaktif</h2>
+      <p><strong>Problem:</strong> user sering baru tahu masalah saat pipeline sudah jalan.</p>
+      <p><strong>Solusi:</strong> tombol <code>Preflight Check</code> untuk validasi sebelum eksekusi.</p>
+      <div class="grid">
+        <div class="card">
+          <h3>Apa yang dicek</h3>
+          <ul>
+            <li>Source ada, extension valid, bisa dibaca.</li>
+            <li>YAML valid, master referensi tersedia.</li>
+            <li>Kolom wajib source/master ditemukan.</li>
+            <li>Konflik sheet output dan potensi overwrite.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Output ke User</h3>
+          <p>Status: <code>Ready</code>, <code>Warning</code>, <code>Blocked</code>.</p>
+          <p>Severity: <code>ERROR</code>, <code>WARNING</code>, <code>INFO</code>.</p>
+          <p><strong>Dampak:</strong> runtime error menurun, trust meningkat.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">P1 - Wajib</div>
+      <h2>2) Dry Run / Preview Ringkas</h2>
+      <p><strong>Problem:</strong> user butuh konfirmasi resep sebelum menulis output final.</p>
+      <p><strong>Solusi:</strong> mode <code>Dry Run</code> (checkbox atau tombol).</p>
+      <ul>
+        <li>Pipeline jalan sampai transformasi.</li>
+        <li>Tidak menulis output final ke <code>outputs/</code> (atau file preview sementara).</li>
+        <li>Tampilkan preview: jumlah baris input vs output, daftar sheet, contoh 10 baris utama.</li>
+      </ul>
+      <p><strong>Dampak:</strong> mencegah output salah format dan hemat waktu user.</p>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">P1 - Wajib</div>
+      <h2>3) Path Security Boundary</h2>
+      <p><strong>Problem:</strong> tool berbasis path rentan traversal dan symlink edge case.</p>
+      <p><strong>Solusi:</strong> perketat boundary akses file di semua titik I/O.</p>
+      <ul>
+        <li>Semua path source/config/master harus resolve di root yang diizinkan.</li>
+        <li>Tolak <code>..</code>, path absolut keluar root, dan symlink berbahaya.</li>
+        <li>Validasi extension secara eksplisit.</li>
+        <li>Jika invalid: beri error jelas dan blokir eksekusi.</li>
+      </ul>
+      <p><strong>Dampak:</strong> risiko akses file tidak semestinya berkurang.</p>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">P1 - Wajib</div>
+      <h2>4) Log Sanitization</h2>
+      <p><strong>Problem:</strong> log bisa memuat path detail user atau nilai sensitif.</p>
+      <p><strong>Solusi:</strong> sanitasi log sebelum ditampilkan/disimpan.</p>
+      <ul>
+        <li>Mask user-home path yang terlalu detail jika tidak perlu.</li>
+        <li>Mask nilai sensitif: NIK, nomor rekening, email.</li>
+        <li>Hindari dump dataframe mentah ke log.</li>
+      </ul>
+      <p><strong>Dampak:</strong> lebih aman saat log dibagikan/screenshot.</p>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">P1 - Wajib</div>
+      <h2>5) Guardrail Resource</h2>
+      <p><strong>Problem:</strong> file besar atau rusak bikin UI terasa hang.</p>
+      <p><strong>Solusi:</strong> size limit + row limit + timeout tahap kritis.</p>
+      <ul>
+        <li>Batas ukuran source default 50-100 MB (configurable).</li>
+        <li>Batas jumlah baris untuk mode interaktif.</li>
+        <li>Timeout untuk baca/transform tertentu.</li>
+        <li>Jika terlewati: status warning/blocked dengan instruksi jelas.</li>
+      </ul>
+      <p><strong>Dampak:</strong> aplikasi lebih stabil, ekspektasi user lebih terkelola.</p>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">P1 - Wajib</div>
+      <h2>6) Start New Session</h2>
+      <p><strong>Problem:</strong> setelah run selesai, state lama masih menempel dan membingungkan.</p>
+      <p><strong>Solusi:</strong> tombol <code>Start New Session</code> aktif setelah worker selesai.</p>
+      <div class="grid">
+        <div class="card">
+          <h3>State yang di-reset</h3>
+          <ul>
+            <li><code>source</code> kosong, log kosong, status kembali <code>Idle</code>.</li>
+            <li>Target output kembali placeholder awal.</li>
+            <li><code>Execute</code> nonaktif sampai source baru dipilih.</li>
+            <li>Config di-refresh ulang sesuai startup.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Yang tidak di-reset</h3>
+          <ul>
+            <li>File output yang sudah dibuat.</li>
+            <li>Isi folder <code>uploads/</code> dan <code>outputs/</code>.</li>
+            <li>File config/master di runtime folder.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">P1 - Wajib</div>
+      <h2>7) Pilih Pekerjaan sebagai Entry Point</h2>
+      <p><strong>Problem:</strong> user operasional tidak familiar dengan istilah teknis <code>Config YAML</code>.</p>
+      <p><strong>Solusi:</strong> ganti/bungkus selector menjadi <code>Pekerjaan</code>.</p>
+      <ul>
+        <li>User memilih jenis pekerjaan, bukan file mentah.</li>
+        <li>Setiap pekerjaan dipetakan ke config utama yang tepat.</li>
+        <li>Deskripsi singkat pekerjaan ditampilkan di UI.</li>
+        <li>Gunakan registry <code>configs/job_profiles.yaml</code>.</li>
+      </ul>
+      <p><strong>Dampak:</strong> mengurangi salah pilih config dan lebih ramah non-teknis.</p>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">P1 - Wajib</div>
+      <h2>8) Lookup Symptom Berbasis Regex</h2>
+      <p><strong>Problem:</strong> variasi symptom comment di lapangan sangat banyak, penuh singkatan, typo, dan frasa yang mirip tetapi tidak identik.</p>
+      <p><strong>Solusi:</strong> ubah master symptom menjadi rule table yang lebih maintainable dan tambahkan lookup berbasis <code>regex</code>.</p>
+      <div class="grid">
+        <div class="card">
+          <h3>Struktur Master Baru</h3>
+          <ul>
+            <li>Sheet <code>symptom</code> memakai kolom <code>priority</code>, <code>part_name</code>, <code>match_type</code>, <code>pattern</code>, <code>symptom</code>, <code>notes</code>.</li>
+            <li>Rule diproses dari priority terkecil ke terbesar.</li>
+            <li>Fallback per <code>part_name</code> tetap dimungkinkan.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Guardrail Minimum</h3>
+          <ul>
+            <li>Compile regex sekali per rule.</li>
+            <li>Regex invalid memblokir execute dengan pesan jelas.</li>
+            <li>Panjang pattern dibatasi.</li>
+            <li>Perilaku existing <code>equals</code>/<code>contains</code> tetap aman.</li>
+          </ul>
+        </div>
+      </div>
+      <p><strong>Dampak:</strong> master symptom lebih fleksibel, lebih mudah dirawat, dan lebih cocok untuk variasi data operasional nyata.</p>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">P2 - Sangat Disarankan</div>
+      <h2>9-13) UX dan Observabilitas</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Progress + Error Actionable</h3>
+          <ul>
+            <li>Step indicator: load source, config, masters, transform, write output.</li>
+            <li>Status per langkah: <code>running/success/failed</code>.</li>
+            <li>Format error: apa masalah, dampak, langkah perbaikan.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Compatibility + Session</h3>
+          <ul>
+            <li>Preflight kecocokan source terhadap <code>Pekerjaan</code>.</li>
+            <li><code>Recent Files</code> / <code>Use last session</code>.</li>
+            <li>Konfirmasi overwrite: Replace, Keep both, Cancel.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">P3 - Nice to Have</div>
+      <h2>14-16) Polish yang Meningkatkan Perceived Quality</h2>
+      <ul>
+        <li><strong>Job Summary panel:</strong> source/config, durasi, jumlah sheet, warning/error, lokasi output.</li>
+        <li><strong>Drag-and-drop source:</strong> mempercepat input tanpa buka dialog file.</li>
+        <li><strong>Empty state dan hint ramah:</strong> CTA jelas saat belum ada pekerjaan valid atau preflight gagal.</li>
+      </ul>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">Implementasi Bertahap</div>
+      <h2>Rencana 4 Fase - Blocking First</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Fase 1 - Fondasi Domain</h3>
+          <ul>
+            <li>Job selector <code>Pekerjaan</code> + registry <code>job_profiles</code>.</li>
+            <li>Path boundary hardening.</li>
+            <li>Restrukturisasi master symptom.</li>
+            <li>Regex-based symptom lookup + guardrail dasar regex.</li>
+          </ul>
+          <p><strong>Exit criteria:</strong> entry point domain stabil, boundary aman, dan sheet symptom baru terbaca valid.</p>
+        </div>
+        <div class="card">
+          <h3>Fase 2 - Safety Sebelum Execute</h3>
+          <ul>
+            <li>Preflight Check.</li>
+            <li>Preflight compatibility source vs pekerjaan.</li>
+            <li>Error message standard.</li>
+            <li>Overwrite confirmation.</li>
+            <li>Dry Run.</li>
+          </ul>
+          <p><strong>Exit criteria:</strong> user tahu kondisi input sebelum execute penuh dan mismatch mayor tertangkap lebih awal.</p>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <h3>Fase 3 - Stabilitas Operasional</h3>
+          <ul>
+            <li>Resource guardrail size/timeout.</li>
+            <li>Log sanitization.</li>
+            <li>Progress step indicator.</li>
+            <li>Start New Session.</li>
+          </ul>
+          <p><strong>Exit criteria:</strong> proses panjang lebih transparan, lebih aman, dan sesi berikutnya tidak membawa konteks lama.</p>
+        </div>
+        <div class="card">
+          <h3>Fase 4 - Efisiensi Harian</h3>
+          <ul>
+            <li>Last session restore.</li>
+            <li>Job summary panel.</li>
+            <li>Empty state dan hint ramah.</li>
+            <li>Drag-and-drop source file.</li>
+          </ul>
+          <p><strong>Exit criteria:</strong> UX harian lebih cepat, lebih matang, dan lebih sedikit membingungkan user operasional.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">Dampak Teknis</div>
+      <h2>Perubahan Arsitektur dan Testing</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Arsitektur</h3>
+          <ul>
+            <li><code>app/services/preflight_service.py</code>.</li>
+            <li>Loader/registry <code>job_profiles</code>.</li>
+            <li>Resolver lookup symptom berbasis regex rule table + priority.</li>
+            <li>Mode <code>dry_run</code> di orchestrator pipeline.</li>
+            <li>Update UI: selector Pekerjaan, tombol Preflight, toggle Dry Run, step progress.</li>
+            <li>Helper <code>sanitasi log</code>, <code>guardrail file/path</code>, dan validasi regex aman.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Testing Tambahan</h3>
+          <ul>
+            <li>Unit test resolver <code>job_profiles</code>.</li>
+            <li>Unit test aturan preflight.</li>
+            <li>Unit test kecocokan source per pekerjaan.</li>
+            <li>Unit test regex lookup symptom dan priority order.</li>
+            <li>Unit test invalid regex handling.</li>
+            <li>Unit test keputusan overwrite dan masking log.</li>
+            <li>Integration test dry run vs real run.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">Checklist Praktis</div>
+      <h2>MVP Upgrade 1 Checklist</h2>
+      <div class="grid">
+        <div class="card">
+          <ul>
+            <li>Preflight Check tersedia dan berjalan.</li>
+            <li>Dry Run tersedia.</li>
+            <li>Selector Pekerjaan memetakan config dengan tepat.</li>
+            <li>Sheet <code>symptom</code> mendukung rule table baru.</li>
+            <li>Lookup symptom regex menghormati urutan <code>priority</code>.</li>
+            <li>Preflight menampilkan severity dan compatibility.</li>
+            <li>Path traversal keluar boundary diblokir.</li>
+            <li>Start New Session reset UI setelah worker selesai.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <ul>
+            <li>Overwrite output meminta konfirmasi.</li>
+            <li>Error message format actionable.</li>
+            <li>Progress step indicator tampil saat execute.</li>
+            <li>Log sensitif dimasking.</li>
+            <li>Size limit dan timeout aktif.</li>
+            <li>Last session restore tersedia.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">Kesimpulan</div>
+      <h2>Urutan Paling Efektif</h2>
+      <ol>
+        <li><strong>Pilih Pekerjaan + path boundary hardening</strong></li>
+        <li><strong>Restrukturisasi master symptom + regex lookup symptom</strong></li>
+        <li><strong>Preflight Check + compatibility preflight</strong></li>
+        <li><strong>Dry Run + overwrite confirmation + error actionable</strong></li>
+        <li><strong>Resource guardrail + log sanitization + progress indicator</strong></li>
+      </ol>
+      <p>Kombinasi ini memberi dampak terbaik pada <strong>correctness</strong>, <strong>security</strong>, dan <strong>UX</strong> tanpa mengubah fondasi tool secara radikal.</p>
+      <p class="note">Terima kasih - deck selesai.</p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="controls">
+      <button id="prevBtn" type="button" aria-label="Slide sebelumnya">Prev</button>
+      <button id="nextBtn" type="button" aria-label="Slide berikutnya">Next</button>
+      <div class="counter" id="counter">1 / 1</div>
+    </div>
+    <div class="progress-wrap" aria-hidden="true">
+      <div class="progress" id="progress"></div>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+      var counter = document.getElementById('counter');
+      var progress = document.getElementById('progress');
+      var prevBtn = document.getElementById('prevBtn');
+      var nextBtn = document.getElementById('nextBtn');
+      var index = 0;
+
+      function render() {
+        for (var i = 0; i < slides.length; i += 1) {
+          slides[i].classList.toggle('active', i === index);
+        }
+
+        counter.textContent = (index + 1) + ' / ' + slides.length;
+        progress.style.width = ((index + 1) / slides.length) * 100 + '%';
+
+        prevBtn.disabled = index === 0;
+        nextBtn.disabled = index === slides.length - 1;
+      }
+
+      function next() {
+        if (index < slides.length - 1) {
+          index += 1;
+          render();
+        }
+      }
+
+      function prev() {
+        if (index > 0) {
+          index -= 1;
+          render();
+        }
+      }
+
+      prevBtn.addEventListener('click', prev);
+      nextBtn.addEventListener('click', next);
+
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'ArrowRight' || event.key === 'PageDown' || event.key === ' ') {
+          event.preventDefault();
+          next();
+        }
+
+        if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
+          event.preventDefault();
+          prev();
+        }
+
+        if (event.key === 'Home') {
+          index = 0;
+          render();
+        }
+
+        if (event.key === 'End') {
+          index = slides.length - 1;
+          render();
+        }
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>

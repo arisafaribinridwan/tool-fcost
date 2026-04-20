@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Panduan Regex Sheet Symptom</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #121a2b;
+      --panel-2: #172238;
+      --text: #e7edf7;
+      --muted: #9fb0c8;
+      --accent: #4cc9f0;
+      --accent-2: #7ae582;
+      --warn: #ffd166;
+      --border: #2a3956;
+      --code: #0a1222;
+      --danger: #ff7b7b;
+      --shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top right, rgba(76, 201, 240, 0.16), transparent 28%),
+        radial-gradient(circle at top left, rgba(122, 229, 130, 0.12), transparent 22%),
+        var(--bg);
+      line-height: 1.6;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 290px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      align-self: start;
+      height: 100vh;
+      padding: 1.25rem;
+      border-right: 1px solid var(--border);
+      background: rgba(7, 13, 25, 0.86);
+      backdrop-filter: blur(10px);
+      overflow: auto;
+    }
+
+    .brand {
+      margin-bottom: 1.1rem;
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(23, 34, 56, 0.95), rgba(13, 20, 34, 0.95));
+      box-shadow: var(--shadow);
+    }
+
+    .brand h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.2rem;
+      line-height: 1.3;
+    }
+
+    .brand p,
+    .sidebar p,
+    .sidebar li,
+    .sidebar a {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .sidebar nav a {
+      display: block;
+      padding: 0.5rem 0.7rem;
+      margin-bottom: 0.3rem;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      text-decoration: none;
+    }
+
+    .sidebar nav a:hover {
+      color: var(--text);
+      border-color: var(--border);
+      background: rgba(23, 34, 56, 0.7);
+    }
+
+    .content {
+      padding: 2rem clamp(1rem, 4vw, 3rem) 4rem;
+    }
+
+    .hero {
+      padding: 1.4rem 1.5rem;
+      margin-bottom: 1.4rem;
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      background: linear-gradient(145deg, rgba(23, 34, 56, 0.92), rgba(10, 18, 34, 0.96));
+      box-shadow: var(--shadow);
+    }
+
+    .hero .eyebrow {
+      display: inline-block;
+      margin-bottom: 0.7rem;
+      color: var(--accent);
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    h1, h2, h3 {
+      margin: 0 0 0.75rem;
+      line-height: 1.25;
+    }
+
+    h1 {
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+    }
+
+    h2 {
+      margin-top: 2rem;
+      font-size: clamp(1.3rem, 2vw, 1.8rem);
+      padding-bottom: 0.35rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    p {
+      margin: 0.35rem 0 1rem;
+    }
+
+    .panel,
+    .callout,
+    table {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: rgba(18, 26, 43, 0.9);
+      box-shadow: var(--shadow);
+    }
+
+    .panel,
+    .callout {
+      padding: 1rem 1.05rem;
+      margin: 1rem 0;
+    }
+
+    .callout strong {
+      color: var(--accent-2);
+    }
+
+    .warn strong {
+      color: var(--warn);
+    }
+
+    .danger strong {
+      color: var(--danger);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+
+    ul,
+    ol {
+      padding-left: 1.2rem;
+      margin: 0.3rem 0 1rem;
+    }
+
+    li {
+      margin-bottom: 0.35rem;
+    }
+
+    code,
+    pre {
+      font-family: Consolas, "Courier New", monospace;
+    }
+
+    code {
+      padding: 0.1rem 0.35rem;
+      border-radius: 6px;
+      background: rgba(10, 18, 34, 0.95);
+      color: #d7f3ff;
+    }
+
+    pre {
+      margin: 0.8rem 0 1rem;
+      padding: 1rem;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--code);
+      color: #dff6ff;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      margin: 1rem 0;
+    }
+
+    th,
+    td {
+      padding: 0.75rem 0.8rem;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: rgba(23, 34, 56, 0.96);
+      color: var(--accent);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .tag {
+      display: inline-block;
+      margin-right: 0.4rem;
+      margin-bottom: 0.35rem;
+      padding: 0.18rem 0.55rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      background: rgba(23, 34, 56, 0.8);
+    }
+
+    .footer-note {
+      margin-top: 2rem;
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    @media (max-width: 980px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: static;
+        height: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <h1>Panduan Regex</h1>
+        <p>Pengisian sheet <code>symptom</code> di <code>master_table.xlsx</code> untuk lookup symptom yang lebih fleksibel dan tetap mudah dirawat.</p>
+      </div>
+
+      <nav>
+        <a href="#tujuan">Tujuan</a>
+        <a href="#sheet">Struktur Sheet</a>
+        <a href="#kolom">Arti Kolom</a>
+        <a href="#alur">Cara Isi</a>
+        <a href="#regex">Standar Regex</a>
+        <a href="#contoh">Contoh Pattern</a>
+        <a href="#template">Template Siap Pakai</a>
+        <a href="#do-dont">Do dan Don't</a>
+        <a href="#checklist">Checklist Review</a>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <section class="hero">
+        <span class="eyebrow">Master Symptom Guide</span>
+        <h1>Panduan Lengkap Regex untuk Sheet <code>symptom</code></h1>
+        <p>Tujuan panduan ini adalah membantu kamu merapikan master symptom di Excel tanpa memecah file master yang sudah ada. File <code>master_table.xlsx</code> tetap bisa dipakai seperti sekarang, dan yang berubah hanya desain serta isi sheet <code>symptom</code>.</p>
+        <div>
+          <span class="tag">Python regex</span>
+          <span class="tag">Search match</span>
+          <span class="tag">Priority-based</span>
+          <span class="tag">Excel-friendly</span>
+        </div>
+      </section>
+
+      <section id="tujuan">
+        <h2>Tujuan</h2>
+        <div class="panel">
+          <p>Sheet <code>symptom</code> dipakai untuk menerjemahkan kombinasi:</p>
+          <ul>
+            <li><code>part_name</code></li>
+            <li>isi komentar kerusakan, misalnya <code>symptom_comment</code></li>
+          </ul>
+          <p>menjadi nilai output <code>symptom</code>.</p>
+          <p>Rule akan dievaluasi berdasarkan <code>priority</code>. Semakin kecil angkanya, semakin dulu diperiksa. Dengan begitu, rule yang lebih spesifik bisa didahulukan dari rule yang lebih umum.</p>
+        </div>
+      </section>
+
+      <section id="sheet">
+        <h2>Struktur Sheet</h2>
+        <p>Di file <code>master_table.xlsx</code>, cukup ubah sheet <code>symptom</code> agar memakai header berikut:</p>
+        <pre>priority | part_name | match_type | pattern | symptom | notes</pre>
+        <div class="callout">
+          <strong>Catatan:</strong> file Excel tetap boleh berisi banyak sheet master lain seperti <code>part_list</code>, <code>factory</code>, <code>branch</code>, <code>action</code>, dan <code>defect_category</code>. Yang perlu berubah hanya sheet <code>symptom</code>.
+        </div>
+      </section>
+
+      <section id="kolom">
+        <h2>Arti Kolom</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Kolom</th>
+              <th>Fungsi</th>
+              <th>Petunjuk Isi</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>priority</code></td>
+              <td>Menentukan urutan pemeriksaan rule.</td>
+              <td>Pakai angka kecil untuk rule yang lebih spesifik. Rekomendasi: kelipatan 10 seperti <code>10</code>, <code>20</code>, <code>30</code>.</td>
+            </tr>
+            <tr>
+              <td><code>part_name</code></td>
+              <td>Membatasi rule berdasarkan part yang sudah teridentifikasi.</td>
+              <td>Contoh: <code>PANEL</code>, <code>MAIN_UNIT</code>, <code>POWER_UNIT</code>. Penulisannya harus konsisten.</td>
+            </tr>
+            <tr>
+              <td><code>match_type</code></td>
+              <td>Menentukan cara membaca <code>pattern</code>.</td>
+              <td>Untuk desain final, paling rapi jika distandarkan ke <code>regex</code>.</td>
+            </tr>
+            <tr>
+              <td><code>pattern</code></td>
+              <td>Pola yang dicek terhadap isi komentar kerusakan.</td>
+              <td>Isi dengan regex Python yang sederhana dan mudah dirawat.</td>
+            </tr>
+            <tr>
+              <td><code>symptom</code></td>
+              <td>Output hasil klasifikasi.</td>
+              <td>Contoh: <code>LINE</code>, <code>BLANK</code>, <code>TOTAL_OFF</code>.</td>
+            </tr>
+            <tr>
+              <td><code>notes</code></td>
+              <td>Catatan untuk manusia.</td>
+              <td>Tidak dipakai mesin. Gunakan untuk menjelaskan alasan rule dibuat.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="alur">
+        <h2>Cara Isi yang Benar</h2>
+        <div class="grid">
+          <div class="panel">
+            <h3>Urutan Kerja</h3>
+            <ol>
+              <li>Kelompokkan rule per <code>part_name</code>.</li>
+              <li>Tulis rule yang paling spesifik dulu.</li>
+              <li>Taruh rule yang lebih umum di bawahnya.</li>
+              <li>Taruh rule default atau fallback paling bawah.</li>
+              <li>Pastikan <code>priority</code> unik dan urut.</li>
+            </ol>
+          </div>
+          <div class="panel">
+            <h3>Kenapa Ini Penting</h3>
+            <p>Kalau rule umum diletakkan terlalu atas, rule itu bisa "memakan" kasus yang seharusnya masuk ke rule yang lebih spesifik.</p>
+            <p>Contoh buruk: <code>MATI</code> diletakkan di atas <code>LAYAR MATI</code> atau <code>MATI TOTAL</code>.</p>
+          </div>
+        </div>
+
+        <div class="callout warn">
+          <strong>Prinsip utama:</strong> semakin spesifik pattern-nya, semakin kecil angka <code>priority</code>-nya.
+        </div>
+      </section>
+
+      <section id="regex">
+        <h2>Standar Regex yang Disarankan</h2>
+        <p>Kalau kamu akan mencari referensi dengan keyword seperti <code>regex python</code>, itu sudah tepat. Supaya master tetap mudah dirawat tim operasional, standar internalnya sebaiknya dibatasi ke bentuk yang sederhana saja.</p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Aturan</th>
+              <th>Rekomendasi</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Engine</td>
+              <td>Python <code>re</code></td>
+            </tr>
+            <tr>
+              <td>Semantik match</td>
+              <td><code>search</code>, bukan <code>fullmatch</code></td>
+            </tr>
+            <tr>
+              <td>Huruf</td>
+              <td>Lebih aman pakai huruf kapital semua jika source dinormalisasi ke kapital</td>
+            </tr>
+            <tr>
+              <td>Alternatif kata</td>
+              <td>Pakai <code>|</code>, misalnya <code>GARIS|LINE</code></td>
+            </tr>
+            <tr>
+              <td>Spasi fleksibel</td>
+              <td>Pakai <code>\s+</code>, misalnya <code>DEAD\s+PIXEL</code></td>
+            </tr>
+            <tr>
+              <td>Kata utuh</td>
+              <td>Pakai <code>\b</code> jika perlu, misalnya <code>\bHDMI\b</code></td>
+            </tr>
+            <tr>
+              <td>Fallback default</td>
+              <td>Pakai <code>.*</code> dan letakkan paling bawah</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout danger">
+          <strong>Hindari regex yang terlalu rumit.</strong> Jangan mulai dengan lookbehind kompleks, nested group yang sulit dibaca, atau pola yang terlalu "pintar". Fokuskan pattern untuk kebutuhan praktis matching symptom saja.
+        </div>
+      </section>
+
+      <section id="contoh">
+        <h2>Contoh Pattern Praktis</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Kebutuhan</th>
+              <th>Contoh Pattern</th>
+              <th>Keterangan</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Alternatif kata</td>
+              <td><code>GARIS|LINE</code></td>
+              <td>Cocok untuk beberapa kata yang maknanya setara.</td>
+            </tr>
+            <tr>
+              <td>Spasi bervariasi</td>
+              <td><code>DEAD\s+PIXEL</code></td>
+              <td>Tetap cocok walau ada lebih dari satu spasi.</td>
+            </tr>
+            <tr>
+              <td>Kata utuh</td>
+              <td><code>\bHDMI\b</code></td>
+              <td>Mengurangi risiko cocok ke kata yang lebih panjang.</td>
+            </tr>
+            <tr>
+              <td>Variasi singkatan/typo</td>
+              <td><code>REMOTE|REMOT|SENSOR</code></td>
+              <td>Bisa menangkap variasi kata umum di lapangan.</td>
+            </tr>
+            <tr>
+              <td>Frasa panjang</td>
+              <td><code>TIDAK\s+ADA\s+GAMBAR|TDK\s+ADA\s+GAMBAR|NO\s+PICTURE</code></td>
+              <td>Gabungkan beberapa frasa ekuivalen dalam satu baris.</td>
+            </tr>
+            <tr>
+              <td>Default</td>
+              <td><code>.*</code></td>
+              <td>Dipakai hanya untuk fallback terakhir.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="template">
+        <h2>Template Siap Pakai</h2>
+        <p>Contoh ini bisa langsung dijadikan acuan saat mengisi sheet <code>symptom</code> di Excel.</p>
+        <pre>priority,part_name,match_type,pattern,symptom,notes
+10,POWER_UNIT,regex,.*,TOTAL_OFF,Default untuk POWER_UNIT
+20,PANEL,regex,PECAH,BROKEN,Kasus layar pecah
+30,PANEL,regex,PIXEL|DEAD\s+PIXEL|DEATH\s+PIXEL|DOT|BINTIK|VOLKADOT,DOT,Pixel dot bintik
+40,PANEL,regex,BULATAN\s+HITAM,SPOT,Titik hitam lokal
+50,PANEL,regex,SETENGAH|SEBELAH,HALF,Gambar hilang setengah
+60,PANEL,regex,GARIS|LINE,LINE,Garis vertikal horizontal
+70,PANEL,regex,GELAP,DARK,Gambar gelap
+80,PANEL,regex,BERBAYANG|BAYANG|BURAM|BLUR|TIDAK\s+JELAS,BLUR,Gambar blur buram
+90,PANEL,regex,BERKEDIP|KEDIP,BLINKING,Layar berkedip
+100,PANEL,regex,TIDAK\s+ADA\s+GAMBAR|TDK\s+ADA\s+GAMBAR|BLANK,BLANK,Gambar tidak tampil
+110,PANEL,regex,LAYAR\s+MATI|MATI\s+TOTAL|TIDAK\s+BISA\s+HIDUP,TOTAL_OFF,Panel mati total
+120,MAIN_UNIT,regex,HDMI,HDMI_NG,Masalah HDMI
+130,MAIN_UNIT,regex,REMOTE|REMOT|SENSOR,SENSOR_NG,Masalah remote sensor
+140,MAIN_UNIT,regex,TIDAK\s+ADA\s+SUARA|SUARA\s+TIDAK\s+JELAS|SEMBER,SOUND_NG,Masalah suara
+150,MAIN_UNIT,regex,LOGO|STUCK,LOGO_FREEZE,Stuck di logo
+160,MAIN_UNIT,regex,SIARAN|SINYAL|SIGNAL|CHANNEL|CHANEL|ANTENE,NO_CHANNEL,Masalah channel siaran
+170,MAIN_UNIT,regex,TIDAK\s+ADA\s+GAMBAR|TDK\s+ADA\s+GAMBAR|NO\s+PICTURE|BLANK,NO_PICTURE,Masalah gambar dari main unit
+180,MAIN_UNIT,regex,INDIKATOR\s+KEDIP|PROTECT,PROTECT,Protect
+190,MAIN_UNIT,regex,STANDBY|STAND\s*BY|STANBY|STANDY,STANDBY,Masalah standby
+200,MAIN_UNIT,regex,ERROR|EROR|SAFE\s+MODE|NETFLIX|GOOGLE|PROGRAM,ERROR,Error aplikasi sistem
+210,MAIN_UNIT,regex,MATI\s+TOTAL|TIDAK\s+BISA\s+HIDUP|MATOT|MATOL|KONSLET|KENA\s+PETIR,TOTAL_OFF,Main unit mati total</pre>
+
+        <div class="callout">
+          <strong>Saran operasional:</strong> edit dulu rule di file CSV atau sheet terpisah, review urutannya, lalu copy hasil final ke sheet <code>symptom</code> pada <code>master_table.xlsx</code>.
+        </div>
+      </section>
+
+      <section id="do-dont">
+        <h2>Do dan Don't</h2>
+        <div class="grid">
+          <div class="panel">
+            <h3>Do</h3>
+            <ul>
+              <li>Pakai penulisan <code>part_name</code> yang konsisten.</li>
+              <li>Berikan jarak angka <code>priority</code> agar mudah sisip rule baru.</li>
+              <li>Mulai dari regex yang sederhana.</li>
+              <li>Masukkan typo umum lapangan jika memang sering muncul.</li>
+              <li>Isi <code>notes</code> singkat agar mudah direview tim lain.</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h3>Don't</h3>
+            <ul>
+              <li>Jangan letakkan rule umum di atas rule spesifik.</li>
+              <li>Jangan campur struktur lama dan baru dalam sheet yang sama.</li>
+              <li>Jangan kosongkan kolom <code>pattern</code> atau <code>symptom</code>.</li>
+              <li>Jangan pakai regex yang terlalu rumit jika belum benar-benar perlu.</li>
+              <li>Jangan ubah nama part seenaknya jika mapping upstream belum ikut berubah.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="checklist">
+        <h2>Checklist Review Sebelum Dipakai</h2>
+        <div class="panel">
+          <ul>
+            <li>Header sheet sudah persis: <code>priority, part_name, match_type, pattern, symptom, notes</code>.</li>
+            <li>Semua <code>priority</code> berupa angka dan urut logis.</li>
+            <li>Semua <code>part_name</code> valid dan konsisten.</li>
+            <li>Semua <code>match_type</code> sesuai standar yang dipilih, idealnya <code>regex</code>.</li>
+            <li>Semua <code>pattern</code> terisi.</li>
+            <li>Semua <code>symptom</code> terisi.</li>
+            <li>Rule spesifik berada di atas rule umum.</li>
+            <li>Fallback seperti <code>.*</code> hanya ada di baris paling bawah untuk part terkait.</li>
+            <li><code>notes</code> cukup jelas untuk menjelaskan alasan bisnis rule dibuat.</li>
+          </ul>
+        </div>
+      </section>
+
+      <p class="footer-note">Panduan ini disusun agar file master Excel tetap bisa dipakai sebagai satu sumber master, tanpa perlu memecah sheet master ke file terpisah. Jika kamu ingin, langkah berikutnya yang paling natural adalah membuat versi print/PDF atau menambahkan contoh rule yang khusus mengikuti data symptom real milikmu.</p>
+    </main>
+  </div>
+</body>
+</html>

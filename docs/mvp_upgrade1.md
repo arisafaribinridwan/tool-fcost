@@ -197,9 +197,46 @@ Tambahkan registry eksplisit, misalnya `configs/job_profiles.yaml`, yang berisi 
 
 ---
 
+### 8) Lookup Symptom Berbasis Regex + Master Rule yang Lebih Maintainable
+
+#### Problem
+Lookup symptom saat ini masih terbatas pada pola sederhana. Untuk data operasional nyata, variasi penulisan symptom comment sering sangat banyak, penuh singkatan, typo, dan frasa yang mirip tetapi tidak identik. Ini membuat master symptom cepat membengkak dan sulit dirawat jika hanya mengandalkan exact/wildcard sederhana.
+
+#### Solusi
+Tambahkan dukungan **regex-based lookup** untuk symptom dan rapikan desain master symptom menjadi rule table yang eksplisit.
+
+#### Bentuk master yang direkomendasikan
+Sheet `symptom` pada `masters/master_table.xlsx` diubah agar memakai struktur seperti:
+- `priority`
+- `part_name`
+- `match_type`
+- `pattern`
+- `symptom`
+- `notes`
+
+#### Perilaku yang direkomendasikan
+- Matching symptom dilakukan berdasarkan kombinasi `part_name` + `pattern`
+- Rule diproses menurut `priority` (semakin kecil, semakin dulu)
+- `match_type` minimal mendukung `regex`
+- Engine memakai regex Python dengan semantik `search`, bukan `fullmatch`
+- Rule default/fallback per `part_name` tetap dimungkinkan
+
+#### Guardrail minimum
+- compile regex sekali per rule, bukan per baris
+- regex invalid harus menghasilkan error yang jelas dan memblokir execute
+- panjang pattern dibatasi agar tidak terlalu berat
+- perilaku existing `equals`/`contains` tetap dijaga agar tidak breaking
+
+#### Dampak
+- Master symptom lebih fleksibel dan lebih mudah dirawat
+- Variasi input nyata lebih mudah ditangani tanpa ledakan jumlah rule manual
+- Menjadi fondasi penting untuk preflight master yang lebih cerdas
+
+---
+
 ## P2 - Sangat Disarankan
 
-### 8) Progress Bar + Step Indicator
+### 9) Progress Bar + Step Indicator
 
 #### Solusi
 Tambahkan indikator langkah proses:
@@ -217,7 +254,7 @@ Masing-masing menampilkan status `running/success/failed`.
 
 ---
 
-### 9) Error Message yang Actionable
+### 10) Error Message yang Actionable
 
 #### Solusi
 Standarisasi format error:
@@ -235,7 +272,7 @@ Contoh:
 
 ---
 
-### 10) Preflight Kecocokan Source terhadap `Pekerjaan`
+### 11) Preflight Kecocokan Source terhadap `Pekerjaan`
 
 #### Problem
 Validasi source saat ini masih dominan di level file dasar atau baru terasa saat execute berjalan. User belum dibantu menjawab pertanyaan penting: apakah file source yang dipilih memang cocok untuk `Pekerjaan` yang dipilih?
@@ -263,7 +300,7 @@ Perluas preflight agar tidak hanya mengecek file bisa dibaca, tetapi juga mengec
 
 ---
 
-### 11) Recent Files / Last Session Restore
+### 12) Recent Files / Last Session Restore
 
 #### Solusi
 Simpan preferensi ringan:
@@ -279,7 +316,7 @@ Saat startup, tampilkan opsi `Use last session`.
 
 ---
 
-### 12) Konfirmasi Sebelum Overwrite Output
+### 13) Konfirmasi Sebelum Overwrite Output
 
 #### Solusi
 Jika nama output sudah ada, tampilkan pilihan:
@@ -294,7 +331,7 @@ Jika nama output sudah ada, tampilkan pilihan:
 
 ## P3 - Nice to Have (Polish)
 
-### 13) Panel "Job Summary"
+### 14) Panel "Job Summary"
 
 Menampilkan ringkasan setelah run:
 - source/config yang dipakai
@@ -303,11 +340,11 @@ Menampilkan ringkasan setelah run:
 - jumlah warning/error
 - lokasi output + tombol copy path
 
-### 14) Drag-and-Drop Source File
+### 15) Drag-and-Drop Source File
 
 Untuk mempercepat input source tanpa klik dialog.
 
-### 15) Empty State dan Hint yang Lebih Ramah
+### 16) Empty State dan Hint yang Lebih Ramah
 
 Contoh:
 - Saat belum ada `Pekerjaan` valid, tampilkan call-to-action jelas.
@@ -316,38 +353,76 @@ Contoh:
 
 ---
 
-## Rekomendasi Implementasi Bertahap (2 Sprint)
+## Rekomendasi Implementasi Bertahap (Blocking-First)
 
-## Sprint 1 (fokus safety + correctness)
+Urutan implementasi sebaiknya dimulai dari fondasi yang paling blocking ke fitur UX yang paling terlihat. Dengan begitu, fase awal membangun correctness dan safety lebih dulu, lalu fitur interaktif di atas fondasi yang sudah stabil.
+
+## Fase 1 - Fondasi Domain dan Boundary (paling blocking)
+
+Target:
+- Job selector (`Pekerjaan`) + registry `job_profiles`
+- Path boundary hardening
+- Restrukturisasi master symptom ke rule table baru
+- Regex-based lookup untuk symptom + guardrail dasar regex
+
+Kenapa fase ini dulu:
+- `Pekerjaan` adalah entry point baru untuk user dan menjadi dasar konteks preflight
+- boundary file harus aman sebelum validasi dan execute diperluas
+- desain master symptom baru adalah fondasi data yang perlu stabil sebelum preflight dan UX dibangun
+
+Exit criteria:
+- User memilih `Pekerjaan`, bukan config mentah
+- Semua akses file berada dalam boundary yang aman
+- Sheet `symptom` baru terbaca valid dan lookup regex berjalan stabil
+
+## Fase 2 - Safety dan Correctness Sebelum Execute
 
 Target:
 - Preflight Check
-- Dry Run
-- Path boundary hardening
-- Start New Session
-- Job selector (`Pekerjaan`)
-- Overwrite confirmation
+- Preflight compatibility source vs pekerjaan
 - Error message standard
+- Overwrite confirmation
+- Dry Run
+
+Kenapa fase ini kedua:
+- setelah fondasi domain dan master stabil, sistem bisa memberi validasi yang lebih akurat
+- dry run baru bernilai tinggi jika config, master, dan rule matching sudah cukup dapat dipercaya
 
 Exit criteria:
 - User bisa tahu kondisi input tanpa mengeksekusi penuh
-- Error mayor terdeteksi di preflight
-- Tidak ada overwrite tanpa konfirmasi
+- mismatch source/config/master/rule mayor terdeteksi sebelum execute
+- tidak ada overwrite tanpa konfirmasi
 
-## Sprint 2 (fokus UX + operasional)
+## Fase 3 - Stabilitas Operasional dan Transparansi Proses
 
 Target:
-- Progress step indicator
-- Preflight compatibility source vs pekerjaan
-- Log sanitization
 - Resource guardrail (size/timeout)
-- Last session restore
-- Job summary panel
+- Log sanitization
+- Progress step indicator
+- Start New Session
+
+Kenapa fase ini ketiga:
+- fase ini memperkecil risiko sesi panjang, macet semu, dan kebocoran informasi setelah correctness dasar tercapai
 
 Exit criteria:
-- UX lebih interaktif
-- Risiko data leakage via log menurun
-- Proses panjang lebih transparan
+- proses panjang lebih transparan
+- data sensitif di log lebih aman
+- user bisa memulai batch berikutnya tanpa konteks sesi lama
+
+## Fase 4 - Efisiensi Harian dan Polish
+
+Target:
+- Last session restore
+- Job summary panel
+- Empty state dan hint yang lebih ramah
+- Drag-and-drop source file
+
+Kenapa fase ini terakhir:
+- semuanya meningkatkan perceived quality, tetapi tidak memblokir correctness inti
+
+Exit criteria:
+- UX harian lebih cepat dan terasa lebih matang
+- user lebih sedikit bingung saat startup, saat idle, dan setelah selesai run
 
 ---
 
@@ -358,6 +433,7 @@ Perubahan tetap bisa mengikuti arsitektur modular yang sudah ada:
 - `app/services/`
   - tambah service `preflight_service.py`
   - tambah service/registry loader untuk `job_profiles`
+  - update resolver lookup symptom agar mendukung regex rule table berbasis priority
   - tambah mode `dry_run` pada orchestrator pipeline
 - `app/ui/main_window.py`
   - selector `Pekerjaan`
@@ -368,11 +444,14 @@ Perubahan tetap bisa mengikuti arsitektur modular yang sudah ada:
 - `app/utils/`
   - helper sanitasi log
   - helper guardrail file/path
+  - helper compile/validasi regex yang aman
 
 Testing yang perlu ditambah:
 - unit test resolver `job_profiles`
 - unit test preflight rules
 - unit test source compatibility per pekerjaan
+- unit test regex lookup symptom dan priority order
+- unit test invalid regex handling
 - unit test overwrite decision
 - unit test log masking
 - integration test dry run vs real run
@@ -384,6 +463,8 @@ Testing yang perlu ditambah:
 - [ ] Tombol `Preflight Check` tersedia dan berjalan
 - [ ] Mode `Dry Run` tersedia
 - [ ] Selector `Pekerjaan` tersedia dan memetakan ke config yang tepat
+- [ ] Sheet `symptom` mendukung rule table baru (`priority`, `part_name`, `match_type`, `pattern`, `symptom`, `notes`)
+- [ ] Lookup symptom berbasis regex berjalan dan menghormati urutan `priority`
 - [ ] Preflight menampilkan severity (`ERROR/WARNING/INFO`)
 - [ ] Preflight dapat menyatakan source cocok/tidak cocok terhadap `Pekerjaan`
 - [ ] Path traversal dan akses path di luar boundary diblokir
@@ -401,9 +482,10 @@ Testing yang perlu ditambah:
 
 Jika harus memilih sedikit tapi paling berdampak, urutan paling efektif adalah:
 
-1. **Pilih `Pekerjaan` + Preflight Check**
-2. **Dry Run**
-3. **Path boundary hardening + Start New Session**
-4. **Overwrite confirmation + progress indicator + error message actionable**
+1. **Pilih `Pekerjaan` + path boundary hardening**
+2. **Restrukturisasi master symptom + regex lookup symptom**
+3. **Preflight Check + compatibility preflight**
+4. **Dry Run + overwrite confirmation + error message actionable**
+5. **Resource guardrail + log sanitization + progress indicator**
 
 Urutan ini memberi kombinasi terbaik antara **correctness**, **security**, dan **UX** tanpa mengubah fondasi tool secara radikal.
