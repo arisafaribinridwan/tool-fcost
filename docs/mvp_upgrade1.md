@@ -133,9 +133,73 @@ Jika terlewati:
 
 ---
 
+### 6) Start New Session / Reset UI Setelah Worker Selesai
+
+#### Problem
+Setelah satu eksekusi selesai, state UI masih membawa konteks sesi sebelumnya: source file masih terisi, log lama masih terlihat, status terakhir masih menempel, dan target output sebelumnya masih tampil. Untuk user operasional, ini membuat sesi berikutnya terasa ambigu dan meningkatkan risiko salah pakai source/config lama.
+
+#### Solusi
+Tambahkan tombol **`Start New Session`** pada UI desktop untuk mengembalikan layar ke kondisi seperti saat aplikasi pertama dibuka.
+
+#### Perilaku yang direkomendasikan
+- Tombol hanya aktif setelah proses worker selesai, baik hasilnya `Sukses` maupun `Gagal`
+- Tombol tetap nonaktif saat worker masih berjalan
+- Saat diklik, UI di-reset ke kondisi awal sesi tanpa menghapus file hasil yang sudah dibuat
+- Config di-refresh kembali dan default selection mengikuti perilaku startup saat ini
+
+#### State yang di-reset
+- `source` dikosongkan
+- log proses dikosongkan
+- status dikembalikan ke `Idle`
+- target output dikembalikan ke placeholder awal
+- tombol `Execute` kembali nonaktif sampai source baru dipilih
+- info config diperbarui ulang sesuai config valid yang tersedia
+
+#### Yang tidak di-reset
+- file output yang sudah berhasil dibuat
+- isi folder `uploads/` dan `outputs/`
+- file config dan master di runtime folder
+
+#### Dampak
+- Mengurangi risiko user menjalankan sesi baru dengan konteks lama
+- Membuat alur kerja harian lebih jelas untuk batch berikutnya
+- Menambah rasa aman tanpa perlu menutup dan membuka aplikasi ulang
+
+---
+
+### 7) Pilih `Pekerjaan` sebagai Entry Point Utama
+
+#### Problem
+Saat ini user harus memilih `Config YAML`, padahal istilah ini teknis dan rawan salah pilih. Untuk user operasional, yang mereka pahami biasanya adalah jenis pekerjaan atau proses bisnis yang ingin dijalankan, bukan nama file config.
+
+#### Solusi
+Ganti atau bungkus pilihan `Config YAML` dengan selector **`Pekerjaan`** yang lebih ramah user.
+
+#### Perilaku yang direkomendasikan
+- User memilih `Pekerjaan`, bukan file config mentah
+- Setiap `Pekerjaan` dipetakan ke config utama yang tepat
+- Deskripsi singkat pekerjaan ditampilkan di UI agar user yakin memilih proses yang benar
+- Dependensi config/master tetap dibaca dari config aktual, tetapi disembunyikan dari user non-teknis
+
+#### Bentuk desain yang direkomendasikan
+Tambahkan registry eksplisit, misalnya `configs/job_profiles.yaml`, yang berisi metadata berikut:
+- `id`
+- `label`
+- `description`
+- `config_file`
+- `enabled`
+- petunjuk preflight tambahan jika diperlukan
+
+#### Dampak
+- Mengurangi salah pilih config
+- Membuat UI lebih mudah dipahami user non-teknis
+- Menjadi fondasi untuk preflight source yang lebih kontekstual
+
+---
+
 ## P2 - Sangat Disarankan
 
-### 6) Progress Bar + Step Indicator
+### 8) Progress Bar + Step Indicator
 
 #### Solusi
 Tambahkan indikator langkah proses:
@@ -153,7 +217,7 @@ Masing-masing menampilkan status `running/success/failed`.
 
 ---
 
-### 7) Error Message yang Actionable
+### 9) Error Message yang Actionable
 
 #### Solusi
 Standarisasi format error:
@@ -171,7 +235,35 @@ Contoh:
 
 ---
 
-### 8) Recent Files / Last Session Restore
+### 10) Preflight Kecocokan Source terhadap `Pekerjaan`
+
+#### Problem
+Validasi source saat ini masih dominan di level file dasar atau baru terasa saat execute berjalan. User belum dibantu menjawab pertanyaan penting: apakah file source yang dipilih memang cocok untuk `Pekerjaan` yang dipilih?
+
+#### Solusi
+Perluas preflight agar tidak hanya mengecek file bisa dibaca, tetapi juga mengecek kecocokan source dengan konteks `Pekerjaan`.
+
+#### Yang dicek
+- sheet wajib untuk pekerjaan tersebut tersedia
+- kolom wajib source tersedia
+- format header source cukup sesuai dengan kebutuhan config
+- config yang dipetakan dari `Pekerjaan` valid
+- semua master yang direferensikan config tersedia
+- jika ada mismatch, hasil ditandai jelas sebagai `Blocked` atau `Warning`
+
+#### Output ke user
+- status ringkas: `Ready`, `Warning`, `Blocked`
+- alasan spesifik kenapa source dianggap cocok atau tidak cocok
+- saran perbaikan, misalnya ganti file source atau pilih `Pekerjaan` lain
+
+#### Dampak
+- Mengurangi trial-error user saat pairing source vs proses
+- Menurunkan risiko eksekusi salah resep
+- Membuat tombol `Execute` bisa dikontrol lebih aman
+
+---
+
+### 11) Recent Files / Last Session Restore
 
 #### Solusi
 Simpan preferensi ringan:
@@ -187,7 +279,7 @@ Saat startup, tampilkan opsi `Use last session`.
 
 ---
 
-### 9) Konfirmasi Sebelum Overwrite Output
+### 12) Konfirmasi Sebelum Overwrite Output
 
 #### Solusi
 Jika nama output sudah ada, tampilkan pilihan:
@@ -202,7 +294,7 @@ Jika nama output sudah ada, tampilkan pilihan:
 
 ## P3 - Nice to Have (Polish)
 
-### 10) Panel "Job Summary"
+### 13) Panel "Job Summary"
 
 Menampilkan ringkasan setelah run:
 - source/config yang dipakai
@@ -211,15 +303,16 @@ Menampilkan ringkasan setelah run:
 - jumlah warning/error
 - lokasi output + tombol copy path
 
-### 11) Drag-and-Drop Source File
+### 14) Drag-and-Drop Source File
 
 Untuk mempercepat input source tanpa klik dialog.
 
-### 12) Empty State dan Hint yang Lebih Ramah
+### 15) Empty State dan Hint yang Lebih Ramah
 
 Contoh:
-- Saat belum ada config valid, tampilkan call-to-action jelas.
-- Saat preflight gagal, tombol execute tetap disable + alasan singkat.
+- Saat belum ada `Pekerjaan` valid, tampilkan call-to-action jelas.
+- Saat source belum cocok dengan `Pekerjaan`, tombol execute tetap disable + alasan singkat.
+- Saat preflight gagal, tampilkan langkah perbaikan paling mungkin.
 
 ---
 
@@ -231,6 +324,8 @@ Target:
 - Preflight Check
 - Dry Run
 - Path boundary hardening
+- Start New Session
+- Job selector (`Pekerjaan`)
 - Overwrite confirmation
 - Error message standard
 
@@ -243,6 +338,7 @@ Exit criteria:
 
 Target:
 - Progress step indicator
+- Preflight compatibility source vs pekerjaan
 - Log sanitization
 - Resource guardrail (size/timeout)
 - Last session restore
@@ -261,17 +357,22 @@ Perubahan tetap bisa mengikuti arsitektur modular yang sudah ada:
 
 - `app/services/`
   - tambah service `preflight_service.py`
+  - tambah service/registry loader untuk `job_profiles`
   - tambah mode `dry_run` pada orchestrator pipeline
 - `app/ui/main_window.py`
+  - selector `Pekerjaan`
   - tombol `Preflight Check`
   - toggle `Dry Run`
+  - tombol `Start New Session` yang aktif hanya setelah worker selesai
   - panel status langkah/progress
 - `app/utils/`
   - helper sanitasi log
   - helper guardrail file/path
 
 Testing yang perlu ditambah:
+- unit test resolver `job_profiles`
 - unit test preflight rules
+- unit test source compatibility per pekerjaan
 - unit test overwrite decision
 - unit test log masking
 - integration test dry run vs real run
@@ -282,8 +383,11 @@ Testing yang perlu ditambah:
 
 - [ ] Tombol `Preflight Check` tersedia dan berjalan
 - [ ] Mode `Dry Run` tersedia
+- [ ] Selector `Pekerjaan` tersedia dan memetakan ke config yang tepat
 - [ ] Preflight menampilkan severity (`ERROR/WARNING/INFO`)
+- [ ] Preflight dapat menyatakan source cocok/tidak cocok terhadap `Pekerjaan`
 - [ ] Path traversal dan akses path di luar boundary diblokir
+- [ ] Tombol `Start New Session` tersedia dan reset UI hanya setelah worker selesai
 - [ ] Overwrite output meminta konfirmasi
 - [ ] Error message menggunakan format actionable
 - [ ] Progress step indicator tampil saat execute
@@ -297,9 +401,9 @@ Testing yang perlu ditambah:
 
 Jika harus memilih sedikit tapi paling berdampak, urutan paling efektif adalah:
 
-1. **Preflight Check**
+1. **Pilih `Pekerjaan` + Preflight Check**
 2. **Dry Run**
-3. **Path boundary hardening + overwrite confirmation**
-4. **Progress indicator + error message actionable**
+3. **Path boundary hardening + Start New Session**
+4. **Overwrite confirmation + progress indicator + error message actionable**
 
 Urutan ini memberi kombinasi terbaik antara **correctness**, **security**, dan **UX** tanpa mengubah fondasi tool secara radikal.
