@@ -13,6 +13,16 @@ Status saat ini:
 - `sub-16` sudah dikunci implementasinya di repo
 - `sub-17` sudah dikunci implementasinya di repo
 
+## Catatan Sinkronisasi Repo Terkini
+
+Dokumen ini terkait dengan state repo terbaru karena dependensi `sub-15` sampai `sub-17` sekarang berjalan di atas fondasi berikut:
+
+- selector UI utama sudah memakai `Pekerjaan` dari registry `configs/job_profiles.yaml`
+- path runtime `configs/`, `masters/`, dan output sudah di-hardening
+- sheet `symptom` sudah memakai rule table baru dengan dukungan `regex`, `priority`, dan fail-fast validation
+
+Catatan ini tidak mengubah kontrak batch 5, tetapi penting agar pembaca tidak mengira repo masih berada pada state sebelum fondasi fase 1 selesai.
+
 ## Sumber Evidence
 
 Temuan di dokumen ini diturunkan dari file berikut:

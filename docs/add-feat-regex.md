@@ -1,7 +1,19 @@
-# Planning Implementasi: Support Regex untuk VLookup Symptom (`lookup_rules`)
+# Implementasi Regex untuk VLookup Symptom (`lookup_rules`)
 
-Dokumen ini adalah rencana implementasi sebelum coding dieksekusi.
-Fokus utama: menambahkan dukungan regex pada mekanisme `lookup_rules` untuk kasus seperti vlookup symptom, tetap backward-compatible dengan rule lama (`equals` dan `contains`).
+Dokumen ini merangkum desain dan hasil implementasi dukungan regex pada mekanisme `lookup_rules` untuk kasus lookup `symptom`, dengan fokus menjaga kompatibilitas perilaku lama (`equals` dan `contains`).
+
+## Status Implementasi
+
+Sudah aktif di repo saat ini:
+
+- dukungan `regex` untuk lookup `symptom`
+- validasi sheet `symptom` sebagai rule table berbasis `priority`
+- urutan rule `priority` ascending dengan tie-break urutan row
+- semantik regex Python `search`
+- compile regex sekali per rule
+- fail-fast untuk regex invalid
+- guardrail panjang pattern
+- regression test untuk `equals` dan `contains`
 
 ---
 
@@ -61,7 +73,7 @@ Contoh kemampuan baru:
 
 ---
 
-## 4) File yang Akan Diubah
+## 4) File yang Diubah
 
 ## Core Logic
 
@@ -70,13 +82,12 @@ Contoh kemampuan baru:
   - (Opsional ringan) validasi field regex-specific bila perlu.
 
 - `app/services/transform_service.py`
-  - Update `_matcher_matches(...)` agar support `mode == "regex"`.
-  - Tambah mekanisme compile pattern yang aman + error handling jelas.
-  - Hindari compile per baris (cache/compile per rule).
+  - Menangani validasi rule table `symptom`.
+  - Menambahkan compile pattern yang aman + error handling jelas.
+  - Menghindari compile per baris source dengan compile sekali per rule.
 
 - `app/services/recipe_service.py`
-  - Update `_matcher_matches(...)` agar parity dengan `transform_service` untuk `mode == "regex"`.
-  - Konsistensi error message untuk regex invalid.
+  - Menjalankan symptom lookup memakai rule table tervalidasi dari `transform_service`.
 
 ## Test
 
@@ -87,6 +98,13 @@ Contoh kemampuan baru:
 - `tests/test_pipeline_service.py`
   - Tambah skenario lookup symptom berbasis regex (happy path).
   - Tambah skenario regex invalid -> fail dengan pesan jelas.
+
+- `tests/test_symptom_rules.py`
+  - Validasi schema rule table symptom.
+  - Priority order dan tie-break urutan row.
+  - Compile regex sekali per rule.
+  - Reject regex terlalu panjang.
+  - Regression untuk `equals` dan `contains`.
 
 ## Dokumentasi (opsional tapi direkomendasikan)
 
@@ -111,7 +129,7 @@ Contoh kemampuan baru:
      - pesan error regex engine.
 
 3. **Batasi panjang pattern**
-   - Default rekomendasi: maksimal 300 karakter per pattern.
+   - Implementasi saat ini memakai batas maksimal `512` karakter per pattern.
    - Pattern melebihi batas -> blocked dengan pesan actionable.
 
 4. **Konsistensi normalisasi**
@@ -137,28 +155,13 @@ Contoh kemampuan baru:
 
 ---
 
-## 6) Rencana Task Eksekusi (Urutan Implementasi)
+## 6) Ringkasan Implementasi
 
-1. **Schema update**
-   - Tambah `regex` pada mode yang didukung di `config_service`.
-
-2. **Engine update - transform path**
-   - Tambah cabang `mode == "regex"` di `transform_service`.
-   - Tambah helper compile regex + cache per matcher.
-
-3. **Engine update - recipe path**
-   - Implement logic identik di `recipe_service` agar output konsisten.
-
-4. **Error messaging**
-   - Standarisasi pesan regex invalid agar actionable.
-
-5. **Tests**
-   - Tambah unit/schema test.
-   - Tambah integration/pipeline test symptom regex.
-   - Tambah test negative case regex invalid.
-
-6. **Dokumentasi contoh config**
-   - Tambah snippet penggunaan `mode: regex`.
+1. `transform_service.py` memvalidasi dan menyiapkan sheet `symptom` sebagai rule table tervalidasi.
+2. Rule regex di-compile sekali per rule saat tabel disiapkan.
+3. `recipe_service.py` dan engine pipeline memakai tabel rule yang sudah tervalidasi tersebut.
+4. Error regex invalid dan pattern terlalu panjang memblokir execute lebih awal.
+5. Test unit dan integration ditambahkan untuk jalur sukses dan error.
 
 ---
 
@@ -212,9 +215,11 @@ Catatan:
 
 ---
 
-## 10) Catatan Review
+## 10) Hasil Verifikasi
 
-Jika planning ini disetujui, implementasi akan dilakukan bertahap sesuai urutan task di atas, lalu saya kirimkan:
-- daftar file yang benar-benar berubah,
-- ringkasan diff perilaku,
-- hasil test yang relevan.
+Verifikasi yang sudah berjalan di repo:
+
+- unit test symptom rules lulus
+- integration test pipeline symptom regex lulus
+- regression test `equals` dan `contains` lulus
+- full `pytest` dan `ruff check .` lulus pada perubahan terakhir

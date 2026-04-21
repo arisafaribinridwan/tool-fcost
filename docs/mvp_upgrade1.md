@@ -2,6 +2,24 @@
 
 Dokumen ini berisi usulan fitur MVP tambahan paling bernilai untuk membuat tool lebih baik dipakai harian, lebih aman, dan lebih nyaman untuk user non-teknis.
 
+## Status Implementasi Saat Ini
+
+Update terbaru di repo saat ini untuk item fase 1:
+
+- [x] Path boundary hardening untuk path runtime `configs/`, `masters/`, dan output path
+- [x] Selector `Pekerjaan` berbasis registry `configs/job_profiles.yaml`
+- [x] Lookup `symptom` berbasis rule table `priority + part_name + match_type + pattern`
+- [x] Dukungan `match_type=regex` untuk `symptom` dengan urutan `priority` ascending dan `first match wins`
+- [x] Guardrail regex dasar: compile sekali per rule, invalid regex fail-fast, panjang pattern dibatasi
+- [ ] Tombol `Start New Session`
+- [ ] Preflight Check
+- [ ] Dry Run
+
+Catatan sinkronisasi:
+
+- status di bawah tetap memuat roadmap lengkap MVP Upgrade 1
+- beberapa item pada roadmap sudah terealisasi sebagian atau penuh dan ditandai lagi pada checklist praktis di bagian bawah
+
 ## Tujuan Upgrade
 
 Upgrade ini fokus pada 4 hal:
@@ -190,6 +208,13 @@ Tambahkan registry eksplisit, misalnya `configs/job_profiles.yaml`, yang berisi 
 - `enabled`
 - petunjuk preflight tambahan jika diperlukan
 
+#### Status implementasi saat ini
+- registry `configs/job_profiles.yaml` sudah dipakai sebagai entry point selector `Pekerjaan`
+- metadata yang sudah aktif di repo saat ini: `id`, `label`, `config_file`, `enabled`
+- UI desktop sudah menampilkan dropdown `Pekerjaan`, tombol `Refresh Pekerjaan`, dan ringkasan config/master untuk job terpilih
+- validasi job dilakukan lewat loader registry dan validasi file config aktual
+- field seperti `description` dan petunjuk preflight tambahan belum diaktifkan
+
 #### Dampak
 - Mengurangi salah pilih config
 - Membuat UI lebih mudah dipahami user non-teknis
@@ -226,6 +251,15 @@ Sheet `symptom` pada `masters/master_table.xlsx` diubah agar memakai struktur se
 - regex invalid harus menghasilkan error yang jelas dan memblokir execute
 - panjang pattern dibatasi agar tidak terlalu berat
 - perilaku existing `equals`/`contains` tetap dijaga agar tidak breaking
+
+#### Status implementasi saat ini
+- sheet `symptom` sudah tervalidasi dengan kolom `priority`, `part_name`, `match_type`, `pattern`, `symptom`, `notes`
+- urutan eksekusi rule sudah mengikuti `priority` ascending lalu urutan row agar hasil deterministik saat priority sama
+- engine regex memakai semantik `search` pada string yang sudah dinormalisasi
+- regex di-compile sekali per rule saat validasi master dan dipakai ulang saat matching
+- regex invalid memblokir execute
+- panjang pattern regex dibatasi di engine
+- regression test untuk `equals` dan `contains` sudah ada agar perilaku lama tetap aman
 
 #### Dampak
 - Master symptom lebih fleksibel dan lebih mudah dirawat
@@ -375,6 +409,12 @@ Exit criteria:
 - Semua akses file berada dalam boundary yang aman
 - Sheet `symptom` baru terbaca valid dan lookup regex berjalan stabil
 
+Status saat ini:
+- `Pekerjaan` sudah aktif sebagai entry point UI
+- boundary path runtime inti sudah di-hardening
+- sheet `symptom` rule table dan regex lookup sudah aktif
+- fase 1 secara fungsional sudah tercapai untuk tiga fondasi utama di atas, tetapi polish lanjutan seperti preflight belum masuk fase berikutnya
+
 ## Fase 2 - Safety dan Correctness Sebelum Execute
 
 Target:
@@ -462,12 +502,12 @@ Testing yang perlu ditambah:
 
 - [ ] Tombol `Preflight Check` tersedia dan berjalan
 - [ ] Mode `Dry Run` tersedia
-- [ ] Selector `Pekerjaan` tersedia dan memetakan ke config yang tepat
-- [ ] Sheet `symptom` mendukung rule table baru (`priority`, `part_name`, `match_type`, `pattern`, `symptom`, `notes`)
-- [ ] Lookup symptom berbasis regex berjalan dan menghormati urutan `priority`
+- [x] Selector `Pekerjaan` tersedia dan memetakan ke config yang tepat
+- [x] Sheet `symptom` mendukung rule table baru (`priority`, `part_name`, `match_type`, `pattern`, `symptom`, `notes`)
+- [x] Lookup symptom berbasis regex berjalan dan menghormati urutan `priority`
 - [ ] Preflight menampilkan severity (`ERROR/WARNING/INFO`)
 - [ ] Preflight dapat menyatakan source cocok/tidak cocok terhadap `Pekerjaan`
-- [ ] Path traversal dan akses path di luar boundary diblokir
+- [x] Path traversal dan akses path di luar boundary diblokir
 - [ ] Tombol `Start New Session` tersedia dan reset UI hanya setelah worker selesai
 - [ ] Overwrite output meminta konfirmasi
 - [ ] Error message menggunakan format actionable

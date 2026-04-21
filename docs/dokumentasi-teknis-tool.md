@@ -23,7 +23,7 @@ Tool dijalankan via UI desktop (`CustomTkinter`) dan engine pemrosesan data (`pa
   - **bundle mode** (hasil build PyInstaller).
 
 ### Layer utama
-- **UI layer**: pemilihan source, pemilihan config, eksekusi pipeline, log proses, buka folder output.
+- **UI layer**: pemilihan source, pemilihan `Pekerjaan` berbasis registry job profile, eksekusi pipeline, log proses, buka folder output.
 - **Service layer**:
   1. validasi source,
   2. validasi+load config YAML,
@@ -57,7 +57,10 @@ Tool mendukung dua gaya konfigurasi:
 Validator YAML memeriksa struktur, tipe data, field wajib, kombinasi field yang valid, serta nilai enum yang didukung.
 
 ## C. Keamanan path (hardening)
-- Path master harus **relatif** dan berada di bawah folder `masters/`.
+- Path runtime divalidasi sebagai path **relatif** di dalam boundary folder yang diizinkan.
+- Path master harus berada di bawah folder `masters/`.
+- Path config harus berada di bawah folder `configs/`.
+- Path output runtime di-resolve ulang agar tetap berada di boundary yang aman.
 - Menolak absolute path, drive path Windows, serta `.` / `..` traversal.
 - Mendukung normalisasi separator (`\\` → `/`) dan resolusi nama file case-insensitive.
 
@@ -73,8 +76,15 @@ Tersedia 3 strategi:
    - cocok untuk mapping berdasarkan kombinasi kondisi/teks.
 
 3. **`lookup_rules`**
-   - rule matching fleksibel (`equals`, `contains`) dengan opsi normalisasi,
-   - dukung `blank_as_wildcard`, wildcard custom, dan `first_match_wins`.
+   - rule matching fleksibel (`equals`, `contains`, `regex`) dengan opsi normalisasi,
+   - untuk sheet `symptom`, rule tervalidasi sebagai rule table berbasis `priority`, `part_name`, `match_type`, `pattern`, `symptom`, `notes`,
+   - dukung `blank_as_wildcard`, wildcard custom, `first_match_wins`, dan semantik regex Python `search`.
+
+## D1. Registry `Pekerjaan`
+- Selector UI utama kini memakai registry `configs/job_profiles.yaml`.
+- Setiap record job minimal berisi `id`, `label`, `config_file`, dan `enabled`.
+- Loader job profile memvalidasi registry, memeriksa config target, dan mengekstrak dependensi master dari config/recipe.
+- Jika config job hilang atau invalid, item job tetap dapat terdeteksi tetapi ditandai invalid dan tidak bisa dieksekusi.
 
 ## E. Transform data (mode klasik)
 Transform yang didukung:
@@ -123,7 +133,10 @@ Ekspresi recipe mencakup operator seperti `substring`, `add`, `divide`, `ceil`, 
 ## J. Quality assurance
 - Unit/integration tests mencakup:
   - validasi source/config,
+  - validasi registry `job_profiles`,
   - pipeline end-to-end,
+  - hardening path runtime,
+  - symptom rule table + regex lookup,
   - lookup & transform,
   - recipe monthly report,
   - output pivot/group_by.
@@ -134,8 +147,8 @@ Ekspresi recipe mencakup operator seperti `substring`, `add`, `divide`, `ceil`, 
 
 1. User pilih source (`.xlsx`/`.csv`) di UI.  
 2. App memvalidasi source.  
-3. App memuat daftar config YAML valid dari `configs/`.  
-4. User tekan **Execute**.  
+3. App memuat daftar `Pekerjaan` dari registry `configs/job_profiles.yaml` dan memvalidasi config target.  
+4. User memilih `Pekerjaan` lalu tekan **Execute**.  
 5. Engine:
    - validasi config,
    - salin source ke `uploads/`,

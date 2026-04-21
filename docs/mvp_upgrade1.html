@@ -253,6 +253,32 @@
     </section>
 
     <section class="slide">
+      <div class="kicker">Status Repo</div>
+      <h2>Update Implementasi Saat Ini</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Sudah Jalan</h3>
+          <ul>
+            <li>Selector <code>Pekerjaan</code> berbasis registry <code>configs/job_profiles.yaml</code>.</li>
+            <li>Path boundary hardening untuk path runtime <code>configs/</code>, <code>masters/</code>, dan output.</li>
+            <li>Sheet <code>symptom</code> sudah memakai rule table baru.</li>
+            <li>Lookup symptom sudah mendukung <code>equals</code>, <code>contains</code>, dan <code>regex</code>.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Guardrail Aktif</h3>
+          <ul>
+            <li>Rule symptom diproses dengan <code>priority</code> ascending dan tie-break urutan row.</li>
+            <li>Regex memakai semantik Python <code>search</code>.</li>
+            <li>Regex di-compile sekali per rule.</li>
+            <li>Regex invalid dan pattern terlalu panjang memblokir execute.</li>
+          </ul>
+          <p class="note">Belum aktif: <code>Preflight Check</code>, <code>Dry Run</code>, dan <code>Start New Session</code>.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
       <div class="kicker">P1 - Wajib</div>
       <h2>1) Preflight Check Interaktif</h2>
       <p><strong>Problem:</strong> user sering baru tahu masalah saat pipeline sudah jalan.</p>
@@ -367,6 +393,7 @@
         <li>Deskripsi singkat pekerjaan ditampilkan di UI.</li>
         <li>Gunakan registry <code>configs/job_profiles.yaml</code>.</li>
       </ul>
+      <p><strong>Status saat ini:</strong> selector <code>Pekerjaan</code>, refresh job, dan ringkasan config/master sudah aktif. Metadata registry yang sudah dipakai: <code>id</code>, <code>label</code>, <code>config_file</code>, <code>enabled</code>.</p>
       <p><strong>Dampak:</strong> mengurangi salah pilih config dan lebih ramah non-teknis.</p>
     </section>
 
@@ -394,6 +421,7 @@
           </ul>
         </div>
       </div>
+      <p><strong>Status saat ini:</strong> rule table symptom dan regex lookup sudah aktif di engine, lengkap dengan ordering <code>priority</code>, tie-break urutan row, compile-once, invalid regex blocking, dan regression test untuk <code>equals</code>/<code>contains</code>.</p>
       <p><strong>Dampak:</strong> master symptom lebih fleksibel, lebih mudah dirawat, dan lebih cocok untuk variasi data operasional nyata.</p>
     </section>
 
@@ -443,6 +471,7 @@
             <li>Regex-based symptom lookup + guardrail dasar regex.</li>
           </ul>
           <p><strong>Exit criteria:</strong> entry point domain stabil, boundary aman, dan sheet symptom baru terbaca valid.</p>
+          <p><strong>Status:</strong> empat fondasi inti fase ini sudah tercapai di repo saat ini.</p>
         </div>
         <div class="card">
           <h3>Fase 2 - Safety Sebelum Execute</h3>
@@ -516,14 +545,14 @@
       <div class="grid">
         <div class="card">
           <ul>
-            <li>Preflight Check tersedia dan berjalan.</li>
-            <li>Dry Run tersedia.</li>
-            <li>Selector Pekerjaan memetakan config dengan tepat.</li>
-            <li>Sheet <code>symptom</code> mendukung rule table baru.</li>
-            <li>Lookup symptom regex menghormati urutan <code>priority</code>.</li>
-            <li>Preflight menampilkan severity dan compatibility.</li>
-            <li>Path traversal keluar boundary diblokir.</li>
-            <li>Start New Session reset UI setelah worker selesai.</li>
+            <li>[ ] Preflight Check tersedia dan berjalan.</li>
+            <li>[ ] Dry Run tersedia.</li>
+            <li>[x] Selector Pekerjaan memetakan config dengan tepat.</li>
+            <li>[x] Sheet <code>symptom</code> mendukung rule table baru.</li>
+            <li>[x] Lookup symptom regex menghormati urutan <code>priority</code>.</li>
+            <li>[ ] Preflight menampilkan severity dan compatibility.</li>
+            <li>[x] Path traversal keluar boundary diblokir.</li>
+            <li>[ ] Start New Session reset UI setelah worker selesai.</li>
           </ul>
         </div>
         <div class="card">
