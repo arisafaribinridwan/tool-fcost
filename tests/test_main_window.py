@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from pathlib import Path
 
 from app.ui.main_window import DesktopApp
 
@@ -20,8 +21,9 @@ class DummyButton:
     def __init__(self):
         self.state = None
 
-    def configure(self, *, state):
-        self.state = state
+    def configure(self, *, state=None, **kwargs):
+        if state is not None:
+            self.state = state
 
 
 class DummyThread:
@@ -30,6 +32,14 @@ class DummyThread:
 
     def is_alive(self) -> bool:
         return self._alive
+
+
+class DummyJob:
+    def __init__(self, job_id: str, label: str = "Report Bulanan"):
+        self.id = job_id
+        self.label = label
+        self.is_valid = True
+        self.config_path = Path("config.yaml")
 
 
 def test_can_start_new_session_only_after_terminal_status():
@@ -110,3 +120,122 @@ def test_start_new_session_resets_ui_state_without_touching_outputs(tmp_path):
     assert "log" in reset_calls
     assert "execute" in reset_calls
     assert log_messages == ["Sesi baru dimulai."]
+
+
+def test_set_pending_session_state_disables_restore_when_missing():
+    app = DesktopApp.__new__(DesktopApp)
+    app.session_restore_var = DummyVar()
+    app.use_last_session_button = DummyButton()
+    app._pending_session_state = object()
+
+    DesktopApp._set_pending_session_state(app, None)
+
+    assert app._pending_session_state is None
+    assert app.session_restore_var.get() == ""
+    assert app.use_last_session_button.state == "disabled"
+
+
+def test_set_pending_session_state_shows_restore_cta_for_valid_job():
+    app = DesktopApp.__new__(DesktopApp)
+    app.session_restore_var = DummyVar()
+    app.use_last_session_button = DummyButton()
+    app.job_by_label = {"Report Bulanan": DummyJob("report-bulanan")}
+
+    state = SimpleNamespace(last_job_id="report-bulanan")
+
+    DesktopApp._set_pending_session_state(app, state)
+
+    assert app._pending_session_state is state
+    assert "Sesi terakhir ditemukan" in app.session_restore_var.get()
+    assert app.use_last_session_button.state == "normal"
+
+
+def test_load_pending_session_state_without_state_keeps_restore_hidden(tmp_path, monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    app.paths = SimpleNamespace(project_root=tmp_path)
+    app.job_by_label = {}
+    recorded: list[object] = []
+
+    monkeypatch.setattr("app.ui.main_window.load_session_state", lambda _root: None)
+    app._set_pending_session_state = lambda state: recorded.append(state)
+
+    DesktopApp._load_pending_session_state(app)
+
+    assert recorded == [None]
+
+
+def test_load_pending_session_state_ignores_invalid_job(tmp_path, monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    app.paths = SimpleNamespace(project_root=tmp_path)
+    app.job_by_label = {}
+    recorded: list[object] = []
+    state = SimpleNamespace(
+        last_job_id="missing-job",
+        last_source_path=tmp_path / "source.xlsx",
+    )
+
+    monkeypatch.setattr("app.ui.main_window.load_session_state", lambda _root: state)
+    monkeypatch.setattr("app.ui.main_window.validate_source_file", lambda _path: [])
+    app._set_pending_session_state = lambda value: recorded.append(value)
+
+    DesktopApp._load_pending_session_state(app)
+
+    assert recorded == [None]
+
+
+def test_load_pending_session_state_ignores_missing_source(tmp_path, monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    app.paths = SimpleNamespace(project_root=tmp_path)
+    app.job_by_label = {"Report Bulanan": DummyJob("report-bulanan")}
+    recorded: list[object] = []
+    state = SimpleNamespace(
+        last_job_id="report-bulanan",
+        last_source_path=tmp_path / "hilang.xlsx",
+    )
+
+    monkeypatch.setattr("app.ui.main_window.load_session_state", lambda _root: state)
+    monkeypatch.setattr("app.ui.main_window.validate_source_file", lambda _path: ["missing"])
+    app._set_pending_session_state = lambda value: recorded.append(value)
+
+    DesktopApp._load_pending_session_state(app)
+
+    assert recorded == [None]
+
+
+def test_use_last_session_restores_job_source_and_runs_preflight(tmp_path, monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    app.job_by_label = {"Report Bulanan": DummyJob("report-bulanan")}
+    app.selected_job_var = DummyVar()
+    app.source_var = DummyVar()
+    app.source_path = None
+    app.paths = SimpleNamespace(project_root=tmp_path)
+    app._pending_session_state = SimpleNamespace(
+        last_job_id="report-bulanan",
+        last_source_path=tmp_path / "source.xlsx",
+    )
+    app._restoring_session = False
+    app.session_restore_var = DummyVar("restore")
+    app.use_last_session_button = DummyButton()
+
+    calls: list[str] = []
+    monkeypatch.setattr("app.ui.main_window.validate_source_file", lambda _path: [])
+    app._set_pending_session_state = lambda state: calls.append(f"pending:{state}")
+    app._update_job_info = lambda: calls.append("job-info")
+    app._append_log = lambda message: calls.append(message)
+    app._persist_session_state = lambda: calls.append("persist")
+    app._schedule_preflight = lambda: calls.append("preflight")
+    app._update_execute_state = lambda: calls.append("execute")
+
+    DesktopApp._use_last_session(app)
+
+    assert app.selected_job_var.get() == "Report Bulanan"
+    assert app.source_var.get().endswith("source.xlsx")
+    assert app.source_path == tmp_path / "source.xlsx"
+    assert calls == [
+        "pending:None",
+        "job-info",
+        "Sesi terakhir dipulihkan: source.xlsx",
+        "persist",
+        "preflight",
+        "execute",
+    ]

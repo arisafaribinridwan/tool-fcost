@@ -5,6 +5,7 @@ from pathlib import Path
 from queue import Empty, Queue
 from threading import Thread
 from tkinter import messagebox
+from typing import Any
 
 import customtkinter as ctk
 
@@ -16,10 +17,14 @@ from app.services import (
     PipelineResult,
     PipelineStepStatus,
     PreflightResult,
+    SessionState,
+    clear_session_state,
     discover_configs,
     discover_job_profiles,
+    load_session_state,
     run_preflight,
     run_pipeline,
+    save_session_state,
     upsert_job_profile_record,
     validate_source_file,
 )
@@ -319,6 +324,8 @@ class DesktopApp(ctk.CTk):
         self._preflight_result: PreflightResult | None = None
         self._worker_queue: Queue[tuple[str, object]] | None = None
         self._worker_thread: Thread | None = None
+        self._pending_session_state: SessionState | None = None
+        self._restoring_session = False
 
         self.title(f"Excel Automation Tool - {self.build_info.mode}")
         self.geometry("1120x720")
@@ -327,6 +334,7 @@ class DesktopApp(ctk.CTk):
         self.source_var = ctk.StringVar(value="")
         self.selected_job_var = ctk.StringVar(value="")
         self.job_info_var = ctk.StringVar(value="Belum ada pekerjaan terpilih.")
+        self.session_restore_var = ctk.StringVar(value="")
         self.preflight_status_var = ctk.StringVar(value="Preflight: Belum dicek")
         self.preflight_summary_var = ctk.StringVar(value="Pilih source dan pekerjaan untuk memulai pemeriksaan otomatis.")
         self.status_var = ctk.StringVar(value="Status: Idle")
@@ -339,7 +347,10 @@ class DesktopApp(ctk.CTk):
 
         self._build_layout()
         self._reset_progress_state()
+        self._restore_window_geometry()
         self.refresh_jobs(initial=True)
+        self.bind("<Configure>", self._on_window_configure)
+        self.protocol("WM_DELETE_WINDOW", self._on_window_close)
         self._append_log(f"Aplikasi siap digunakan. Runtime: {self.build_info.summary()}")
         stale_warning = get_stale_bundle_warning(paths.project_root)
         if stale_warning:
@@ -410,30 +421,45 @@ class DesktopApp(ctk.CTk):
 
         ctk.CTkLabel(
             left_panel,
+            textvariable=self.session_restore_var,
+            justify="left",
+            wraplength=300,
+        ).grid(row=9, column=0, padx=16, pady=(0, 8), sticky="w")
+
+        self.use_last_session_button = ctk.CTkButton(
+            left_panel,
+            text="Use Last Session",
+            command=self._use_last_session,
+            state="disabled",
+        )
+        self.use_last_session_button.grid(row=10, column=0, padx=16, pady=(0, 16), sticky="ew")
+
+        ctk.CTkLabel(
+            left_panel,
             textvariable=self.job_info_var,
             justify="left",
             wraplength=300,
-        ).grid(row=9, column=0, padx=16, pady=(0, 16), sticky="w")
+        ).grid(row=11, column=0, padx=16, pady=(0, 16), sticky="w")
 
         ctk.CTkLabel(
             left_panel,
             text="Preflight",
             font=ctk.CTkFont(weight="bold"),
-        ).grid(row=10, column=0, padx=16, pady=(0, 4), sticky="w")
+        ).grid(row=12, column=0, padx=16, pady=(0, 4), sticky="w")
 
         ctk.CTkLabel(
             left_panel,
             textvariable=self.preflight_status_var,
             justify="left",
             wraplength=300,
-        ).grid(row=11, column=0, padx=16, pady=(0, 4), sticky="w")
+        ).grid(row=13, column=0, padx=16, pady=(0, 4), sticky="w")
 
         ctk.CTkLabel(
             left_panel,
             textvariable=self.preflight_summary_var,
             justify="left",
             wraplength=300,
-        ).grid(row=12, column=0, padx=16, pady=(0, 16), sticky="w")
+        ).grid(row=14, column=0, padx=16, pady=(0, 16), sticky="w")
 
         self.execute_button = ctk.CTkButton(
             left_panel,
@@ -442,16 +468,16 @@ class DesktopApp(ctk.CTk):
             state="disabled",
             height=42,
         )
-        self.execute_button.grid(row=13, column=0, padx=16, pady=(0, 8), sticky="ew")
+        self.execute_button.grid(row=15, column=0, padx=16, pady=(0, 8), sticky="ew")
 
         ctk.CTkLabel(
             left_panel,
             text="Progress",
             font=ctk.CTkFont(weight="bold"),
-        ).grid(row=14, column=0, padx=16, pady=(0, 4), sticky="w")
+        ).grid(row=16, column=0, padx=16, pady=(0, 4), sticky="w")
 
         self.progress_bar = ctk.CTkProgressBar(left_panel)
-        self.progress_bar.grid(row=15, column=0, padx=16, pady=(0, 4), sticky="ew")
+        self.progress_bar.grid(row=17, column=0, padx=16, pady=(0, 4), sticky="ew")
         self.progress_bar.set(0)
 
         ctk.CTkLabel(
@@ -459,10 +485,10 @@ class DesktopApp(ctk.CTk):
             textvariable=self.progress_summary_var,
             justify="left",
             wraplength=300,
-        ).grid(row=16, column=0, padx=16, pady=(0, 8), sticky="w")
+        ).grid(row=18, column=0, padx=16, pady=(0, 8), sticky="w")
 
         progress_frame = ctk.CTkFrame(left_panel, fg_color="transparent")
-        progress_frame.grid(row=17, column=0, padx=16, pady=(0, 16), sticky="ew")
+        progress_frame.grid(row=19, column=0, padx=16, pady=(0, 16), sticky="ew")
         progress_frame.grid_columnconfigure(0, weight=1)
         for row_idx, (step_id, _) in enumerate(PIPELINE_STEP_ORDER):
             ctk.CTkLabel(
@@ -477,7 +503,7 @@ class DesktopApp(ctk.CTk):
             left_panel,
             text="Buka Folder Outputs",
             command=self._open_outputs_dir,
-        ).grid(row=18, column=0, padx=16, pady=(0, 16), sticky="ew")
+        ).grid(row=20, column=0, padx=16, pady=(0, 16), sticky="ew")
 
         self.start_new_session_button = ctk.CTkButton(
             left_panel,
@@ -485,24 +511,24 @@ class DesktopApp(ctk.CTk):
             command=self._start_new_session,
             state="disabled",
         )
-        self.start_new_session_button.grid(row=19, column=0, padx=16, pady=(0, 16), sticky="ew")
+        self.start_new_session_button.grid(row=21, column=0, padx=16, pady=(0, 16), sticky="ew")
 
         ctk.CTkLabel(
             left_panel,
             textvariable=self.status_var,
             justify="left",
             wraplength=300,
-        ).grid(row=20, column=0, padx=16, pady=(0, 8), sticky="w")
+        ).grid(row=22, column=0, padx=16, pady=(0, 8), sticky="w")
 
         ctk.CTkLabel(left_panel, text="Target output").grid(
-            row=21, column=0, padx=16, sticky="w"
+            row=23, column=0, padx=16, sticky="w"
         )
         ctk.CTkLabel(
             left_panel,
             textvariable=self.last_output_var,
             justify="left",
             wraplength=300,
-        ).grid(row=22, column=0, padx=16, pady=(0, 16), sticky="w")
+        ).grid(row=24, column=0, padx=16, pady=(0, 16), sticky="w")
 
         ctk.CTkLabel(
             right_panel,
@@ -513,6 +539,109 @@ class DesktopApp(ctk.CTk):
         self.log_box = ctk.CTkTextbox(right_panel, wrap="word")
         self.log_box.grid(row=1, column=0, padx=16, pady=(0, 16), sticky="nsew")
         self.log_box.configure(state="disabled")
+
+    def _restore_window_geometry(self) -> None:
+        session_state = load_session_state(self.paths.project_root)
+        if session_state is None or session_state.window_geometry is None:
+            return
+        self.geometry(session_state.window_geometry)
+
+    def _load_pending_session_state(self) -> None:
+        session_state = load_session_state(self.paths.project_root)
+        if session_state is None:
+            self._set_pending_session_state(None)
+            return
+
+        valid_job = self._job_label_for_id(session_state.last_job_id) is not None
+        valid_source = session_state.last_source_path is not None and not validate_source_file(
+            session_state.last_source_path
+        )
+        if not valid_job or not valid_source:
+            self._set_pending_session_state(None)
+            return
+
+        self._set_pending_session_state(session_state)
+
+    def _set_pending_session_state(self, state: SessionState | None) -> None:
+        self._pending_session_state = state
+        if "session_restore_var" not in self.__dict__ or "use_last_session_button" not in self.__dict__:
+            return
+        if state is None:
+            self.session_restore_var.set("")
+            self.use_last_session_button.configure(state="disabled")
+            return
+        job_label = self._job_label_for_id(state.last_job_id)
+        if job_label is None:
+            self.session_restore_var.set("")
+            self.use_last_session_button.configure(state="disabled")
+            return
+        self.session_restore_var.set(
+            f"Sesi terakhir ditemukan untuk pekerjaan {job_label}. Gunakan sesi terakhir atau pilih source baru."
+        )
+        self.use_last_session_button.configure(state="normal")
+
+    def _job_label_for_id(self, job_id: str | None) -> str | None:
+        if not isinstance(job_id, str) or not job_id.strip():
+            return None
+        for label, item in self.job_by_label.items():
+            if item.id == job_id and item.is_valid:
+                return label
+        return None
+
+    def _current_window_geometry(self) -> str | None:
+        if not hasattr(self, "geometry"):
+            return None
+        try:
+            value = self.geometry()
+        except Exception:
+            return None
+        return value if isinstance(value, str) and value else None
+
+    def _persist_session_state(self) -> None:
+        if self._restoring_session or "paths" not in self.__dict__:
+            return
+        selected_job = self._selected_job()
+        save_session_state(
+            self.paths.project_root,
+            last_job_id=selected_job.id if selected_job is not None else None,
+            last_source_path=self.source_path,
+            window_geometry=self._current_window_geometry(),
+        )
+
+    def _on_window_configure(self, _: Any) -> None:
+        self._persist_session_state()
+
+    def _on_window_close(self) -> None:
+        self._persist_session_state()
+        self.destroy()
+
+    def _use_last_session(self) -> None:
+        state = self._pending_session_state
+        if state is None:
+            return
+        job_label = self._job_label_for_id(state.last_job_id)
+        source_path = state.last_source_path
+        if job_label is None or source_path is None:
+            self._set_pending_session_state(None)
+            return
+        if validate_source_file(source_path):
+            self._set_pending_session_state(None)
+            return
+
+        self._restoring_session = True
+        try:
+            self.selected_job_var.set(job_label)
+            self.source_path = source_path
+            self.source_var.set(str(source_path))
+        finally:
+            self._restoring_session = False
+
+        self._set_pending_session_state(None)
+        self._update_job_info()
+        self._append_log(f"Sesi terakhir dipulihkan: {source_path.name}")
+        self._persist_session_state()
+        self._schedule_preflight()
+        self._update_execute_state()
 
     def _append_log(self, message: str) -> None:
         timestamp = datetime.now().strftime("%H:%M:%S")
@@ -576,12 +705,15 @@ class DesktopApp(ctk.CTk):
 
         self.source_path = source_path
         self.source_var.set(str(source_path))
+        self._set_pending_session_state(None)
+        self._persist_session_state()
         self._append_log(f"Source dipilih: {source_path.name}")
         self._schedule_preflight()
         self._update_execute_state()
 
     def _on_job_selected(self, _: str) -> None:
         self._update_job_info()
+        self._persist_session_state()
         self._schedule_preflight()
         self._update_execute_state()
 
@@ -626,6 +758,9 @@ class DesktopApp(ctk.CTk):
 
         if self._job_settings_dialog is not None and self._job_settings_dialog.winfo_exists():
             self._job_settings_dialog.refresh()
+
+        if initial:
+            self._load_pending_session_state()
 
     def _update_job_info(self) -> None:
         selected_label = self.selected_job_var.get()
@@ -704,6 +839,9 @@ class DesktopApp(ctk.CTk):
         self._worker_queue = None
         self._worker_thread = None
         self._set_preflight_idle()
+        self._set_pending_session_state(None)
+        if "paths" in self.__dict__:
+            clear_session_state(self.paths.project_root)
         self._set_status("Idle")
         self._clear_log_box()
         self.refresh_jobs(initial=False)
