@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+import re
 
 import pandas as pd
 
@@ -25,6 +26,7 @@ SUPPORTED_RULE_OPERATORS = {
 }
 SUPPORTED_FORMULA_OPERATIONS = {"add", "subtract", "multiply", "divide"}
 SUPPORTED_GROUPBY_AGGFUNCS = {"sum", "mean", "min", "max", "count", "first", "last"}
+SUPPORTED_SYMPTOM_MATCH_TYPES = {"equals", "contains", "regex"}
 
 
 def resolve_master_path(master_file: str, project_root: Path, masters_dir: Path) -> Path:
@@ -143,7 +145,107 @@ def _matcher_matches(source_value: object, master_value: object, matcher_cfg: di
         if not token:
             return True
         return token in source_normalized
+    if mode == "regex":
+        try:
+            return re.search(master_normalized, source_normalized) is not None
+        except re.error as exc:
+            raise ValueError(f"Regex matcher tidak valid: {exc}") from exc
     raise ValueError(f"Mode matcher tidak didukung: '{mode}'.")
+
+
+def prepare_symptom_rule_table(master_df: pd.DataFrame, *, context: str) -> pd.DataFrame:
+    required_columns = ["priority", "part_name", "match_type", "pattern", "symptom", "notes"]
+    missing_columns = [column for column in required_columns if column not in master_df.columns]
+    if missing_columns:
+        raise ValueError(
+            f"{context} wajib memiliki kolom: {', '.join(required_columns)}. Hilang: {', '.join(missing_columns)}"
+        )
+
+    prepared = master_df.loc[:, required_columns].copy()
+    prepared["_row_order"] = range(len(prepared))
+
+    if prepared.empty:
+        return prepared
+
+    prepared["part_name"] = prepared["part_name"].fillna("").astype(str).str.strip()
+    prepared["match_type"] = prepared["match_type"].fillna("").astype(str).str.strip().str.casefold()
+    prepared["pattern"] = prepared["pattern"].fillna("").astype(str).str.strip()
+    prepared["symptom"] = prepared["symptom"].fillna("").astype(str).str.strip()
+    prepared["notes"] = prepared["notes"].fillna("").astype(str)
+
+    invalid_priority_rows: list[str] = []
+    priorities: list[int] = []
+    for idx, value in enumerate(prepared["priority"], start=2):
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            invalid_priority_rows.append(str(idx))
+            priorities.append(0)
+            continue
+        if parsed <= 0:
+            invalid_priority_rows.append(str(idx))
+        priorities.append(parsed)
+    if invalid_priority_rows:
+        raise ValueError(
+            f"{context} memiliki priority invalid pada baris: {', '.join(invalid_priority_rows)}. Priority harus integer positif."
+        )
+    prepared["priority"] = priorities
+
+    invalid_match_type_rows = [
+        str(idx)
+        for idx, value in enumerate(prepared["match_type"], start=2)
+        if value not in SUPPORTED_SYMPTOM_MATCH_TYPES
+    ]
+    if invalid_match_type_rows:
+        raise ValueError(
+            f"{context} memiliki match_type tidak didukung pada baris: {', '.join(invalid_match_type_rows)}. "
+            f"Nilai yang didukung: {', '.join(sorted(SUPPORTED_SYMPTOM_MATCH_TYPES))}."
+        )
+
+    blank_pattern_rows = [
+        str(idx) for idx, value in enumerate(prepared["pattern"], start=2) if not value
+    ]
+    if blank_pattern_rows:
+        raise ValueError(
+            f"{context} memiliki pattern kosong pada baris: {', '.join(blank_pattern_rows)}."
+        )
+
+    blank_symptom_rows = [
+        str(idx) for idx, value in enumerate(prepared["symptom"], start=2) if not value
+    ]
+    if blank_symptom_rows:
+        raise ValueError(
+            f"{context} memiliki symptom kosong pada baris: {', '.join(blank_symptom_rows)}."
+        )
+
+    regex_invalid_rows: list[str] = []
+    for idx, row in enumerate(prepared.itertuples(index=False), start=2):
+        if row.match_type != "regex":
+            continue
+        try:
+            re.compile(row.pattern)
+        except re.error:
+            regex_invalid_rows.append(str(idx))
+    if regex_invalid_rows:
+        raise ValueError(
+            f"{context} memiliki regex invalid pada baris: {', '.join(regex_invalid_rows)}."
+        )
+
+    return prepared.sort_values(["priority", "_row_order"], kind="stable").reset_index(drop=True)
+
+
+def match_symptom_rule(source_value: object, rule_row: pd.Series) -> bool:
+    match_type = str(rule_row["match_type"])
+    pattern = str(rule_row["pattern"])
+    source_normalized = _normalize_text_with_case(source_value, case_sensitive=False)
+
+    if match_type == "equals":
+        return source_normalized == _normalize_text_with_case(pattern, case_sensitive=False)
+    if match_type == "contains":
+        return _normalize_text_with_case(pattern, case_sensitive=False) in source_normalized
+    if match_type == "regex":
+        return re.search(pattern, source_normalized, re.IGNORECASE) is not None
+    raise ValueError(f"Match type symptom tidak didukung: '{match_type}'.")
 
 
 def _read_master_dataframe(master_cfg: dict, project_root: Path, masters_dir: Path) -> tuple[Path, pd.DataFrame]:
@@ -484,6 +586,38 @@ def _apply_lookup_rules_master(
         raise ValueError(
             f"Kolom master hilang di '{master_path.name}': {', '.join(sorted(set(missing_master_cols)))}"
         )
+
+    if str(master_cfg.get("sheet_name", "")).casefold() == "symptom" and target_column == "symptom":
+        symptom_rules = prepare_symptom_rule_table(
+            master_df,
+            context=f"Sheet symptom '{master_path.name}'",
+        )
+        if "part_name" not in merged_df.columns or "symptom_comment" not in merged_df.columns:
+            raise ValueError(
+                "Kolom source untuk symptom rules tidak ditemukan: part_name, symptom_comment"
+            )
+
+        output_values: list[object] = []
+        for _, source_row in merged_df.iterrows():
+            resolved_value = on_missing_match
+            source_part = _normalize_text_with_case(source_row["part_name"], case_sensitive=True)
+            for _, rule_row in symptom_rules.iterrows():
+                rule_part = _normalize_text_with_case(rule_row["part_name"], case_sensitive=True)
+                if source_part != rule_part:
+                    continue
+                if match_symptom_rule(source_row["symptom_comment"], rule_row):
+                    resolved_value = rule_row["symptom"]
+                    if first_match_wins:
+                        break
+            output_values.append("" if pd.isna(resolved_value) else resolved_value)
+
+        merged_df = merged_df.copy()
+        merged_df[target_column] = output_values
+        log(
+            f"Master {idx} symptom rules loaded: {master_path.name} "
+            f"({len(symptom_rules)} rules -> kolom '{target_column}')."
+        )
+        return merged_df
 
     selected_master = master_df.loc[:, list(dict.fromkeys(required_master_cols))].copy()
     selected_master = selected_master[selected_master[value_column].notna()].reset_index(

@@ -15,7 +15,7 @@ from app.services.transform_service import (
 
 REQUIRED_ROOT_FIELDS = ("name", "source_sheet", "header", "outputs")
 SUPPORTED_MASTER_STRATEGIES = {"lookup", "lookup_rules", "ordered_rules"}
-SUPPORTED_MATCHER_MODES = {"equals", "contains"}
+SUPPORTED_MATCHER_MODES = {"equals", "contains", "regex"}
 SUPPORTED_KEY_NORMALIZERS = {"compact_text"}
 SUPPORTED_RECIPE_MATCHING_ORDERS = {"top_to_bottom"}
 SUPPORTED_TRANSFORM_TYPES = {

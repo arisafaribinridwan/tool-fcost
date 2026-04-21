@@ -7,7 +7,11 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.services.transform_service import resolve_master_path
+from app.services.transform_service import (
+    match_symptom_rule,
+    prepare_symptom_rule_table,
+    resolve_master_path,
+)
 
 
 LogFn = Callable[[str], None]
@@ -584,8 +588,43 @@ def _apply_lookup_rules_step(data_df: pd.DataFrame, step_cfg: dict, context: _Re
         master_col = str(matcher["master"])
         if source_col not in data_df.columns:
             raise ValueError(f"Step '{step_cfg['id']}' gagal, kolom '{source_col}' tidak ditemukan.")
+        if (
+            str(master_cfg.get("sheet", "")).casefold() == "symptom"
+            and target_column == "symptom"
+            and source_col == "symptom_comment"
+        ):
+            continue
         if master_col not in master_df.columns:
             raise ValueError(f"Step '{step_cfg['id']}' gagal, kolom master '{master_col}' tidak ditemukan.")
+
+    if str(master_cfg.get("sheet", "")).casefold() == "symptom" and target_column == "symptom":
+        symptom_rules = prepare_symptom_rule_table(
+            master_df,
+            context=f"Sheet symptom '{master_cfg['sheet']}' pada step '{step_cfg['id']}'",
+        )
+        if "part_name" not in data_df.columns or "symptom_comment" not in data_df.columns:
+            raise ValueError(
+                f"Step '{step_cfg['id']}' gagal, kolom source untuk symptom rules tidak lengkap."
+            )
+
+        results: list[object] = []
+        on_missing = step_cfg.get("on_missing_match")
+        for _, source_row in data_df.iterrows():
+            resolved = on_missing
+            source_part = _normalize_text(source_row["part_name"], case_sensitive=True)
+            for _, master_row in symptom_rules.iterrows():
+                rule_part = _normalize_text(master_row["part_name"], case_sensitive=True)
+                if source_part != rule_part:
+                    continue
+                if match_symptom_rule(source_row["symptom_comment"], master_row):
+                    resolved = master_row["symptom"]
+                    break
+            results.append(resolved)
+
+        result_df = data_df.copy()
+        result_df[target_column] = results
+        log(f"Step '{step_cfg['id']}' selesai: symptom rules tervalidasi dan diterapkan.")
+        return result_df
 
     results: list[object] = []
     on_missing = step_cfg.get("on_missing_match")
