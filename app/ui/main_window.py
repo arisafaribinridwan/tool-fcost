@@ -479,22 +479,30 @@ class DesktopApp(ctk.CTk):
             command=self._open_outputs_dir,
         ).grid(row=18, column=0, padx=16, pady=(0, 16), sticky="ew")
 
+        self.start_new_session_button = ctk.CTkButton(
+            left_panel,
+            text="Start New Session",
+            command=self._start_new_session,
+            state="disabled",
+        )
+        self.start_new_session_button.grid(row=19, column=0, padx=16, pady=(0, 16), sticky="ew")
+
         ctk.CTkLabel(
             left_panel,
             textvariable=self.status_var,
             justify="left",
             wraplength=300,
-        ).grid(row=19, column=0, padx=16, pady=(0, 8), sticky="w")
+        ).grid(row=20, column=0, padx=16, pady=(0, 8), sticky="w")
 
         ctk.CTkLabel(left_panel, text="Target output").grid(
-            row=20, column=0, padx=16, sticky="w"
+            row=21, column=0, padx=16, sticky="w"
         )
         ctk.CTkLabel(
             left_panel,
             textvariable=self.last_output_var,
             justify="left",
             wraplength=300,
-        ).grid(row=21, column=0, padx=16, pady=(0, 16), sticky="w")
+        ).grid(row=22, column=0, padx=16, pady=(0, 16), sticky="w")
 
         ctk.CTkLabel(
             right_panel,
@@ -644,6 +652,10 @@ class DesktopApp(ctk.CTk):
     def _update_execute_state(self) -> None:
         worker_running = self._worker_thread is not None and self._worker_thread.is_alive()
         preflight_running = self._preflight_thread is not None and self._preflight_thread.is_alive()
+        session_reset_enabled = self._can_start_new_session()
+        self.start_new_session_button.configure(
+            state="normal" if session_reset_enabled else "disabled"
+        )
         if worker_running:
             self.execute_button.configure(state="disabled")
             return
@@ -668,6 +680,35 @@ class DesktopApp(ctk.CTk):
         )
         self.last_output_var.set("-")
         self._reset_progress_state()
+
+    def _can_start_new_session(self) -> bool:
+        worker_running = self._worker_thread is not None and self._worker_thread.is_alive()
+        if worker_running:
+            return False
+        return self.status_var.get() in {"Status: Sukses", "Status: Gagal"}
+
+    def _clear_log_box(self) -> None:
+        self.log_box.configure(state="normal")
+        self.log_box.delete("1.0", "end")
+        self.log_box.configure(state="disabled")
+
+    def _start_new_session(self) -> None:
+        if not self._can_start_new_session():
+            return
+
+        self.source_path = None
+        self.source_var.set("")
+        self._preflight_request_id += 1
+        self._latest_preflight_request_id = self._preflight_request_id
+        self._active_preflight_request_id = None
+        self._worker_queue = None
+        self._worker_thread = None
+        self._set_preflight_idle()
+        self._set_status("Idle")
+        self._clear_log_box()
+        self.refresh_jobs(initial=False)
+        self._append_log("Sesi baru dimulai.")
+        self._update_execute_state()
 
     def _format_preflight_summary(self, result: PreflightResult) -> str:
         if not result.findings:
