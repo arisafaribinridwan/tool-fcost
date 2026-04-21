@@ -871,10 +871,38 @@ def test_run_pipeline_supports_monthly_step_recipe_end_to_end(app_paths):
         ).to_excel(writer, index=False, sheet_name="factory")
         pd.DataFrame(
             [
-                {"part_name": "PANEL", "symptom_comment": "*line", "symptom": "LINE"},
-                {"part_name": "TAPE", "symptom_comment": "*", "symptom": "TAPE_GENERIC"},
-                {"part_name": "MAIN_UNIT", "symptom_comment": "*boot", "symptom": "BOOT"},
-                {"part_name": "POWER_UNIT", "symptom_comment": "*power", "symptom": "POWER"},
+                {
+                    "priority": 20,
+                    "part_name": "PANEL",
+                    "match_type": "contains",
+                    "pattern": "line",
+                    "symptom": "LINE",
+                    "notes": "panel line",
+                },
+                {
+                    "priority": 10,
+                    "part_name": "TAPE",
+                    "match_type": "regex",
+                    "pattern": ".*",
+                    "symptom": "TAPE_GENERIC",
+                    "notes": "fallback tape",
+                },
+                {
+                    "priority": 30,
+                    "part_name": "MAIN_UNIT",
+                    "match_type": "contains",
+                    "pattern": "boot",
+                    "symptom": "BOOT",
+                    "notes": "main boot",
+                },
+                {
+                    "priority": 40,
+                    "part_name": "POWER_UNIT",
+                    "match_type": "regex",
+                    "pattern": "power",
+                    "symptom": "POWER",
+                    "notes": "power regex",
+                },
             ]
         ).to_excel(writer, index=False, sheet_name="symptom")
         pd.DataFrame([{"init": "JKT", "branch": "Jakarta"}]).to_excel(
@@ -914,10 +942,10 @@ def test_run_pipeline_supports_monthly_step_recipe_end_to_end(app_paths):
         ).to_excel(writer, index=False, sheet_name="defect_category")
 
     recipe_path = app_paths.configs_dir / "monthly-report-recipe.yaml"
-    recipe_path.write_text(
-        Path("docs/monthly-report-recipe.yaml").read_text(encoding="utf-8"),
-        encoding="utf-8",
-    )
+    recipe_content = Path("docs/done/monthly-report-recipe.yaml").read_text(encoding="utf-8")
+    recipe_content = recipe_content.replace('master: "symptom_comment"', 'master: "pattern"')
+    recipe_content = recipe_content.replace('mode: "contains"', 'mode: "regex"', 1)
+    recipe_path.write_text(recipe_content, encoding="utf-8")
 
     logs: list[str] = []
     result = run_pipeline(
