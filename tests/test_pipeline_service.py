@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 from app.services.pipeline_service import run_pipeline
-from app.services.pipeline_types import PipelineError
+from app.services.pipeline_types import PipelineError, PipelineStepStatus
 
 
 def _write_yaml(path: Path, content: str) -> None:
@@ -98,6 +98,203 @@ def test_run_pipeline_happy_path_csv_with_master_and_pivot(app_paths):
     assert len(detail_df) == 3
     assert summary_df.loc[summary_df["kategori"] == "Cat 1", "qty"].iloc[0] == 13
     assert summary_df.loc[summary_df["kategori"] == "Cat 2", "qty"].iloc[0] == 5
+
+
+def test_run_pipeline_blocks_when_source_size_exceeds_limit(app_paths):
+    source_path = app_paths.project_root / "source.csv"
+    source_path.write_bytes(b"x" * 2 * 1024 * 1024)
+
+    config_path = app_paths.configs_dir / "report.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Laporan Tes"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Laporan Tes"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "qty"',
+            ]
+        ),
+    )
+    _write_yaml(
+        app_paths.configs_dir / "app_limits.yaml",
+        "\n".join(
+            [
+                "resource_guardrails:",
+                "  max_source_size_mb: 1",
+                "  warning_source_size_mb: 0.5",
+                "  interactive_row_limit: 150000",
+                '  row_limit_mode: "warning"',
+                "  timeouts:",
+                "    read_seconds: 45",
+                "    transform_seconds: 120",
+                "    write_seconds: 60",
+            ]
+        ),
+    )
+
+    with pytest.raises(PipelineError, match="Ukuran source melebihi batas aplikasi"):
+        run_pipeline(
+            paths=app_paths,
+            source_path=source_path,
+            config_path=config_path,
+            log=lambda _: None,
+        )
+
+
+def test_run_pipeline_emits_progress_events_in_order(app_paths):
+    source_path = app_paths.project_root / "source.csv"
+    pd.DataFrame([{"qty": 1}]).to_csv(source_path, index=False)
+
+    config_path = app_paths.configs_dir / "progress.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Progress Test"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Progress Test"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "qty"',
+            ]
+        ),
+    )
+
+    progress_events: list[PipelineStepStatus] = []
+    run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _: None,
+        progress=progress_events.append,
+    )
+
+    assert [(item.step_id, item.state) for item in progress_events] == [
+        ("load_config", "running"),
+        ("load_config", "success"),
+        ("copy_source", "running"),
+        ("copy_source", "success"),
+        ("read_source", "running"),
+        ("read_source", "success"),
+        ("load_masters", "running"),
+        ("load_masters", "success"),
+        ("transform", "running"),
+        ("transform", "success"),
+        ("build_output", "running"),
+        ("build_output", "success"),
+        ("write_output", "running"),
+        ("write_output", "success"),
+    ]
+    assert all(
+        item.duration_ms is None or item.duration_ms >= 1 for item in progress_events
+    )
+
+
+def test_run_pipeline_marks_failed_step_when_transform_errors(app_paths, monkeypatch):
+    source_path = app_paths.project_root / "source.csv"
+    pd.DataFrame([{"qty": 1}]).to_csv(source_path, index=False)
+
+    config_path = app_paths.configs_dir / "transform_fail.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Transform Fail"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Transform Fail"',
+                "transforms:",
+                '  - type: "ensure_optional_columns"',
+                "    columns:",
+                '      - "qty"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "qty"',
+            ]
+        ),
+    )
+
+    def raise_transform_error(*args, **kwargs):
+        raise ValueError("transform rusak")
+
+    monkeypatch.setattr("app.services.pipeline_service.apply_transform_steps", raise_transform_error)
+
+    progress_events: list[PipelineStepStatus] = []
+    with pytest.raises(PipelineError, match="Transform data gagal dijalankan"):
+        run_pipeline(
+            paths=app_paths,
+            source_path=source_path,
+            config_path=config_path,
+            log=lambda _: None,
+            progress=progress_events.append,
+        )
+
+    assert progress_events[-1].step_id == "transform"
+    assert progress_events[-1].state == "failed"
+
+
+def test_run_pipeline_raises_timeout_for_slow_read_stage(app_paths, monkeypatch):
+    source_path = app_paths.project_root / "source.csv"
+    pd.DataFrame([{"qty": 1}]).to_csv(source_path, index=False)
+
+    config_path = app_paths.configs_dir / "timeout.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Timeout Test"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Timeout Test"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "qty"',
+            ]
+        ),
+    )
+    _write_yaml(
+        app_paths.configs_dir / "app_limits.yaml",
+        "\n".join(
+            [
+                "resource_guardrails:",
+                "  max_source_size_mb: 75",
+                "  warning_source_size_mb: 60",
+                "  interactive_row_limit: 150000",
+                '  row_limit_mode: "warning"',
+                "  timeouts:",
+                "    read_seconds: 0.01",
+                "    transform_seconds: 120",
+                "    write_seconds: 60",
+            ]
+        ),
+    )
+
+    original_load = __import__("app.services.pipeline_service", fromlist=["load_source_dataframe"]).load_source_dataframe
+
+    def slow_load(*args, **kwargs):
+        import time
+
+        time.sleep(0.02)
+        return original_load(*args, **kwargs)
+
+    monkeypatch.setattr("app.services.pipeline_service.load_source_dataframe", slow_load)
+
+    with pytest.raises(PipelineError, match="Tahap 'Baca source' melebihi batas waktu"):
+        run_pipeline(
+            paths=app_paths,
+            source_path=source_path,
+            config_path=config_path,
+            log=lambda _: None,
+        )
 
 
 def test_run_pipeline_supports_casefold_master_path_and_sheet_name(app_paths):

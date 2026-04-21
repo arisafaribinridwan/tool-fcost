@@ -22,6 +22,7 @@ from app.services.pipeline_service import run_pipeline
 from app.services.pipeline_types import (
     PipelineError,
     PipelineResult,
+    PipelineStepStatus,
     PreflightFinding,
     PreflightResult,
 )
@@ -38,6 +39,7 @@ __all__ = [
     "SUPPORTED_SOURCE_SUFFIXES",
     "PipelineError",
     "PipelineResult",
+    "PipelineStepStatus",
     "PreflightFinding",
     "PreflightResult",
     "copy_source_to_uploads",

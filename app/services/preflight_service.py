@@ -16,6 +16,7 @@ from app.services.source_service import (
     validate_source_file,
 )
 from app.services.transform_service import resolve_master_path
+from app.utils.runtime_guardrails import check_source_size, load_guardrail_limits
 
 
 _UNSAFE_FILENAME_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
@@ -47,6 +48,83 @@ def _resolve_status(findings: list[PreflightFinding]) -> str:
     if any(item.severity == "WARNING" for item in findings):
         return "Warning"
     return "Ready"
+
+
+def _format_size_mb(size_mb: float) -> str:
+    return f"{size_mb:.1f}".rstrip("0").rstrip(".")
+
+
+def _append_size_guardrail_findings(
+    *,
+    source_path: Path,
+    paths: AppPaths,
+    findings: list[PreflightFinding],
+) -> None:
+    limits, warning = load_guardrail_limits(paths.project_root)
+    if warning:
+        findings.append(
+            _make_finding(
+                "WARNING",
+                "GUARDRAIL_CONFIG_FALLBACK",
+                "Konfigurasi guardrail internal tidak valid, memakai default aman.",
+                warning,
+            )
+        )
+
+    try:
+        size_check = check_source_size(source_path, limits)
+    except OSError as exc:
+        findings.append(
+            _make_finding(
+                "ERROR",
+                "SOURCE_SIZE_CHECK_FAILED",
+                "Ukuran source tidak bisa diperiksa.",
+                f"Pastikan file source bisa diakses lalu coba lagi. Detail: {exc}",
+            )
+        )
+        return
+
+    if size_check.exceeds_max:
+        findings.append(
+            _make_finding(
+                "ERROR",
+                "SOURCE_SIZE_LIMIT_EXCEEDED",
+                "Ukuran source melebihi batas aplikasi.",
+                f"Ukuran file {_format_size_mb(size_check.size_mb)} MB, maksimum {_format_size_mb(limits.max_source_size_mb)} MB. Gunakan file yang lebih kecil atau pecah source sebelum menjalankan proses.",
+            )
+        )
+        return
+
+    if size_check.exceeds_warning:
+        findings.append(
+            _make_finding(
+                "WARNING",
+                "SOURCE_SIZE_NEAR_LIMIT",
+                "Ukuran source mendekati batas aplikasi.",
+                f"Ukuran file {_format_size_mb(size_check.size_mb)} MB dari batas maksimum {_format_size_mb(limits.max_source_size_mb)} MB. Proses mungkin terasa lebih lambat dari biasanya.",
+            )
+        )
+
+
+def _append_row_limit_finding(
+    *,
+    row_count: int,
+    paths: AppPaths,
+    findings: list[PreflightFinding],
+) -> None:
+    limits, _ = load_guardrail_limits(paths.project_root)
+    if row_count <= limits.interactive_row_limit:
+        return
+
+    severity = "ERROR" if limits.row_limit_mode == "error" else "WARNING"
+    findings.append(
+        _make_finding(
+            severity,
+            "SOURCE_ROW_LIMIT_EXCEEDED",
+            "Jumlah baris source melebihi batas mode interaktif.",
+            f"Baris terbaca: {row_count}, batas: {limits.interactive_row_limit}. Kurangi data source atau gunakan batch yang lebih kecil.",
+        )
+    )
 
 
 def _collect_master_refs(config: dict) -> list[str]:
@@ -138,6 +216,7 @@ def preview_output_path(paths: AppPaths, config: dict, config_path: Path) -> Pat
 
 def _check_classic_compatibility(
     *,
+    paths: AppPaths,
     source_path: Path,
     config: dict,
     findings: list[PreflightFinding],
@@ -158,6 +237,8 @@ def _check_classic_compatibility(
             )
         )
         return
+
+    _append_row_limit_finding(row_count=len(source_df), paths=paths, findings=findings)
 
     try:
         validate_required_source_columns(source_df, config.get("required_source_columns"))
@@ -184,6 +265,7 @@ def _check_classic_compatibility(
 
 def _check_recipe_compatibility(
     *,
+    paths: AppPaths,
     source_path: Path,
     config: dict,
     findings: list[PreflightFinding],
@@ -229,6 +311,16 @@ def _check_recipe_compatibility(
             )
         )
         return
+
+    row_count = 0
+    for sheet_name in workbook.sheet_names:
+        try:
+            sheet_df = pd.read_excel(workbook, sheet_name=sheet_name)
+        except Exception:
+            continue
+        row_count = max(row_count, len(sheet_df))
+    if row_count > 0:
+        _append_row_limit_finding(row_count=row_count, paths=paths, findings=findings)
 
     for step_cfg in extract_steps:
         step_id = str(step_cfg.get("id", "extract_sheet"))
@@ -297,6 +389,10 @@ def run_preflight(
             )
         return PreflightResult(status="Blocked", findings=tuple(findings), output_path=None)
 
+    _append_size_guardrail_findings(source_path=source_path, paths=paths, findings=findings)
+    if any(item.severity == "ERROR" and item.code.startswith("SOURCE_SIZE") for item in findings):
+        return PreflightResult(status="Blocked", findings=tuple(findings), output_path=None)
+
     try:
         config = load_config_payload(config_path)
     except ValueError as exc:
@@ -324,9 +420,19 @@ def run_preflight(
     _check_output_sheet_names(config, findings)
 
     if is_step_recipe_payload(config):
-        _check_recipe_compatibility(source_path=source_path, config=config, findings=findings)
+        _check_recipe_compatibility(
+            paths=paths,
+            source_path=source_path,
+            config=config,
+            findings=findings,
+        )
     else:
-        _check_classic_compatibility(source_path=source_path, config=config, findings=findings)
+        _check_classic_compatibility(
+            paths=paths,
+            source_path=source_path,
+            config=config,
+            findings=findings,
+        )
 
     return PreflightResult(
         status=_resolve_status(findings),
