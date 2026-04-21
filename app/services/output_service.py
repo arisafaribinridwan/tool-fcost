@@ -7,6 +7,8 @@ import re
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 import pandas as pd
 
+from app.utils.path_safety import resolve_runtime_relative_path
+
 
 INVALID_SHEET_CHARS = re.compile(r"[:\\/?*\[\]]")
 
@@ -115,16 +117,33 @@ def _apply_worksheet_style(
 def write_output_workbook(
     output_sheets: dict[str, pd.DataFrame],
     output_path: Path,
+    outputs_dir: Path,
     report_title: str,
     header_cfg: dict,
     styling_cfg: dict,
     source_df: pd.DataFrame,
 ) -> None:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        output_relative = output_path.resolve().relative_to(outputs_dir.resolve())
+    except ValueError as exc:
+        raise ValueError(
+            "Path output tidak valid: file wajib berada di folder outputs/."
+        ) from exc
+
+    try:
+        safe_output_path = resolve_runtime_relative_path(
+            outputs_dir.parent,
+            f"outputs/{output_relative.as_posix()}",
+            root_name="outputs",
+        )
+    except ValueError as exc:
+        raise ValueError(f"Path output tidak valid: {exc}") from exc
+
+    safe_output_path.parent.mkdir(parents=True, exist_ok=True)
     period_text = _build_period_text(source_df, header_cfg)
     used_sheet_names: set[str] = set()
 
-    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+    with pd.ExcelWriter(safe_output_path, engine="openpyxl") as writer:
         for raw_sheet_name, frame in output_sheets.items():
             sheet_name = sanitize_sheet_name(raw_sheet_name, used_sheet_names)
             startrow = 3
