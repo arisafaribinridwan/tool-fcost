@@ -260,6 +260,16 @@ def _make_hint_app() -> DesktopApp:
     return app
 
 
+def _make_summary_app() -> DesktopApp:
+    app = DesktopApp.__new__(DesktopApp)
+    app.paths = SimpleNamespace(project_root=Path("."))
+    app.source_path = Path("source.xlsx")
+    app.job_summary_var = DummyVar()
+    app._last_run_context = None
+    app._preflight_result = PreflightResult(status="Ready", findings=(), output_path=None)
+    return app
+
+
 def test_update_hints_at_startup_without_valid_job():
     app = _make_hint_app()
 
@@ -332,3 +342,60 @@ def test_update_hints_after_success_and_failure():
     assert app.primary_hint_var.get() == (
         "Proses gagal. Periksa log untuk detail lalu perbaiki source atau config aktif."
     )
+
+
+def test_job_summary_empty_at_startup():
+    app = _make_summary_app()
+
+    DesktopApp._set_job_summary_idle(app)
+
+    assert app.job_summary_var.get() == "Belum ada proses yang selesai."
+
+
+def test_job_summary_success_is_filled():
+    app = _make_summary_app()
+    job = DummyJob("report-bulanan")
+    result = SimpleNamespace(
+        output_path=Path("outputs/hasil.xlsx"),
+        sheets_written=2,
+        duration_ms=1800,
+    )
+
+    DesktopApp._set_job_summary_success(app, job, result)
+
+    summary = app.job_summary_var.get()
+    assert "Status: Sukses" in summary
+    assert "Pekerjaan: Report Bulanan" in summary
+    assert "Source: source.xlsx" in summary
+    assert "Durasi: 1.8 detik" in summary
+    assert "Sheet output: 2" in summary
+    assert f"Output: {result.output_path}" in summary
+    assert "Preflight: 0 error, 0 warning, 0 info" in summary
+
+
+def test_job_summary_failure_shows_failed_status_without_output():
+    app = _make_summary_app()
+    app._last_run_context = {
+        "job_label": "Report Bulanan",
+        "source_name": "source.xlsx",
+        "duration_ms": None,
+    }
+
+    DesktopApp._set_job_summary_failure(app, "gagal total")
+
+    summary = app.job_summary_var.get()
+    assert "Status: Gagal" in summary
+    assert "Pekerjaan: Report Bulanan" in summary
+    assert "Source: source.xlsx" in summary
+    assert "Output: -" in summary
+    assert "Error: gagal total" in summary
+
+
+def test_start_new_session_clears_job_summary():
+    app = DesktopApp.__new__(DesktopApp)
+    app._last_run_context = {"job_label": "lama"}
+    app.job_summary_var = DummyVar("ada isi")
+
+    DesktopApp._set_job_summary_idle(app)
+
+    assert app.job_summary_var.get() == "Belum ada proses yang selesai."

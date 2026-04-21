@@ -83,6 +83,8 @@ def test_run_pipeline_happy_path_csv_with_master_and_pivot(app_paths):
     assert result.output_path.exists()
     assert result.source_copy_path.exists()
     assert result.sheets_written == 2
+    assert result.duration_ms >= 1
+    assert result.sheet_names == ("Detail", "Summary")
     assert any("Write workbook" in item for item in logs)
 
     detail_df = pd.read_excel(result.output_path, sheet_name="Detail", skiprows=3)

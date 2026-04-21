@@ -44,6 +44,8 @@ class PipelineResult:
     output_path: Path
     source_copy_path: Path
     sheets_written: int
+    duration_ms: int
+    sheet_names: tuple[str, ...]
 
 
 @dataclass(frozen=True)

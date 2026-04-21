@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from queue import Empty, Queue
 from threading import Thread
+from time import perf_counter
 from tkinter import messagebox
 from typing import Any
 
@@ -341,11 +342,13 @@ class DesktopApp(ctk.CTk):
         self.preflight_summary_var = ctk.StringVar(value="Pilih source dan pekerjaan untuk memulai pemeriksaan otomatis.")
         self.status_var = ctk.StringVar(value="Status: Idle")
         self.last_output_var = ctk.StringVar(value="-")
+        self.job_summary_var = ctk.StringVar(value="Belum ada proses yang selesai.")
         self.progress_summary_var = ctk.StringVar(value="Progress: 0/7 langkah selesai")
         self._progress_vars = {
             step_id: ctk.StringVar(value=f"[ ] {label}")
             for step_id, label in PIPELINE_STEP_ORDER
         }
+        self._last_run_context: dict[str, object] | None = None
 
         self._build_layout()
         self._reset_progress_state()
@@ -544,7 +547,19 @@ class DesktopApp(ctk.CTk):
             textvariable=self.last_output_var,
             justify="left",
             wraplength=300,
-        ).grid(row=26, column=0, padx=16, pady=(0, 16), sticky="w")
+        ).grid(row=26, column=0, padx=16, pady=(0, 12), sticky="w")
+
+        ctk.CTkLabel(
+            left_panel,
+            text="Job Summary",
+            font=ctk.CTkFont(weight="bold"),
+        ).grid(row=27, column=0, padx=16, sticky="w")
+        ctk.CTkLabel(
+            left_panel,
+            textvariable=self.job_summary_var,
+            justify="left",
+            wraplength=300,
+        ).grid(row=28, column=0, padx=16, pady=(0, 16), sticky="w")
 
         ctk.CTkLabel(
             right_panel,
@@ -702,6 +717,66 @@ class DesktopApp(ctk.CTk):
     def _set_status(self, text: str) -> None:
         self.status_var.set(f"Status: {text}")
         self._update_hints()
+
+    def _format_duration_text(self, duration_ms: int | None) -> str:
+        if duration_ms is None or duration_ms <= 0:
+            return "-"
+        if duration_ms < 1000:
+            return f"{duration_ms} ms"
+        return f"{duration_ms / 1000:.1f} detik"
+
+    def _set_job_summary_idle(self) -> None:
+        if "job_summary_var" not in self.__dict__:
+            return
+        self.job_summary_var.set("Belum ada proses yang selesai.")
+
+    def _set_job_summary_success(self, job: JobProfileSummary, result: PipelineResult) -> None:
+        if "job_summary_var" not in self.__dict__:
+            return
+        source_name = self.source_path.name if isinstance(self.source_path, Path) else "-"
+        preflight_result = self._hint_preflight_result()
+        if preflight_result is None:
+            preflight_summary = "-"
+        else:
+            preflight_summary = (
+                f"{preflight_result.error_count} error, "
+                f"{preflight_result.warning_count} warning, "
+                f"{preflight_result.info_count} info"
+            )
+        self.job_summary_var.set(
+            "\n".join(
+                [
+                    "Status: Sukses",
+                    f"Pekerjaan: {job.label}",
+                    f"Source: {source_name}",
+                    f"Durasi: {self._format_duration_text(result.duration_ms)}",
+                    f"Sheet output: {result.sheets_written}",
+                    f"Output: {result.output_path}",
+                    f"Preflight: {preflight_summary}",
+                ]
+            )
+        )
+
+    def _set_job_summary_failure(self, error_message: str) -> None:
+        if "job_summary_var" not in self.__dict__:
+            return
+        context = self._last_run_context or {}
+        job_label = str(context.get("job_label", "-"))
+        source_name = str(context.get("source_name", "-"))
+        duration_text = self._format_duration_text(context.get("duration_ms"))
+        self.job_summary_var.set(
+            "\n".join(
+                [
+                    "Status: Gagal",
+                    f"Pekerjaan: {job_label}",
+                    f"Source: {source_name}",
+                    f"Durasi: {duration_text}",
+                    "Sheet output: -",
+                    "Output: -",
+                    f"Error: {sanitize_exception_message(error_message, project_root=self.paths.project_root)}",
+                ]
+            )
+        )
 
     def _set_hint_values(self, primary: str, execute: str) -> None:
         if "primary_hint_var" not in self.__dict__ or "execute_hint_var" not in self.__dict__:
@@ -936,7 +1011,9 @@ class DesktopApp(ctk.CTk):
         self._active_preflight_request_id = None
         self._worker_queue = None
         self._worker_thread = None
+        self._last_run_context = None
         self._set_preflight_idle()
+        self._set_job_summary_idle()
         self._set_pending_session_state(None)
         if "paths" in self.__dict__:
             clear_session_state(self.paths.project_root)
@@ -1123,6 +1200,12 @@ class DesktopApp(ctk.CTk):
         self.execute_button.configure(state="disabled")
         self._set_status("Running")
         self._reset_progress_state()
+        self._last_run_context = {
+            "job_label": job.label,
+            "source_name": self.source_path.name,
+            "duration_ms": None,
+            "started_at": perf_counter(),
+        }
         self._append_log(f"Eksekusi dimulai untuk pekerjaan: {job.label}")
         self._worker_queue = Queue()
         self._worker_thread = Thread(
@@ -1183,15 +1266,25 @@ class DesktopApp(ctk.CTk):
             elif kind == "success":
                 result = payload
                 if isinstance(result, PipelineResult):
+                    job = self._selected_job()
                     self.last_output_var.set(str(result.output_path))
                     self._set_status("Sukses")
+                    if job is not None:
+                        self._set_job_summary_success(job, result)
                     self._append_log(
                         f"Output berhasil dibuat ({result.sheets_written} sheet)."
                     )
                     self._update_hints()
             elif kind == "error":
                 error_message = str(payload)
+                if self._last_run_context is not None:
+                    started_at = self._last_run_context.get("started_at")
+                    if isinstance(started_at, float):
+                        self._last_run_context["duration_ms"] = max(
+                            1, int(round((perf_counter() - started_at) * 1000))
+                        )
                 self._set_status("Gagal")
+                self._set_job_summary_failure(error_message)
                 self._append_log(f"Error: {error_message}")
                 self._update_hints()
                 messagebox.showerror(
