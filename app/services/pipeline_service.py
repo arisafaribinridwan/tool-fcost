@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime
 from pathlib import Path
-import re
 
 from app import AppPaths
 from app.services.config_service import is_step_recipe_payload, load_config_payload
 from app.services.output_service import write_output_workbook
+from app.services.preflight_service import preview_output_path
 from app.services.pipeline_types import PipelineError, PipelineResult
 from app.services.recipe_service import execute_step_recipe
 from app.services.source_service import (
@@ -25,14 +24,6 @@ from app.services.transform_service import (
 
 LogFn = Callable[[str], None]
 
-_UNSAFE_FILENAME_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
-
-
-def _safe_filename(raw_name: str) -> str:
-    normalized = _UNSAFE_FILENAME_CHARS.sub("_", raw_name.strip())
-    normalized = normalized.strip("._")
-    return normalized or "report"
-
 
 def run_pipeline(
     *,
@@ -43,7 +34,11 @@ def run_pipeline(
 ) -> PipelineResult:
     source_errors = validate_source_file(source_path)
     if source_errors:
-        raise PipelineError("; ".join(source_errors))
+        raise PipelineError(
+            "Source tidak valid untuk dieksekusi. "
+            + "; ".join(source_errors)
+            + " Periksa file source lalu coba lagi."
+        )
 
     log(f"Load config: {config_path.name}")
     try:
@@ -55,7 +50,11 @@ def run_pipeline(
     try:
         source_copy = copy_source_to_uploads(source_path, paths.uploads_dir)
     except OSError as exc:
-        raise PipelineError(f"Gagal menyalin source ke uploads/: {exc}") from exc
+        raise PipelineError(
+            "Gagal menyalin source ke folder uploads/. "
+            "Pastikan file source bisa diakses dan aplikasi punya izin tulis. "
+            f"Detail: {exc}"
+        ) from exc
 
     if is_step_recipe_payload(config):
         log(f"Read source workbook: {source_path.name}")
@@ -68,7 +67,10 @@ def run_pipeline(
                 log=log,
             )
         except ValueError as exc:
-            raise PipelineError(str(exc)) from exc
+            raise PipelineError(
+                "Recipe tidak bisa dijalankan dengan input saat ini. "
+                f"Periksa kecocokan source, step recipe, dan master. Detail: {exc}"
+            ) from exc
         source_df = recipe_result.source_df_for_header
         output_sheets = recipe_result.output_sheets
     else:
@@ -80,7 +82,10 @@ def run_pipeline(
                 source_sheet=str(source_sheet) if source_path.suffix.lower() == ".xlsx" else None,
             )
         except ValueError as exc:
-            raise PipelineError(str(exc)) from exc
+            raise PipelineError(
+                "Source tidak bisa dibaca sesuai config aktif. "
+                f"Periksa sheet source atau format file. Detail: {exc}"
+            ) from exc
 
         try:
             validate_required_source_columns(
@@ -88,7 +93,9 @@ def run_pipeline(
                 config.get("required_source_columns"),
             )
         except ValueError as exc:
-            raise PipelineError(str(exc)) from exc
+            raise PipelineError(
+                f"{exc}. Lengkapi kolom source atau sesuaikan config pekerjaan aktif."
+            ) from exc
 
         if source_df.empty:
             log("Warning: source kosong, output akan tetap dibuat.")
@@ -105,7 +112,10 @@ def run_pipeline(
                 log=log,
             )
         except ValueError as exc:
-            raise PipelineError(str(exc)) from exc
+            raise PipelineError(
+                "Lookup master gagal diproses. "
+                f"Periksa file master dan mapping config. Detail: {exc}"
+            ) from exc
 
         log("Apply transform rules")
         try:
@@ -115,19 +125,22 @@ def run_pipeline(
                 log=log,
             )
         except ValueError as exc:
-            raise PipelineError(str(exc)) from exc
+            raise PipelineError(
+                "Transform data gagal dijalankan. "
+                f"Periksa aturan transform pada config aktif. Detail: {exc}"
+            ) from exc
 
         log("Build output sheets")
         try:
             output_sheets = build_output_sheets(config["outputs"], transformed_df, log)
         except ValueError as exc:
-            raise PipelineError(str(exc)) from exc
+            raise PipelineError(
+                "Output sheet tidak bisa dibentuk. "
+                f"Periksa definisi outputs pada config aktif. Detail: {exc}"
+            ) from exc
 
     config_name = str(config.get("name", config_path.stem))
-    output_file_name = (
-        f"{_safe_filename(config_name)}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-    )
-    output_path = paths.outputs_dir / output_file_name
+    output_path = preview_output_path(paths, config, config_path)
 
     log("Write workbook (.xlsx)")
     try:
@@ -141,7 +154,11 @@ def run_pipeline(
             source_df=source_df,
         )
     except Exception as exc:
-        raise PipelineError(f"Gagal menulis file output: {exc}") from exc
+        raise PipelineError(
+            "Gagal menulis file output. "
+            "Periksa izin folder outputs/, nama file hasil, atau workbook target yang sedang terbuka. "
+            f"Detail: {exc}"
+        ) from exc
 
     log(f"Selesai. Output: {output_path.name}")
     return PipelineResult(

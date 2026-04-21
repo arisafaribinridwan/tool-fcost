@@ -17,8 +17,14 @@ from app.services.job_profile_service import (
     save_job_profile_records,
     upsert_job_profile_record,
 )
+from app.services.preflight_service import preview_output_path, run_preflight
 from app.services.pipeline_service import run_pipeline
-from app.services.pipeline_types import PipelineError, PipelineResult
+from app.services.pipeline_types import (
+    PipelineError,
+    PipelineResult,
+    PreflightFinding,
+    PreflightResult,
+)
 from app.services.source_service import (
     SUPPORTED_SOURCE_SUFFIXES,
     copy_source_to_uploads,
@@ -32,6 +38,8 @@ __all__ = [
     "SUPPORTED_SOURCE_SUFFIXES",
     "PipelineError",
     "PipelineResult",
+    "PreflightFinding",
+    "PreflightResult",
     "copy_source_to_uploads",
     "discover_configs",
     "discover_job_profiles",
@@ -40,6 +48,8 @@ __all__ = [
     "load_job_profile_records",
     "load_config_payload",
     "load_config_summary",
+    "preview_output_path",
+    "run_preflight",
     "run_pipeline",
     "save_job_profile_records",
     "upsert_job_profile_record",
