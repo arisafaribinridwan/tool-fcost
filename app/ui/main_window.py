@@ -14,6 +14,7 @@ from app.services import (
     ConfigSummary,
     JobProfileSummary,
     PipelineResult,
+    PipelineStepStatus,
     PreflightResult,
     discover_configs,
     discover_job_profiles,
@@ -22,7 +23,23 @@ from app.services import (
     upsert_job_profile_record,
     validate_source_file,
 )
-from app.utils import open_in_file_manager, select_source_file
+from app.utils import (
+    open_in_file_manager,
+    sanitize_exception_message,
+    sanitize_log_message,
+    select_source_file,
+)
+
+
+PIPELINE_STEP_ORDER = (
+    ("load_config", "Load config"),
+    ("copy_source", "Salin source"),
+    ("read_source", "Baca source"),
+    ("load_masters", "Load master"),
+    ("transform", "Transform"),
+    ("build_output", "Build output"),
+    ("write_output", "Write output"),
+)
 
 
 class JobSettingsDialog(ctk.CTkToplevel):
@@ -314,8 +331,14 @@ class DesktopApp(ctk.CTk):
         self.preflight_summary_var = ctk.StringVar(value="Pilih source dan pekerjaan untuk memulai pemeriksaan otomatis.")
         self.status_var = ctk.StringVar(value="Status: Idle")
         self.last_output_var = ctk.StringVar(value="-")
+        self.progress_summary_var = ctk.StringVar(value="Progress: 0/7 langkah selesai")
+        self._progress_vars = {
+            step_id: ctk.StringVar(value=f"[ ] {label}")
+            for step_id, label in PIPELINE_STEP_ORDER
+        }
 
         self._build_layout()
+        self._reset_progress_state()
         self.refresh_jobs(initial=True)
         self._append_log(f"Aplikasi siap digunakan. Runtime: {self.build_info.summary()}")
         stale_warning = get_stale_bundle_warning(paths.project_root)
@@ -421,28 +444,57 @@ class DesktopApp(ctk.CTk):
         )
         self.execute_button.grid(row=13, column=0, padx=16, pady=(0, 8), sticky="ew")
 
+        ctk.CTkLabel(
+            left_panel,
+            text="Progress",
+            font=ctk.CTkFont(weight="bold"),
+        ).grid(row=14, column=0, padx=16, pady=(0, 4), sticky="w")
+
+        self.progress_bar = ctk.CTkProgressBar(left_panel)
+        self.progress_bar.grid(row=15, column=0, padx=16, pady=(0, 4), sticky="ew")
+        self.progress_bar.set(0)
+
+        ctk.CTkLabel(
+            left_panel,
+            textvariable=self.progress_summary_var,
+            justify="left",
+            wraplength=300,
+        ).grid(row=16, column=0, padx=16, pady=(0, 8), sticky="w")
+
+        progress_frame = ctk.CTkFrame(left_panel, fg_color="transparent")
+        progress_frame.grid(row=17, column=0, padx=16, pady=(0, 16), sticky="ew")
+        progress_frame.grid_columnconfigure(0, weight=1)
+        for row_idx, (step_id, _) in enumerate(PIPELINE_STEP_ORDER):
+            ctk.CTkLabel(
+                progress_frame,
+                textvariable=self._progress_vars[step_id],
+                justify="left",
+                anchor="w",
+                wraplength=300,
+            ).grid(row=row_idx, column=0, sticky="ew")
+
         ctk.CTkButton(
             left_panel,
             text="Buka Folder Outputs",
             command=self._open_outputs_dir,
-        ).grid(row=14, column=0, padx=16, pady=(0, 16), sticky="ew")
+        ).grid(row=18, column=0, padx=16, pady=(0, 16), sticky="ew")
 
         ctk.CTkLabel(
             left_panel,
             textvariable=self.status_var,
             justify="left",
             wraplength=300,
-        ).grid(row=15, column=0, padx=16, pady=(0, 8), sticky="w")
+        ).grid(row=19, column=0, padx=16, pady=(0, 8), sticky="w")
 
         ctk.CTkLabel(left_panel, text="Target output").grid(
-            row=16, column=0, padx=16, sticky="w"
+            row=20, column=0, padx=16, sticky="w"
         )
         ctk.CTkLabel(
             left_panel,
             textvariable=self.last_output_var,
             justify="left",
             wraplength=300,
-        ).grid(row=17, column=0, padx=16, pady=(0, 16), sticky="w")
+        ).grid(row=21, column=0, padx=16, pady=(0, 16), sticky="w")
 
         ctk.CTkLabel(
             right_panel,
@@ -456,11 +508,43 @@ class DesktopApp(ctk.CTk):
 
     def _append_log(self, message: str) -> None:
         timestamp = datetime.now().strftime("%H:%M:%S")
-        line = f"[{timestamp}] {message}\n"
+        sanitized = sanitize_log_message(message, project_root=self.paths.project_root)
+        line = f"[{timestamp}] {sanitized}\n"
         self.log_box.configure(state="normal")
         self.log_box.insert("end", line)
         self.log_box.see("end")
         self.log_box.configure(state="disabled")
+
+    def _format_step_line(self, status: PipelineStepStatus) -> str:
+        marker = {
+            "pending": "[ ]",
+            "running": "[~]",
+            "success": "[v]",
+            "failed": "[x]",
+        }.get(status.state, "[?]")
+        duration_text = f" ({status.duration_ms} ms)" if status.duration_ms is not None else ""
+        return f"{marker} {status.label}{duration_text}"
+
+    def _reset_progress_state(self) -> None:
+        for step_id, label in PIPELINE_STEP_ORDER:
+            self._progress_vars[step_id].set(f"[ ] {label}")
+        self.progress_summary_var.set(
+            f"Progress: 0/{len(PIPELINE_STEP_ORDER)} langkah selesai"
+        )
+        self.progress_bar.set(0)
+
+    def _apply_progress_update(self, status: PipelineStepStatus) -> None:
+        target_var = self._progress_vars.get(status.step_id)
+        if target_var is None:
+            return
+        target_var.set(self._format_step_line(status))
+        completed_steps = sum(
+            1 for step_id, _ in PIPELINE_STEP_ORDER if self._progress_vars[step_id].get().startswith("[v]")
+        )
+        self.progress_summary_var.set(
+            f"Progress: {completed_steps}/{len(PIPELINE_STEP_ORDER)} langkah selesai"
+        )
+        self.progress_bar.set(completed_steps / len(PIPELINE_STEP_ORDER))
 
     def _set_status(self, text: str) -> None:
         self.status_var.set(f"Status: {text}")
@@ -475,7 +559,10 @@ class DesktopApp(ctk.CTk):
         errors = validate_source_file(source_path)
         if errors:
             error_message = "\n".join(errors)
-            messagebox.showerror("Source tidak valid", error_message)
+            messagebox.showerror(
+                "Source tidak valid",
+                sanitize_exception_message(error_message, project_root=self.paths.project_root),
+            )
             self._append_log(f"Source invalid: {error_message}")
             return
 
@@ -580,6 +667,7 @@ class DesktopApp(ctk.CTk):
             "Pilih source dan pekerjaan untuk memulai pemeriksaan otomatis."
         )
         self.last_output_var.set("-")
+        self._reset_progress_state()
 
     def _format_preflight_summary(self, result: PreflightResult) -> str:
         if not result.findings:
@@ -696,7 +784,7 @@ class DesktopApp(ctk.CTk):
                     self.preflight_status_var.set("Preflight: Blocked")
                     self.preflight_summary_var.set(
                         "Preflight gagal dijalankan. Periksa source/job aktif lalu coba lagi. "
-                        f"Detail: {error_message}"
+                        f"Detail: {sanitize_exception_message(error_message, project_root=self.paths.project_root)}"
                     )
                     self._append_log(f"Preflight error: {error_message}")
                     self.last_output_var.set("-")
@@ -752,6 +840,7 @@ class DesktopApp(ctk.CTk):
 
         self.execute_button.configure(state="disabled")
         self._set_status("Running")
+        self._reset_progress_state()
         self._append_log(f"Eksekusi dimulai untuk pekerjaan: {job.label}")
         self._worker_queue = Queue()
         self._worker_thread = Thread(
@@ -777,12 +866,16 @@ class DesktopApp(ctk.CTk):
         def worker_log(message: str) -> None:
             event_queue.put(("log", message))
 
+        def worker_progress(status: PipelineStepStatus) -> None:
+            event_queue.put(("progress", status))
+
         try:
             result = run_pipeline(
                 paths=self.paths,
                 source_path=source_path,
                 config_path=config_path,
                 log=worker_log,
+                progress=worker_progress,
             )
             event_queue.put(("success", result))
         except Exception as exc:
@@ -803,6 +896,8 @@ class DesktopApp(ctk.CTk):
 
             if kind == "log":
                 self._append_log(str(payload))
+            elif kind == "progress" and isinstance(payload, PipelineStepStatus):
+                self._apply_progress_update(payload)
             elif kind == "success":
                 result = payload
                 if isinstance(result, PipelineResult):
@@ -815,7 +910,10 @@ class DesktopApp(ctk.CTk):
                 error_message = str(payload)
                 self._set_status("Gagal")
                 self._append_log(f"Error: {error_message}")
-                messagebox.showerror("Eksekusi gagal", error_message)
+                messagebox.showerror(
+                    "Eksekusi gagal",
+                    sanitize_exception_message(error_message, project_root=self.paths.project_root),
+                )
             elif kind == "done":
                 done_received = True
 
@@ -831,7 +929,10 @@ class DesktopApp(ctk.CTk):
         try:
             open_in_file_manager(self.paths.outputs_dir)
         except RuntimeError as exc:
-            messagebox.showerror("Gagal membuka folder", str(exc))
+            messagebox.showerror(
+                "Gagal membuka folder",
+                sanitize_exception_message(str(exc), project_root=self.paths.project_root),
+            )
             self._append_log(str(exc))
             return
         self._append_log(f"Membuka folder output: {self.paths.outputs_dir}")
