@@ -1,0 +1,5 @@
+jobs:
+- id: monthly-fcost-lcd
+  label: monthly-fcost-lcd
+  config_file: monthly-report-recipe.yaml
+  enabled: true
