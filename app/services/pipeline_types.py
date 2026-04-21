@@ -44,3 +44,11 @@ class PipelineResult:
     output_path: Path
     source_copy_path: Path
     sheets_written: int
+
+
+@dataclass(frozen=True)
+class PipelineStepStatus:
+    step_id: str
+    label: str
+    state: str
+    duration_ms: int | None = None
