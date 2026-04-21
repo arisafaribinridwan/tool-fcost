@@ -915,7 +915,7 @@ def test_run_pipeline_supports_monthly_step_recipe_end_to_end(app_paths):
 
     recipe_path = app_paths.configs_dir / "monthly-report-recipe.yaml"
     recipe_path.write_text(
-        Path("docs/monthly-report-recipe.yaml").read_text(encoding="utf-8"),
+        Path("docs/done/monthly-report-recipe.yaml").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
 

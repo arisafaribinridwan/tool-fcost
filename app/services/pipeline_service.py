@@ -134,6 +134,7 @@ def run_pipeline(
         write_output_workbook(
             output_sheets=output_sheets,
             output_path=output_path,
+            outputs_dir=paths.outputs_dir,
             report_title=str(config.get("header", {}).get("title", config_name)),
             header_cfg=config.get("header", {}),
             styling_cfg=config.get("styling", {}),

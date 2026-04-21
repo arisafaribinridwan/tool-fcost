@@ -23,6 +23,14 @@ def normalize_relative_path_string(raw_path: str) -> str:
     return str(PurePosixPath(*parts))
 
 
+def validate_runtime_relative_path(raw_path: str, *, root_name: str) -> str:
+    normalized = normalize_relative_path_string(raw_path)
+    parts = normalized.split("/")
+    if parts[0].casefold() != root_name.casefold():
+        raise ValueError(f"Path wajib berada di bawah folder {root_name}/.")
+    return normalized
+
+
 def resolve_casefold_relative_path(base_dir: Path, relative_path: str) -> Path:
     current = base_dir.resolve()
     for part in normalize_relative_path_string(relative_path).split("/"):
@@ -39,3 +47,12 @@ def resolve_casefold_relative_path(base_dir: Path, relative_path: str) -> Path:
             continue
         current = candidate
     return current
+
+
+def resolve_runtime_relative_path(base_dir: Path, relative_path: str, *, root_name: str) -> Path:
+    normalized = validate_runtime_relative_path(relative_path, root_name=root_name)
+    resolved = resolve_casefold_relative_path(base_dir, normalized).resolve()
+    runtime_root = (base_dir.resolve() / root_name).resolve()
+    if not resolved.is_relative_to(runtime_root):
+        raise ValueError(f"Path tidak aman: '{relative_path}'. File wajib berada di folder {root_name}/.")
+    return resolved
