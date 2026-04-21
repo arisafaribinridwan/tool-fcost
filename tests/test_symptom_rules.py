@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from app.services.transform_service import prepare_symptom_rule_table
+from app.services.transform_service import match_symptom_rule, prepare_symptom_rule_table
 from app.services.pipeline_service import run_pipeline
 from app.services.pipeline_types import PipelineError
 
@@ -86,6 +86,91 @@ def test_prepare_symptom_rule_table_sorts_by_priority_then_row_order():
     prepared = prepare_symptom_rule_table(master_df, context="Sheet symptom")
 
     assert prepared["pattern"].tolist() == ["first", "later", "tie-breaker"]
+
+
+def test_prepare_symptom_rule_table_compiles_regex_once_per_rule():
+    master_df = pd.DataFrame(
+        [
+            {
+                "priority": 10,
+                "part_name": "PANEL",
+                "match_type": "regex",
+                "pattern": r"vertical\s+line",
+                "symptom": "VERTICAL_LINE",
+                "notes": "compiled",
+            }
+        ]
+    )
+
+    prepared = prepare_symptom_rule_table(master_df, context="Sheet symptom")
+
+    compiled = prepared.iloc[0]["_compiled_pattern"]
+    assert compiled is not None
+    assert compiled.pattern == r"vertical\s+line"
+
+
+def test_prepare_symptom_rule_table_rejects_regex_too_long():
+    master_df = pd.DataFrame(
+        [
+            {
+                "priority": 10,
+                "part_name": "PANEL",
+                "match_type": "regex",
+                "pattern": "a" * 513,
+                "symptom": "LONG_PATTERN",
+                "notes": "too long",
+            }
+        ]
+    )
+
+    with pytest.raises(ValueError, match="regex terlalu panjang"):
+        prepare_symptom_rule_table(master_df, context="Sheet symptom")
+
+
+def test_match_symptom_rule_keeps_equals_behavior():
+    rule_row = pd.Series(
+        {
+            "match_type": "equals",
+            "pattern": " Vertical   Line ",
+        }
+    )
+
+    assert match_symptom_rule("vertical line", rule_row) is True
+    assert match_symptom_rule("vertical lines", rule_row) is False
+
+
+def test_match_symptom_rule_keeps_contains_behavior():
+    rule_row = pd.Series(
+        {
+            "match_type": "contains",
+            "pattern": "Line",
+        }
+    )
+
+    assert match_symptom_rule("vertical line defect", rule_row) is True
+    assert match_symptom_rule("boot failure", rule_row) is False
+
+
+def test_match_symptom_rule_uses_precompiled_regex():
+    prepared = prepare_symptom_rule_table(
+        pd.DataFrame(
+            [
+                {
+                    "priority": 10,
+                    "part_name": "PANEL",
+                    "match_type": "regex",
+                    "pattern": r"vertical\s+line",
+                    "symptom": "VERTICAL_LINE",
+                    "notes": "compiled",
+                }
+            ]
+        ),
+        context="Sheet symptom",
+    )
+
+    rule_row = prepared.iloc[0]
+    assert match_symptom_rule("Vertical   Line", rule_row) is True
+    assert match_symptom_rule("horizontal line", rule_row) is False
 
 
 def test_run_pipeline_rejects_invalid_symptom_sheet_priority(app_paths):
