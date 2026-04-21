@@ -27,6 +27,7 @@ SUPPORTED_RULE_OPERATORS = {
 SUPPORTED_FORMULA_OPERATIONS = {"add", "subtract", "multiply", "divide"}
 SUPPORTED_GROUPBY_AGGFUNCS = {"sum", "mean", "min", "max", "count", "first", "last"}
 SUPPORTED_SYMPTOM_MATCH_TYPES = {"equals", "contains", "regex"}
+MAX_SYMPTOM_REGEX_PATTERN_LENGTH = 512
 
 
 def resolve_master_path(master_file: str, project_root: Path, masters_dir: Path) -> Path:
@@ -218,18 +219,33 @@ def prepare_symptom_rule_table(master_df: pd.DataFrame, *, context: str) -> pd.D
             f"{context} memiliki symptom kosong pada baris: {', '.join(blank_symptom_rows)}."
         )
 
+    regex_too_long_rows = [
+        str(idx)
+        for idx, row in enumerate(prepared.itertuples(index=False), start=2)
+        if row.match_type == "regex" and len(row.pattern) > MAX_SYMPTOM_REGEX_PATTERN_LENGTH
+    ]
+    if regex_too_long_rows:
+        raise ValueError(
+            f"{context} memiliki regex terlalu panjang pada baris: {', '.join(regex_too_long_rows)}. "
+            f"Maksimal {MAX_SYMPTOM_REGEX_PATTERN_LENGTH} karakter."
+        )
+
     regex_invalid_rows: list[str] = []
+    compiled_patterns: list[re.Pattern[str] | None] = []
     for idx, row in enumerate(prepared.itertuples(index=False), start=2):
-        if row.match_type != "regex":
-            continue
-        try:
-            re.compile(row.pattern)
-        except re.error:
-            regex_invalid_rows.append(str(idx))
+        compiled_pattern: re.Pattern[str] | None = None
+        if row.match_type == "regex":
+            try:
+                compiled_pattern = re.compile(_normalize_text_with_case(row.pattern, case_sensitive=False))
+            except re.error:
+                regex_invalid_rows.append(str(idx))
+        compiled_patterns.append(compiled_pattern)
     if regex_invalid_rows:
         raise ValueError(
             f"{context} memiliki regex invalid pada baris: {', '.join(regex_invalid_rows)}."
         )
+
+    prepared["_compiled_pattern"] = compiled_patterns
 
     return prepared.sort_values(["priority", "_row_order"], kind="stable").reset_index(drop=True)
 
@@ -244,7 +260,10 @@ def match_symptom_rule(source_value: object, rule_row: pd.Series) -> bool:
     if match_type == "contains":
         return _normalize_text_with_case(pattern, case_sensitive=False) in source_normalized
     if match_type == "regex":
-        return re.search(pattern, source_normalized, re.IGNORECASE) is not None
+        compiled_pattern = rule_row.get("_compiled_pattern")
+        if compiled_pattern is None:
+            compiled_pattern = re.compile(_normalize_text_with_case(pattern, case_sensitive=False))
+        return compiled_pattern.search(source_normalized) is not None
     raise ValueError(f"Match type symptom tidak didukung: '{match_type}'.")
 
 
