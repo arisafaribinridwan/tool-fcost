@@ -177,3 +177,144 @@ def test_run_preflight_blocks_recipe_when_candidate_sheet_missing(app_paths):
 
     assert result.status == "Blocked"
     assert any(item.code == "RECIPE_SHEET_NOT_FOUND" for item in result.findings)
+
+
+def test_run_preflight_blocks_when_source_size_exceeds_limit(app_paths):
+    source_path = app_paths.project_root / "oversize.csv"
+    source_path.write_bytes(b"x" * 2 * 1024 * 1024)
+
+    config_path = app_paths.configs_dir / "report.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Laporan Tes"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Laporan Tes"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "qty"',
+            ]
+        ),
+    )
+    _write_yaml(
+        app_paths.configs_dir / "app_limits.yaml",
+        "\n".join(
+            [
+                "resource_guardrails:",
+                "  max_source_size_mb: 1",
+                "  warning_source_size_mb: 0.5",
+                "  interactive_row_limit: 150000",
+                '  row_limit_mode: "warning"',
+                "  timeouts:",
+                "    read_seconds: 45",
+                "    transform_seconds: 120",
+                "    write_seconds: 60",
+            ]
+        ),
+    )
+
+    result = run_preflight(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+    )
+
+    assert result.status == "Blocked"
+    assert any(item.code == "SOURCE_SIZE_LIMIT_EXCEEDED" for item in result.findings)
+
+
+def test_run_preflight_warns_when_source_size_near_limit(app_paths):
+    source_path = app_paths.project_root / "near_limit.csv"
+    source_path.write_bytes(b"x" * int(0.75 * 1024 * 1024))
+
+    config_path = app_paths.configs_dir / "report.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Laporan Tes"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Laporan Tes"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "qty"',
+            ]
+        ),
+    )
+    _write_yaml(
+        app_paths.configs_dir / "app_limits.yaml",
+        "\n".join(
+            [
+                "resource_guardrails:",
+                "  max_source_size_mb: 2",
+                "  warning_source_size_mb: 0.5",
+                "  interactive_row_limit: 150000",
+                '  row_limit_mode: "warning"',
+                "  timeouts:",
+                "    read_seconds: 45",
+                "    transform_seconds: 120",
+                "    write_seconds: 60",
+            ]
+        ),
+    )
+
+    result = run_preflight(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+    )
+
+    assert result.status == "Warning"
+    assert any(item.code == "SOURCE_SIZE_NEAR_LIMIT" for item in result.findings)
+
+
+def test_run_preflight_warns_when_row_limit_exceeded(app_paths):
+    source_path = app_paths.project_root / "rows.csv"
+    pd.DataFrame([{"qty": idx} for idx in range(4)]).to_csv(source_path, index=False)
+
+    config_path = app_paths.configs_dir / "report.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Laporan Tes"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Laporan Tes"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "qty"',
+            ]
+        ),
+    )
+    _write_yaml(
+        app_paths.configs_dir / "app_limits.yaml",
+        "\n".join(
+            [
+                "resource_guardrails:",
+                "  max_source_size_mb: 75",
+                "  warning_source_size_mb: 60",
+                "  interactive_row_limit: 3",
+                '  row_limit_mode: "warning"',
+                "  timeouts:",
+                "    read_seconds: 45",
+                "    transform_seconds: 120",
+                "    write_seconds: 60",
+            ]
+        ),
+    )
+
+    result = run_preflight(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+    )
+
+    assert result.status == "Warning"
+    assert any(item.code == "SOURCE_ROW_LIMIT_EXCEEDED" for item in result.findings)
