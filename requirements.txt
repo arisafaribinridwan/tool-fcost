@@ -6,3 +6,4 @@ pyinstaller==6.19.0
 pytest==9.0.3
 ruff==0.15.10
 python-dotenv==1.2.2
+tkinterdnd2==0.4.3

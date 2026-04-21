@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from time import perf_counter
 
 from app import AppPaths
 from app.services.config_service import is_step_recipe_payload, load_config_payload
@@ -126,6 +127,7 @@ def run_pipeline(
     log: LogFn,
     progress: ProgressFn | None = None,
 ) -> PipelineResult:
+    started_at = perf_counter()
     source_errors = validate_source_file(source_path)
     if source_errors:
         raise PipelineError(
@@ -338,4 +340,6 @@ def run_pipeline(
         output_path=output_path,
         source_copy_path=source_copy,
         sheets_written=len(output_sheets),
+        duration_ms=_duration_ms(perf_counter() - started_at),
+        sheet_names=tuple(output_sheets),
     )

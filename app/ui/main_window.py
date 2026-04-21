@@ -4,7 +4,14 @@ from datetime import datetime
 from pathlib import Path
 from queue import Empty, Queue
 from threading import Thread
+from time import perf_counter
 from tkinter import messagebox
+from typing import Any
+
+try:
+    from tkinterdnd2 import DND_FILES  # type: ignore[import-not-found]
+except ImportError:
+    DND_FILES = None
 
 import customtkinter as ctk
 
@@ -16,10 +23,14 @@ from app.services import (
     PipelineResult,
     PipelineStepStatus,
     PreflightResult,
+    SessionState,
+    clear_session_state,
     discover_configs,
     discover_job_profiles,
+    load_session_state,
     run_preflight,
     run_pipeline,
+    save_session_state,
     upsert_job_profile_record,
     validate_source_file,
 )
@@ -40,6 +51,44 @@ PIPELINE_STEP_ORDER = (
     ("build_output", "Build output"),
     ("write_output", "Write output"),
 )
+
+
+def _parse_dropped_files(raw_drop_data: str) -> tuple[str, ...]:
+    value = raw_drop_data.strip()
+    if not value:
+        return ()
+
+    paths: list[str] = []
+    current: list[str] = []
+    in_braces = False
+    for char in value:
+        if char == "{":
+            if current:
+                token = "".join(current).strip()
+                if token:
+                    paths.append(token)
+                current = []
+            in_braces = True
+            continue
+        if char == "}" and in_braces:
+            token = "".join(current).strip()
+            if token:
+                paths.append(token)
+            current = []
+            in_braces = False
+            continue
+        if char.isspace() and not in_braces:
+            token = "".join(current).strip()
+            if token:
+                paths.append(token)
+            current = []
+            continue
+        current.append(char)
+
+    token = "".join(current).strip()
+    if token:
+        paths.append(token)
+    return tuple(paths)
 
 
 class JobSettingsDialog(ctk.CTkToplevel):
@@ -319,6 +368,8 @@ class DesktopApp(ctk.CTk):
         self._preflight_result: PreflightResult | None = None
         self._worker_queue: Queue[tuple[str, object]] | None = None
         self._worker_thread: Thread | None = None
+        self._pending_session_state: SessionState | None = None
+        self._restoring_session = False
 
         self.title(f"Excel Automation Tool - {self.build_info.mode}")
         self.geometry("1120x720")
@@ -327,19 +378,27 @@ class DesktopApp(ctk.CTk):
         self.source_var = ctk.StringVar(value="")
         self.selected_job_var = ctk.StringVar(value="")
         self.job_info_var = ctk.StringVar(value="Belum ada pekerjaan terpilih.")
+        self.session_restore_var = ctk.StringVar(value="")
+        self.primary_hint_var = ctk.StringVar(value="")
+        self.execute_hint_var = ctk.StringVar(value="")
         self.preflight_status_var = ctk.StringVar(value="Preflight: Belum dicek")
         self.preflight_summary_var = ctk.StringVar(value="Pilih source dan pekerjaan untuk memulai pemeriksaan otomatis.")
         self.status_var = ctk.StringVar(value="Status: Idle")
         self.last_output_var = ctk.StringVar(value="-")
+        self.job_summary_var = ctk.StringVar(value="Belum ada proses yang selesai.")
         self.progress_summary_var = ctk.StringVar(value="Progress: 0/7 langkah selesai")
         self._progress_vars = {
             step_id: ctk.StringVar(value=f"[ ] {label}")
             for step_id, label in PIPELINE_STEP_ORDER
         }
+        self._last_run_context: dict[str, object] | None = None
 
         self._build_layout()
         self._reset_progress_state()
+        self._restore_window_geometry()
         self.refresh_jobs(initial=True)
+        self.bind("<Configure>", self._on_window_configure)
+        self.protocol("WM_DELETE_WINDOW", self._on_window_close)
         self._append_log(f"Aplikasi siap digunakan. Runtime: {self.build_info.summary()}")
         stale_warning = get_stale_bundle_warning(paths.project_root)
         if stale_warning:
@@ -385,8 +444,29 @@ class DesktopApp(ctk.CTk):
             command=self._select_source,
         ).grid(row=4, column=0, padx=16, pady=(0, 16), sticky="ew")
 
+        self.source_drop_hint_var = ctk.StringVar(
+            value=(
+                "Tarik file source ke area ini untuk memilih lebih cepat."
+                if DND_FILES is not None
+                else "Drag-and-drop source belum tersedia di environment ini. Gunakan tombol Pilih Source."
+            )
+        )
+        self.source_drop_label = ctk.CTkLabel(
+            left_panel,
+            textvariable=self.source_drop_hint_var,
+            justify="left",
+            wraplength=300,
+            anchor="w",
+            corner_radius=8,
+            fg_color=("gray86", "gray20"),
+            padx=12,
+            pady=12,
+        )
+        self.source_drop_label.grid(row=5, column=0, padx=16, pady=(0, 16), sticky="ew")
+        self._bind_drop_target(self.source_drop_label)
+
         ctk.CTkLabel(left_panel, text="Pekerjaan").grid(
-            row=5, column=0, padx=16, sticky="w"
+            row=6, column=0, padx=16, sticky="w"
         )
         self.job_menu = ctk.CTkOptionMenu(
             left_panel,
@@ -394,46 +474,75 @@ class DesktopApp(ctk.CTk):
             values=["Belum ada pekerjaan"],
             command=self._on_job_selected,
         )
-        self.job_menu.grid(row=6, column=0, padx=16, pady=(4, 8), sticky="ew")
+        self.job_menu.grid(row=7, column=0, padx=16, pady=(4, 8), sticky="ew")
 
         ctk.CTkButton(
             left_panel,
             text="Pengaturan",
             command=self._open_job_settings,
-        ).grid(row=7, column=0, padx=16, pady=(0, 8), sticky="ew")
+        ).grid(row=8, column=0, padx=16, pady=(0, 8), sticky="ew")
 
         ctk.CTkButton(
             left_panel,
             text="Refresh Pekerjaan",
             command=self.refresh_jobs,
-        ).grid(row=8, column=0, padx=16, pady=(0, 8), sticky="ew")
+        ).grid(row=9, column=0, padx=16, pady=(0, 8), sticky="ew")
+
+        ctk.CTkLabel(
+            left_panel,
+            textvariable=self.session_restore_var,
+            justify="left",
+            wraplength=300,
+        ).grid(row=10, column=0, padx=16, pady=(0, 8), sticky="w")
+
+        self.use_last_session_button = ctk.CTkButton(
+            left_panel,
+            text="Use Last Session",
+            command=self._use_last_session,
+            state="disabled",
+        )
+        self.use_last_session_button.grid(row=11, column=0, padx=16, pady=(0, 16), sticky="ew")
 
         ctk.CTkLabel(
             left_panel,
             textvariable=self.job_info_var,
             justify="left",
             wraplength=300,
-        ).grid(row=9, column=0, padx=16, pady=(0, 16), sticky="w")
+        ).grid(row=12, column=0, padx=16, pady=(0, 16), sticky="w")
+
+        ctk.CTkLabel(
+            left_panel,
+            textvariable=self.primary_hint_var,
+            justify="left",
+            wraplength=300,
+        ).grid(row=13, column=0, padx=16, pady=(0, 8), sticky="w")
+
+        ctk.CTkLabel(
+            left_panel,
+            textvariable=self.execute_hint_var,
+            justify="left",
+            wraplength=300,
+        ).grid(row=14, column=0, padx=16, pady=(0, 16), sticky="w")
 
         ctk.CTkLabel(
             left_panel,
             text="Preflight",
             font=ctk.CTkFont(weight="bold"),
-        ).grid(row=10, column=0, padx=16, pady=(0, 4), sticky="w")
+        ).grid(row=15, column=0, padx=16, pady=(0, 4), sticky="w")
 
         ctk.CTkLabel(
             left_panel,
             textvariable=self.preflight_status_var,
             justify="left",
             wraplength=300,
-        ).grid(row=11, column=0, padx=16, pady=(0, 4), sticky="w")
+        ).grid(row=16, column=0, padx=16, pady=(0, 4), sticky="w")
 
         ctk.CTkLabel(
             left_panel,
             textvariable=self.preflight_summary_var,
             justify="left",
             wraplength=300,
-        ).grid(row=12, column=0, padx=16, pady=(0, 16), sticky="w")
+        ).grid(row=17, column=0, padx=16, pady=(0, 16), sticky="w")
 
         self.execute_button = ctk.CTkButton(
             left_panel,
@@ -442,16 +551,16 @@ class DesktopApp(ctk.CTk):
             state="disabled",
             height=42,
         )
-        self.execute_button.grid(row=13, column=0, padx=16, pady=(0, 8), sticky="ew")
+        self.execute_button.grid(row=18, column=0, padx=16, pady=(0, 8), sticky="ew")
 
         ctk.CTkLabel(
             left_panel,
             text="Progress",
             font=ctk.CTkFont(weight="bold"),
-        ).grid(row=14, column=0, padx=16, pady=(0, 4), sticky="w")
+        ).grid(row=19, column=0, padx=16, pady=(0, 4), sticky="w")
 
         self.progress_bar = ctk.CTkProgressBar(left_panel)
-        self.progress_bar.grid(row=15, column=0, padx=16, pady=(0, 4), sticky="ew")
+        self.progress_bar.grid(row=20, column=0, padx=16, pady=(0, 4), sticky="ew")
         self.progress_bar.set(0)
 
         ctk.CTkLabel(
@@ -459,10 +568,10 @@ class DesktopApp(ctk.CTk):
             textvariable=self.progress_summary_var,
             justify="left",
             wraplength=300,
-        ).grid(row=16, column=0, padx=16, pady=(0, 8), sticky="w")
+        ).grid(row=21, column=0, padx=16, pady=(0, 8), sticky="w")
 
         progress_frame = ctk.CTkFrame(left_panel, fg_color="transparent")
-        progress_frame.grid(row=17, column=0, padx=16, pady=(0, 16), sticky="ew")
+        progress_frame.grid(row=22, column=0, padx=16, pady=(0, 16), sticky="ew")
         progress_frame.grid_columnconfigure(0, weight=1)
         for row_idx, (step_id, _) in enumerate(PIPELINE_STEP_ORDER):
             ctk.CTkLabel(
@@ -477,7 +586,7 @@ class DesktopApp(ctk.CTk):
             left_panel,
             text="Buka Folder Outputs",
             command=self._open_outputs_dir,
-        ).grid(row=18, column=0, padx=16, pady=(0, 16), sticky="ew")
+        ).grid(row=23, column=0, padx=16, pady=(0, 16), sticky="ew")
 
         self.start_new_session_button = ctk.CTkButton(
             left_panel,
@@ -485,24 +594,36 @@ class DesktopApp(ctk.CTk):
             command=self._start_new_session,
             state="disabled",
         )
-        self.start_new_session_button.grid(row=19, column=0, padx=16, pady=(0, 16), sticky="ew")
+        self.start_new_session_button.grid(row=24, column=0, padx=16, pady=(0, 16), sticky="ew")
 
         ctk.CTkLabel(
             left_panel,
             textvariable=self.status_var,
             justify="left",
             wraplength=300,
-        ).grid(row=20, column=0, padx=16, pady=(0, 8), sticky="w")
+        ).grid(row=25, column=0, padx=16, pady=(0, 8), sticky="w")
 
         ctk.CTkLabel(left_panel, text="Target output").grid(
-            row=21, column=0, padx=16, sticky="w"
+            row=26, column=0, padx=16, sticky="w"
         )
         ctk.CTkLabel(
             left_panel,
             textvariable=self.last_output_var,
             justify="left",
             wraplength=300,
-        ).grid(row=22, column=0, padx=16, pady=(0, 16), sticky="w")
+        ).grid(row=27, column=0, padx=16, pady=(0, 12), sticky="w")
+
+        ctk.CTkLabel(
+            left_panel,
+            text="Job Summary",
+            font=ctk.CTkFont(weight="bold"),
+        ).grid(row=28, column=0, padx=16, sticky="w")
+        ctk.CTkLabel(
+            left_panel,
+            textvariable=self.job_summary_var,
+            justify="left",
+            wraplength=300,
+        ).grid(row=29, column=0, padx=16, pady=(0, 16), sticky="w")
 
         ctk.CTkLabel(
             right_panel,
@@ -513,6 +634,155 @@ class DesktopApp(ctk.CTk):
         self.log_box = ctk.CTkTextbox(right_panel, wrap="word")
         self.log_box.grid(row=1, column=0, padx=16, pady=(0, 16), sticky="nsew")
         self.log_box.configure(state="disabled")
+
+    def _bind_drop_target(self, widget: ctk.CTkLabel) -> None:
+        if DND_FILES is None:
+            return
+        drop_target_register = getattr(widget, "drop_target_register", None)
+        dnd_bind = getattr(widget, "dnd_bind", None)
+        if not callable(drop_target_register) or not callable(dnd_bind):
+            self.source_drop_hint_var.set(
+                "Drag-and-drop source belum aktif di runtime ini. Gunakan tombol Pilih Source."
+            )
+            return
+        drop_target_register(DND_FILES)
+        dnd_bind("<<Drop>>", self._on_source_dropped)
+
+    def _apply_source_path(self, source_path: Path, *, log_prefix: str) -> None:
+        self.source_path = source_path
+        self.source_var.set(str(source_path))
+        self._set_pending_session_state(None)
+        self._persist_session_state()
+        self._append_log(f"{log_prefix}: {source_path.name}")
+        self._schedule_preflight()
+        self._update_execute_state()
+        self._update_hints()
+
+    def _handle_dropped_source(self, raw_drop_data: str) -> bool:
+        dropped_files = _parse_dropped_files(raw_drop_data)
+        if not dropped_files:
+            self._append_log("Drop source diabaikan: tidak ada file yang terbaca.")
+            return False
+        if len(dropped_files) != 1:
+            self._append_log("Drop source ditolak: hanya satu file yang boleh dijatuhkan.")
+            return False
+
+        source_path = Path(dropped_files[0])
+        errors = validate_source_file(source_path)
+        if errors:
+            self._append_log(f"Drop source invalid: {'; '.join(errors)}")
+            return False
+
+        self._apply_source_path(source_path, log_prefix="Source dijatuhkan")
+        return True
+
+    def _on_source_dropped(self, event: Any) -> str | None:
+        raw_drop_data = getattr(event, "data", "")
+        self._handle_dropped_source(str(raw_drop_data))
+        return None
+
+    def _restore_window_geometry(self) -> None:
+        session_state = load_session_state(self.paths.project_root)
+        if session_state is None or session_state.window_geometry is None:
+            return
+        self.geometry(session_state.window_geometry)
+
+    def _load_pending_session_state(self) -> None:
+        session_state = load_session_state(self.paths.project_root)
+        if session_state is None:
+            self._set_pending_session_state(None)
+            return
+
+        valid_job = self._job_label_for_id(session_state.last_job_id) is not None
+        valid_source = session_state.last_source_path is not None and not validate_source_file(
+            session_state.last_source_path
+        )
+        if not valid_job or not valid_source:
+            self._set_pending_session_state(None)
+            return
+
+        self._set_pending_session_state(session_state)
+
+    def _set_pending_session_state(self, state: SessionState | None) -> None:
+        self._pending_session_state = state
+        if "session_restore_var" not in self.__dict__ or "use_last_session_button" not in self.__dict__:
+            return
+        if state is None:
+            self.session_restore_var.set("")
+            self.use_last_session_button.configure(state="disabled")
+            return
+        job_label = self._job_label_for_id(state.last_job_id)
+        if job_label is None:
+            self.session_restore_var.set("")
+            self.use_last_session_button.configure(state="disabled")
+            return
+        self.session_restore_var.set(
+            f"Sesi terakhir ditemukan untuk pekerjaan {job_label}. Gunakan sesi terakhir atau pilih source baru."
+        )
+        self.use_last_session_button.configure(state="normal")
+
+    def _job_label_for_id(self, job_id: str | None) -> str | None:
+        if not isinstance(job_id, str) or not job_id.strip():
+            return None
+        for label, item in self.job_by_label.items():
+            if item.id == job_id and item.is_valid:
+                return label
+        return None
+
+    def _current_window_geometry(self) -> str | None:
+        if not hasattr(self, "geometry"):
+            return None
+        try:
+            value = self.geometry()
+        except Exception:
+            return None
+        return value if isinstance(value, str) and value else None
+
+    def _persist_session_state(self) -> None:
+        if self._restoring_session or "paths" not in self.__dict__:
+            return
+        selected_job = self._selected_job()
+        save_session_state(
+            self.paths.project_root,
+            last_job_id=selected_job.id if selected_job is not None else None,
+            last_source_path=self.source_path,
+            window_geometry=self._current_window_geometry(),
+        )
+
+    def _on_window_configure(self, _: Any) -> None:
+        self._persist_session_state()
+
+    def _on_window_close(self) -> None:
+        self._persist_session_state()
+        self.destroy()
+
+    def _use_last_session(self) -> None:
+        state = self._pending_session_state
+        if state is None:
+            return
+        job_label = self._job_label_for_id(state.last_job_id)
+        source_path = state.last_source_path
+        if job_label is None or source_path is None:
+            self._set_pending_session_state(None)
+            return
+        if validate_source_file(source_path):
+            self._set_pending_session_state(None)
+            return
+
+        self._restoring_session = True
+        try:
+            self.selected_job_var.set(job_label)
+            self.source_path = source_path
+            self.source_var.set(str(source_path))
+        finally:
+            self._restoring_session = False
+
+        self._set_pending_session_state(None)
+        self._update_job_info()
+        self._append_log(f"Sesi terakhir dipulihkan: {source_path.name}")
+        self._persist_session_state()
+        self._schedule_preflight()
+        self._update_execute_state()
 
     def _append_log(self, message: str) -> None:
         timestamp = datetime.now().strftime("%H:%M:%S")
@@ -556,6 +826,142 @@ class DesktopApp(ctk.CTk):
 
     def _set_status(self, text: str) -> None:
         self.status_var.set(f"Status: {text}")
+        self._update_hints()
+
+    def _format_duration_text(self, duration_ms: int | None) -> str:
+        if duration_ms is None or duration_ms <= 0:
+            return "-"
+        if duration_ms < 1000:
+            return f"{duration_ms} ms"
+        return f"{duration_ms / 1000:.1f} detik"
+
+    def _set_job_summary_idle(self) -> None:
+        if "job_summary_var" not in self.__dict__:
+            return
+        self.job_summary_var.set("Belum ada proses yang selesai.")
+
+    def _set_job_summary_success(self, job: JobProfileSummary, result: PipelineResult) -> None:
+        if "job_summary_var" not in self.__dict__:
+            return
+        source_name = self.source_path.name if isinstance(self.source_path, Path) else "-"
+        preflight_result = self._hint_preflight_result()
+        if preflight_result is None:
+            preflight_summary = "-"
+        else:
+            preflight_summary = (
+                f"{preflight_result.error_count} error, "
+                f"{preflight_result.warning_count} warning, "
+                f"{preflight_result.info_count} info"
+            )
+        self.job_summary_var.set(
+            "\n".join(
+                [
+                    "Status: Sukses",
+                    f"Pekerjaan: {job.label}",
+                    f"Source: {source_name}",
+                    f"Durasi: {self._format_duration_text(result.duration_ms)}",
+                    f"Sheet output: {result.sheets_written}",
+                    f"Output: {result.output_path}",
+                    f"Preflight: {preflight_summary}",
+                ]
+            )
+        )
+
+    def _set_job_summary_failure(self, error_message: str) -> None:
+        if "job_summary_var" not in self.__dict__:
+            return
+        context = self._last_run_context or {}
+        job_label = str(context.get("job_label", "-"))
+        source_name = str(context.get("source_name", "-"))
+        duration_text = self._format_duration_text(context.get("duration_ms"))
+        self.job_summary_var.set(
+            "\n".join(
+                [
+                    "Status: Gagal",
+                    f"Pekerjaan: {job_label}",
+                    f"Source: {source_name}",
+                    f"Durasi: {duration_text}",
+                    "Sheet output: -",
+                    "Output: -",
+                    f"Error: {sanitize_exception_message(error_message, project_root=self.paths.project_root)}",
+                ]
+            )
+        )
+
+    def _set_hint_values(self, primary: str, execute: str) -> None:
+        if "primary_hint_var" not in self.__dict__ or "execute_hint_var" not in self.__dict__:
+            return
+        self.primary_hint_var.set(primary)
+        self.execute_hint_var.set(execute)
+
+    def _hint_job_count(self) -> int:
+        job_by_label = self.__dict__.get("job_by_label")
+        return len(job_by_label) if isinstance(job_by_label, dict) else 0
+
+    def _hint_source_path(self) -> Path | None:
+        source_path = self.__dict__.get("source_path")
+        return source_path if isinstance(source_path, Path) else None
+
+    def _hint_status_text(self) -> str:
+        status_var = self.__dict__.get("status_var")
+        if status_var is None:
+            return "Status: Idle"
+        return str(status_var.get())
+
+    def _hint_preflight_status_text(self) -> str:
+        preflight_status_var = self.__dict__.get("preflight_status_var")
+        if preflight_status_var is None:
+            return "Preflight: Belum dicek"
+        return str(preflight_status_var.get())
+
+    def _hint_preflight_result(self) -> PreflightResult | None:
+        result = self.__dict__.get("_preflight_result")
+        return result if isinstance(result, PreflightResult) else None
+
+    def _resolve_primary_hint(self) -> str:
+        worker_running = self._worker_thread is not None and self._worker_thread.is_alive()
+        if self._hint_job_count() == 0:
+            return "Belum ada pekerjaan valid. Cek file configs/job_profiles.yaml dan config yang dirujuk."
+        if worker_running:
+            return "Proses sedang berjalan. Tunggu hingga semua langkah selesai."
+        if self._hint_status_text() == "Status: Sukses":
+            return "Proses selesai. Periksa Job Summary atau buka folder outputs."
+        if self._hint_status_text() == "Status: Gagal":
+            return "Proses gagal. Periksa log untuk detail lalu perbaiki source atau config aktif."
+        if self._hint_source_path() is None:
+            return "Pilih source file untuk pekerjaan yang aktif."
+        preflight_running = self._preflight_thread is not None and self._preflight_thread.is_alive()
+        if preflight_running or self._hint_preflight_status_text() == "Preflight: Memeriksa...":
+            return "Preflight sedang memeriksa kecocokan source, config, dan output."
+        preflight_result = self._hint_preflight_result()
+        if preflight_result is not None and preflight_result.status == "Blocked":
+            return "Execute dinonaktifkan karena masih ada error preflight. Lihat ringkasan preflight atau log untuk detail."
+        if preflight_result is not None and preflight_result.can_execute:
+            return "Source siap diproses. Jalankan Execute untuk membuat output."
+        return "Pilih source dan pekerjaan untuk memulai pemeriksaan otomatis."
+
+    def _resolve_execute_hint(self) -> str:
+        worker_running = self._worker_thread is not None and self._worker_thread.is_alive()
+        if self._hint_job_count() == 0:
+            return "Tambahkan atau perbaiki pekerjaan valid sebelum menjalankan execute."
+        if worker_running:
+            return "Execute dinonaktifkan selama proses masih berjalan."
+        preflight_running = self._preflight_thread is not None and self._preflight_thread.is_alive()
+        if self._hint_source_path() is None:
+            return "Pilih source terlebih dahulu."
+        if self._selected_job() is None:
+            return "Pilih pekerjaan valid terlebih dahulu."
+        if preflight_running or self._hint_preflight_status_text() == "Preflight: Memeriksa...":
+            return "Tunggu preflight selesai sebelum menjalankan execute."
+        preflight_result = self._hint_preflight_result()
+        if preflight_result is None:
+            return "Preflight belum siap."
+        if not preflight_result.can_execute:
+            return "Execute dinonaktifkan sampai semua error preflight diselesaikan."
+        return "Execute siap dijalankan."
+
+    def _update_hints(self) -> None:
+        self._set_hint_values(self._resolve_primary_hint(), self._resolve_execute_hint())
 
     def _select_source(self) -> None:
         file_path = select_source_file(self.paths.project_root)
@@ -574,16 +980,14 @@ class DesktopApp(ctk.CTk):
             self._append_log(f"Source invalid: {error_message}")
             return
 
-        self.source_path = source_path
-        self.source_var.set(str(source_path))
-        self._append_log(f"Source dipilih: {source_path.name}")
-        self._schedule_preflight()
-        self._update_execute_state()
+        self._apply_source_path(source_path, log_prefix="Source dipilih")
 
     def _on_job_selected(self, _: str) -> None:
         self._update_job_info()
+        self._persist_session_state()
         self._schedule_preflight()
         self._update_execute_state()
+        self._update_hints()
 
     def refresh_jobs(self, initial: bool = False) -> None:
         job_items = discover_job_profiles(self.paths.configs_dir)
@@ -626,6 +1030,11 @@ class DesktopApp(ctk.CTk):
 
         if self._job_settings_dialog is not None and self._job_settings_dialog.winfo_exists():
             self._job_settings_dialog.refresh()
+
+        if initial:
+            self._load_pending_session_state()
+
+        self._update_hints()
 
     def _update_job_info(self) -> None:
         selected_label = self.selected_job_var.get()
@@ -671,6 +1080,7 @@ class DesktopApp(ctk.CTk):
             self.execute_button.configure(state="normal")
         else:
             self.execute_button.configure(state="disabled")
+        self._update_hints()
 
     def _set_preflight_idle(self) -> None:
         self._preflight_result = None
@@ -680,6 +1090,7 @@ class DesktopApp(ctk.CTk):
         )
         self.last_output_var.set("-")
         self._reset_progress_state()
+        self._update_hints()
 
     def _can_start_new_session(self) -> bool:
         worker_running = self._worker_thread is not None and self._worker_thread.is_alive()
@@ -703,12 +1114,18 @@ class DesktopApp(ctk.CTk):
         self._active_preflight_request_id = None
         self._worker_queue = None
         self._worker_thread = None
+        self._last_run_context = None
         self._set_preflight_idle()
+        self._set_job_summary_idle()
+        self._set_pending_session_state(None)
+        if "paths" in self.__dict__:
+            clear_session_state(self.paths.project_root)
         self._set_status("Idle")
         self._clear_log_box()
         self.refresh_jobs(initial=False)
         self._append_log("Sesi baru dimulai.")
         self._update_execute_state()
+        self._update_hints()
 
     def _format_preflight_summary(self, result: PreflightResult) -> str:
         if not result.findings:
@@ -727,6 +1144,7 @@ class DesktopApp(ctk.CTk):
         if result.output_path is not None:
             self.last_output_var.set(str(result.output_path))
         self._update_execute_state()
+        self._update_hints()
 
     def _schedule_preflight(self) -> None:
         job = self._selected_job()
@@ -741,6 +1159,7 @@ class DesktopApp(ctk.CTk):
         self.preflight_status_var.set("Preflight: Memeriksa...")
         self.preflight_summary_var.set("Memvalidasi source, config, master, dan target output...")
         self._update_execute_state()
+        self._update_hints()
 
         if self._preflight_thread is not None and self._preflight_thread.is_alive():
             return
@@ -830,6 +1249,7 @@ class DesktopApp(ctk.CTk):
                     self._append_log(f"Preflight error: {error_message}")
                     self.last_output_var.set("-")
                     self._update_execute_state()
+                    self._update_hints()
             elif kind == "done":
                 done_received = True
 
@@ -848,6 +1268,7 @@ class DesktopApp(ctk.CTk):
                 self._schedule_preflight()
                 return
             self._update_execute_state()
+            self._update_hints()
             return
 
         self.after(120, self._poll_preflight_events)
@@ -882,6 +1303,12 @@ class DesktopApp(ctk.CTk):
         self.execute_button.configure(state="disabled")
         self._set_status("Running")
         self._reset_progress_state()
+        self._last_run_context = {
+            "job_label": job.label,
+            "source_name": self.source_path.name,
+            "duration_ms": None,
+            "started_at": perf_counter(),
+        }
         self._append_log(f"Eksekusi dimulai untuk pekerjaan: {job.label}")
         self._worker_queue = Queue()
         self._worker_thread = Thread(
@@ -942,15 +1369,27 @@ class DesktopApp(ctk.CTk):
             elif kind == "success":
                 result = payload
                 if isinstance(result, PipelineResult):
+                    job = self._selected_job()
                     self.last_output_var.set(str(result.output_path))
                     self._set_status("Sukses")
+                    if job is not None:
+                        self._set_job_summary_success(job, result)
                     self._append_log(
                         f"Output berhasil dibuat ({result.sheets_written} sheet)."
                     )
+                    self._update_hints()
             elif kind == "error":
                 error_message = str(payload)
+                if self._last_run_context is not None:
+                    started_at = self._last_run_context.get("started_at")
+                    if isinstance(started_at, float):
+                        self._last_run_context["duration_ms"] = max(
+                            1, int(round((perf_counter() - started_at) * 1000))
+                        )
                 self._set_status("Gagal")
+                self._set_job_summary_failure(error_message)
                 self._append_log(f"Error: {error_message}")
+                self._update_hints()
                 messagebox.showerror(
                     "Eksekusi gagal",
                     sanitize_exception_message(error_message, project_root=self.paths.project_root),
@@ -962,6 +1401,7 @@ class DesktopApp(ctk.CTk):
             self._worker_queue = None
             self._worker_thread = None
             self._update_execute_state()
+            self._update_hints()
             return
 
         self.after(120, self._poll_worker_events)

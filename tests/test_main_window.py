@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from pathlib import Path
 
-from app.ui.main_window import DesktopApp
+from app.services import PreflightResult
+from app.ui.main_window import DesktopApp, _parse_dropped_files
 
 
 class DummyVar:
@@ -20,8 +22,9 @@ class DummyButton:
     def __init__(self):
         self.state = None
 
-    def configure(self, *, state):
-        self.state = state
+    def configure(self, *, state=None, **kwargs):
+        if state is not None:
+            self.state = state
 
 
 class DummyThread:
@@ -30,6 +33,16 @@ class DummyThread:
 
     def is_alive(self) -> bool:
         return self._alive
+
+
+class DummyJob:
+    def __init__(self, job_id: str, label: str = "Report Bulanan"):
+        self.id = job_id
+        self.label = label
+        self.is_valid = True
+        self.config_path = Path("config.yaml")
+        self.config_file = "config.yaml"
+        self.master_files = ("master.xlsx",)
 
 
 def test_can_start_new_session_only_after_terminal_status():
@@ -110,3 +123,336 @@ def test_start_new_session_resets_ui_state_without_touching_outputs(tmp_path):
     assert "log" in reset_calls
     assert "execute" in reset_calls
     assert log_messages == ["Sesi baru dimulai."]
+
+
+def test_set_pending_session_state_disables_restore_when_missing():
+    app = DesktopApp.__new__(DesktopApp)
+    app.session_restore_var = DummyVar()
+    app.use_last_session_button = DummyButton()
+    app._pending_session_state = object()
+
+    DesktopApp._set_pending_session_state(app, None)
+
+    assert app._pending_session_state is None
+    assert app.session_restore_var.get() == ""
+    assert app.use_last_session_button.state == "disabled"
+
+
+def test_set_pending_session_state_shows_restore_cta_for_valid_job():
+    app = DesktopApp.__new__(DesktopApp)
+    app.session_restore_var = DummyVar()
+    app.use_last_session_button = DummyButton()
+    app.job_by_label = {"Report Bulanan": DummyJob("report-bulanan")}
+
+    state = SimpleNamespace(last_job_id="report-bulanan")
+
+    DesktopApp._set_pending_session_state(app, state)
+
+    assert app._pending_session_state is state
+    assert "Sesi terakhir ditemukan" in app.session_restore_var.get()
+    assert app.use_last_session_button.state == "normal"
+
+
+def test_load_pending_session_state_without_state_keeps_restore_hidden(tmp_path, monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    app.paths = SimpleNamespace(project_root=tmp_path)
+    app.job_by_label = {}
+    recorded: list[object] = []
+
+    monkeypatch.setattr("app.ui.main_window.load_session_state", lambda _root: None)
+    app._set_pending_session_state = lambda state: recorded.append(state)
+
+    DesktopApp._load_pending_session_state(app)
+
+    assert recorded == [None]
+
+
+def test_load_pending_session_state_ignores_invalid_job(tmp_path, monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    app.paths = SimpleNamespace(project_root=tmp_path)
+    app.job_by_label = {}
+    recorded: list[object] = []
+    state = SimpleNamespace(
+        last_job_id="missing-job",
+        last_source_path=tmp_path / "source.xlsx",
+    )
+
+    monkeypatch.setattr("app.ui.main_window.load_session_state", lambda _root: state)
+    monkeypatch.setattr("app.ui.main_window.validate_source_file", lambda _path: [])
+    app._set_pending_session_state = lambda value: recorded.append(value)
+
+    DesktopApp._load_pending_session_state(app)
+
+    assert recorded == [None]
+
+
+def test_load_pending_session_state_ignores_missing_source(tmp_path, monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    app.paths = SimpleNamespace(project_root=tmp_path)
+    app.job_by_label = {"Report Bulanan": DummyJob("report-bulanan")}
+    recorded: list[object] = []
+    state = SimpleNamespace(
+        last_job_id="report-bulanan",
+        last_source_path=tmp_path / "hilang.xlsx",
+    )
+
+    monkeypatch.setattr("app.ui.main_window.load_session_state", lambda _root: state)
+    monkeypatch.setattr("app.ui.main_window.validate_source_file", lambda _path: ["missing"])
+    app._set_pending_session_state = lambda value: recorded.append(value)
+
+    DesktopApp._load_pending_session_state(app)
+
+    assert recorded == [None]
+
+
+def test_use_last_session_restores_job_source_and_runs_preflight(tmp_path, monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    app.job_by_label = {"Report Bulanan": DummyJob("report-bulanan")}
+    app.selected_job_var = DummyVar()
+    app.source_var = DummyVar()
+    app.source_path = None
+    app.paths = SimpleNamespace(project_root=tmp_path)
+    app._pending_session_state = SimpleNamespace(
+        last_job_id="report-bulanan",
+        last_source_path=tmp_path / "source.xlsx",
+    )
+    app._restoring_session = False
+    app.session_restore_var = DummyVar("restore")
+    app.use_last_session_button = DummyButton()
+
+    calls: list[str] = []
+    monkeypatch.setattr("app.ui.main_window.validate_source_file", lambda _path: [])
+    app._set_pending_session_state = lambda state: calls.append(f"pending:{state}")
+    app._update_job_info = lambda: calls.append("job-info")
+    app._append_log = lambda message: calls.append(message)
+    app._persist_session_state = lambda: calls.append("persist")
+    app._schedule_preflight = lambda: calls.append("preflight")
+    app._update_execute_state = lambda: calls.append("execute")
+
+    DesktopApp._use_last_session(app)
+
+    assert app.selected_job_var.get() == "Report Bulanan"
+    assert app.source_var.get().endswith("source.xlsx")
+    assert app.source_path == tmp_path / "source.xlsx"
+    assert calls == [
+        "pending:None",
+        "job-info",
+        "Sesi terakhir dipulihkan: source.xlsx",
+        "persist",
+        "preflight",
+        "execute",
+    ]
+
+
+def _make_hint_app() -> DesktopApp:
+    app = DesktopApp.__new__(DesktopApp)
+    app.job_by_label = {}
+    app.selected_job_var = DummyVar("")
+    app.source_path = None
+    app._preflight_result = None
+    app._preflight_thread = None
+    app._worker_thread = None
+    app.status_var = DummyVar("Status: Idle")
+    app.preflight_status_var = DummyVar("Preflight: Belum dicek")
+    app.primary_hint_var = DummyVar()
+    app.execute_hint_var = DummyVar()
+    app._selected_job = lambda: None
+    return app
+
+
+def _make_summary_app() -> DesktopApp:
+    app = DesktopApp.__new__(DesktopApp)
+    app.paths = SimpleNamespace(project_root=Path("."))
+    app.source_path = Path("source.xlsx")
+    app.job_summary_var = DummyVar()
+    app._last_run_context = None
+    app._preflight_result = PreflightResult(status="Ready", findings=(), output_path=None)
+    return app
+
+
+def test_update_hints_at_startup_without_valid_job():
+    app = _make_hint_app()
+
+    DesktopApp._update_hints(app)
+
+    assert app.primary_hint_var.get() == (
+        "Belum ada pekerjaan valid. Cek file configs/job_profiles.yaml dan config yang dirujuk."
+    )
+    assert app.execute_hint_var.get() == (
+        "Tambahkan atau perbaiki pekerjaan valid sebelum menjalankan execute."
+    )
+
+
+def test_update_hints_when_source_not_selected():
+    app = _make_hint_app()
+    app.job_by_label = {"Report Bulanan": DummyJob("report-bulanan")}
+    app.selected_job_var = DummyVar("Report Bulanan")
+    app._selected_job = lambda: app.job_by_label["Report Bulanan"]
+
+    DesktopApp._update_hints(app)
+
+    assert app.primary_hint_var.get() == "Pilih source file untuk pekerjaan yang aktif."
+    assert app.execute_hint_var.get() == "Pilih source terlebih dahulu."
+
+
+def test_update_hints_when_preflight_blocked():
+    app = _make_hint_app()
+    app.job_by_label = {"Report Bulanan": DummyJob("report-bulanan")}
+    app.selected_job_var = DummyVar("Report Bulanan")
+    app.source_path = Path("source.xlsx")
+    app._selected_job = lambda: app.job_by_label["Report Bulanan"]
+    app._preflight_result = PreflightResult(status="Blocked", findings=(), output_path=None)
+    app.preflight_status_var = DummyVar("Preflight: Blocked")
+
+    DesktopApp._update_hints(app)
+
+    assert app.primary_hint_var.get() == (
+        "Execute dinonaktifkan karena masih ada error preflight. Lihat ringkasan preflight atau log untuk detail."
+    )
+    assert app.execute_hint_var.get() == (
+        "Execute dinonaktifkan sampai semua error preflight diselesaikan."
+    )
+
+
+def test_update_hints_when_ready_to_execute():
+    app = _make_hint_app()
+    app.job_by_label = {"Report Bulanan": DummyJob("report-bulanan")}
+    app.selected_job_var = DummyVar("Report Bulanan")
+    app.source_path = Path("source.xlsx")
+    app._selected_job = lambda: app.job_by_label["Report Bulanan"]
+    app._preflight_result = PreflightResult(status="Ready", findings=(), output_path=None)
+    app.preflight_status_var = DummyVar("Preflight: Ready")
+
+    DesktopApp._update_hints(app)
+
+    assert app.primary_hint_var.get() == "Source siap diproses. Jalankan Execute untuk membuat output."
+    assert app.execute_hint_var.get() == "Execute siap dijalankan."
+
+
+def test_update_hints_after_success_and_failure():
+    app = _make_hint_app()
+    app.job_by_label = {"Report Bulanan": DummyJob("report-bulanan")}
+
+    app.status_var.set("Status: Sukses")
+    DesktopApp._update_hints(app)
+    assert app.primary_hint_var.get() == "Proses selesai. Periksa Job Summary atau buka folder outputs."
+
+    app.status_var.set("Status: Gagal")
+    DesktopApp._update_hints(app)
+    assert app.primary_hint_var.get() == (
+        "Proses gagal. Periksa log untuk detail lalu perbaiki source atau config aktif."
+    )
+
+
+def test_job_summary_empty_at_startup():
+    app = _make_summary_app()
+
+    DesktopApp._set_job_summary_idle(app)
+
+    assert app.job_summary_var.get() == "Belum ada proses yang selesai."
+
+
+def test_job_summary_success_is_filled():
+    app = _make_summary_app()
+    job = DummyJob("report-bulanan")
+    result = SimpleNamespace(
+        output_path=Path("outputs/hasil.xlsx"),
+        sheets_written=2,
+        duration_ms=1800,
+    )
+
+    DesktopApp._set_job_summary_success(app, job, result)
+
+    summary = app.job_summary_var.get()
+    assert "Status: Sukses" in summary
+    assert "Pekerjaan: Report Bulanan" in summary
+    assert "Source: source.xlsx" in summary
+    assert "Durasi: 1.8 detik" in summary
+    assert "Sheet output: 2" in summary
+    assert f"Output: {result.output_path}" in summary
+    assert "Preflight: 0 error, 0 warning, 0 info" in summary
+
+
+def test_job_summary_failure_shows_failed_status_without_output():
+    app = _make_summary_app()
+    app._last_run_context = {
+        "job_label": "Report Bulanan",
+        "source_name": "source.xlsx",
+        "duration_ms": None,
+    }
+
+    DesktopApp._set_job_summary_failure(app, "gagal total")
+
+    summary = app.job_summary_var.get()
+    assert "Status: Gagal" in summary
+    assert "Pekerjaan: Report Bulanan" in summary
+    assert "Source: source.xlsx" in summary
+    assert "Output: -" in summary
+    assert "Error: gagal total" in summary
+
+
+def test_start_new_session_clears_job_summary():
+    app = DesktopApp.__new__(DesktopApp)
+    app._last_run_context = {"job_label": "lama"}
+    app.job_summary_var = DummyVar("ada isi")
+
+    DesktopApp._set_job_summary_idle(app)
+
+    assert app.job_summary_var.get() == "Belum ada proses yang selesai."
+
+
+def test_parse_dropped_files_supports_single_and_braced_paths():
+    assert _parse_dropped_files(r"C:\Data\source.xlsx") == (r"C:\Data\source.xlsx",)
+    assert _parse_dropped_files(r"{C:\Data Folder\source.xlsx}") == (
+        r"C:\Data Folder\source.xlsx",
+    )
+
+
+def test_handle_dropped_source_rejects_multiple_files(monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    logs: list[str] = []
+    app._append_log = logs.append
+
+    result = DesktopApp._handle_dropped_source(
+        app,
+        r"{C:\Data\one.xlsx} {C:\Data\two.xlsx}",
+    )
+
+    assert result is False
+    assert logs == ["Drop source ditolak: hanya satu file yang boleh dijatuhkan."]
+
+
+def test_handle_dropped_source_rejects_invalid_extension(monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    logs: list[str] = []
+    app._append_log = logs.append
+    monkeypatch.setattr("app.ui.main_window.validate_source_file", lambda _path: ["format tidak didukung"])
+
+    result = DesktopApp._handle_dropped_source(app, r"C:\Data\source.txt")
+
+    assert result is False
+    assert logs == ["Drop source invalid: format tidak didukung"]
+
+
+def test_handle_dropped_source_rejects_missing_file(monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    logs: list[str] = []
+    app._append_log = logs.append
+    monkeypatch.setattr("app.ui.main_window.validate_source_file", lambda _path: ["file tidak ditemukan"])
+
+    result = DesktopApp._handle_dropped_source(app, r"C:\Data\missing.xlsx")
+
+    assert result is False
+    assert logs == ["Drop source invalid: file tidak ditemukan"]
+
+
+def test_handle_dropped_source_applies_valid_file(monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    calls: list[tuple[Path, str]] = []
+    monkeypatch.setattr("app.ui.main_window.validate_source_file", lambda _path: [])
+    app._apply_source_path = lambda source_path, *, log_prefix: calls.append((source_path, log_prefix))
+
+    result = DesktopApp._handle_dropped_source(app, r"{C:\Data Folder\source.xlsx}")
+
+    assert result is True
+    assert calls == [(Path(r"C:\Data Folder\source.xlsx"), "Source dijatuhkan")]

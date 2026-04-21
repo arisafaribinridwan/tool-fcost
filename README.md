@@ -61,6 +61,7 @@ pip install -r requirements.txt
 - `openpyxl` untuk baca/tulis dan styling Excel
 - `PyYAML` untuk parsing config
 - `pyinstaller` untuk packaging portable
+- `tkinterdnd2` untuk drag-and-drop source file di desktop
 - `pytest` dan `ruff` untuk testing dan linting
 
 ## Menjalankan Saat Development
@@ -90,6 +91,7 @@ Repo sudah menyertakan 2 contoh config:
 - Build harus dilakukan di OS targetnya masing-masing.
 - Jangan mengandalkan cross-build `PyInstaller` untuk menghasilkan binary OS lain.
 - Folder runtime `configs/`, `masters/`, `uploads/`, dan `outputs/` dibuat otomatis saat first run. Script build juga menyiapkan folder-folder ini di hasil `dist/`.
+- Build Windows membawa hidden import `tkinterdnd2` agar drag-and-drop source tetap aktif pada bundle yang mendukung.
 
 ### Build di Linux
 

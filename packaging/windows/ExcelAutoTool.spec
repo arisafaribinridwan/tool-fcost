@@ -10,6 +10,7 @@ entry_script = project_root / "run.py"
 
 datas = collect_data_files("customtkinter")
 hiddenimports = collect_submodules("customtkinter")
+hiddenimports += collect_submodules("tkinterdnd2")
 
 a = Analysis(
     [str(entry_script)],
