@@ -8,6 +8,11 @@ from time import perf_counter
 from tkinter import messagebox
 from typing import Any
 
+try:
+    from tkinterdnd2 import DND_FILES  # type: ignore[import-not-found]
+except ImportError:
+    DND_FILES = None
+
 import customtkinter as ctk
 
 from app import AppPaths
@@ -46,6 +51,44 @@ PIPELINE_STEP_ORDER = (
     ("build_output", "Build output"),
     ("write_output", "Write output"),
 )
+
+
+def _parse_dropped_files(raw_drop_data: str) -> tuple[str, ...]:
+    value = raw_drop_data.strip()
+    if not value:
+        return ()
+
+    paths: list[str] = []
+    current: list[str] = []
+    in_braces = False
+    for char in value:
+        if char == "{":
+            if current:
+                token = "".join(current).strip()
+                if token:
+                    paths.append(token)
+                current = []
+            in_braces = True
+            continue
+        if char == "}" and in_braces:
+            token = "".join(current).strip()
+            if token:
+                paths.append(token)
+            current = []
+            in_braces = False
+            continue
+        if char.isspace() and not in_braces:
+            token = "".join(current).strip()
+            if token:
+                paths.append(token)
+            current = []
+            continue
+        current.append(char)
+
+    token = "".join(current).strip()
+    if token:
+        paths.append(token)
+    return tuple(paths)
 
 
 class JobSettingsDialog(ctk.CTkToplevel):
@@ -401,8 +444,29 @@ class DesktopApp(ctk.CTk):
             command=self._select_source,
         ).grid(row=4, column=0, padx=16, pady=(0, 16), sticky="ew")
 
+        self.source_drop_hint_var = ctk.StringVar(
+            value=(
+                "Tarik file source ke area ini untuk memilih lebih cepat."
+                if DND_FILES is not None
+                else "Drag-and-drop source belum tersedia di environment ini. Gunakan tombol Pilih Source."
+            )
+        )
+        self.source_drop_label = ctk.CTkLabel(
+            left_panel,
+            textvariable=self.source_drop_hint_var,
+            justify="left",
+            wraplength=300,
+            anchor="w",
+            corner_radius=8,
+            fg_color=("gray86", "gray20"),
+            padx=12,
+            pady=12,
+        )
+        self.source_drop_label.grid(row=5, column=0, padx=16, pady=(0, 16), sticky="ew")
+        self._bind_drop_target(self.source_drop_label)
+
         ctk.CTkLabel(left_panel, text="Pekerjaan").grid(
-            row=5, column=0, padx=16, sticky="w"
+            row=6, column=0, padx=16, sticky="w"
         )
         self.job_menu = ctk.CTkOptionMenu(
             left_panel,
@@ -410,26 +474,26 @@ class DesktopApp(ctk.CTk):
             values=["Belum ada pekerjaan"],
             command=self._on_job_selected,
         )
-        self.job_menu.grid(row=6, column=0, padx=16, pady=(4, 8), sticky="ew")
+        self.job_menu.grid(row=7, column=0, padx=16, pady=(4, 8), sticky="ew")
 
         ctk.CTkButton(
             left_panel,
             text="Pengaturan",
             command=self._open_job_settings,
-        ).grid(row=7, column=0, padx=16, pady=(0, 8), sticky="ew")
+        ).grid(row=8, column=0, padx=16, pady=(0, 8), sticky="ew")
 
         ctk.CTkButton(
             left_panel,
             text="Refresh Pekerjaan",
             command=self.refresh_jobs,
-        ).grid(row=8, column=0, padx=16, pady=(0, 8), sticky="ew")
+        ).grid(row=9, column=0, padx=16, pady=(0, 8), sticky="ew")
 
         ctk.CTkLabel(
             left_panel,
             textvariable=self.session_restore_var,
             justify="left",
             wraplength=300,
-        ).grid(row=9, column=0, padx=16, pady=(0, 8), sticky="w")
+        ).grid(row=10, column=0, padx=16, pady=(0, 8), sticky="w")
 
         self.use_last_session_button = ctk.CTkButton(
             left_panel,
@@ -437,48 +501,48 @@ class DesktopApp(ctk.CTk):
             command=self._use_last_session,
             state="disabled",
         )
-        self.use_last_session_button.grid(row=10, column=0, padx=16, pady=(0, 16), sticky="ew")
+        self.use_last_session_button.grid(row=11, column=0, padx=16, pady=(0, 16), sticky="ew")
 
         ctk.CTkLabel(
             left_panel,
             textvariable=self.job_info_var,
             justify="left",
             wraplength=300,
-        ).grid(row=11, column=0, padx=16, pady=(0, 16), sticky="w")
+        ).grid(row=12, column=0, padx=16, pady=(0, 16), sticky="w")
 
         ctk.CTkLabel(
             left_panel,
             textvariable=self.primary_hint_var,
             justify="left",
             wraplength=300,
-        ).grid(row=12, column=0, padx=16, pady=(0, 8), sticky="w")
+        ).grid(row=13, column=0, padx=16, pady=(0, 8), sticky="w")
 
         ctk.CTkLabel(
             left_panel,
             textvariable=self.execute_hint_var,
             justify="left",
             wraplength=300,
-        ).grid(row=13, column=0, padx=16, pady=(0, 16), sticky="w")
+        ).grid(row=14, column=0, padx=16, pady=(0, 16), sticky="w")
 
         ctk.CTkLabel(
             left_panel,
             text="Preflight",
             font=ctk.CTkFont(weight="bold"),
-        ).grid(row=14, column=0, padx=16, pady=(0, 4), sticky="w")
+        ).grid(row=15, column=0, padx=16, pady=(0, 4), sticky="w")
 
         ctk.CTkLabel(
             left_panel,
             textvariable=self.preflight_status_var,
             justify="left",
             wraplength=300,
-        ).grid(row=15, column=0, padx=16, pady=(0, 4), sticky="w")
+        ).grid(row=16, column=0, padx=16, pady=(0, 4), sticky="w")
 
         ctk.CTkLabel(
             left_panel,
             textvariable=self.preflight_summary_var,
             justify="left",
             wraplength=300,
-        ).grid(row=16, column=0, padx=16, pady=(0, 16), sticky="w")
+        ).grid(row=17, column=0, padx=16, pady=(0, 16), sticky="w")
 
         self.execute_button = ctk.CTkButton(
             left_panel,
@@ -487,16 +551,16 @@ class DesktopApp(ctk.CTk):
             state="disabled",
             height=42,
         )
-        self.execute_button.grid(row=17, column=0, padx=16, pady=(0, 8), sticky="ew")
+        self.execute_button.grid(row=18, column=0, padx=16, pady=(0, 8), sticky="ew")
 
         ctk.CTkLabel(
             left_panel,
             text="Progress",
             font=ctk.CTkFont(weight="bold"),
-        ).grid(row=18, column=0, padx=16, pady=(0, 4), sticky="w")
+        ).grid(row=19, column=0, padx=16, pady=(0, 4), sticky="w")
 
         self.progress_bar = ctk.CTkProgressBar(left_panel)
-        self.progress_bar.grid(row=19, column=0, padx=16, pady=(0, 4), sticky="ew")
+        self.progress_bar.grid(row=20, column=0, padx=16, pady=(0, 4), sticky="ew")
         self.progress_bar.set(0)
 
         ctk.CTkLabel(
@@ -504,10 +568,10 @@ class DesktopApp(ctk.CTk):
             textvariable=self.progress_summary_var,
             justify="left",
             wraplength=300,
-        ).grid(row=20, column=0, padx=16, pady=(0, 8), sticky="w")
+        ).grid(row=21, column=0, padx=16, pady=(0, 8), sticky="w")
 
         progress_frame = ctk.CTkFrame(left_panel, fg_color="transparent")
-        progress_frame.grid(row=21, column=0, padx=16, pady=(0, 16), sticky="ew")
+        progress_frame.grid(row=22, column=0, padx=16, pady=(0, 16), sticky="ew")
         progress_frame.grid_columnconfigure(0, weight=1)
         for row_idx, (step_id, _) in enumerate(PIPELINE_STEP_ORDER):
             ctk.CTkLabel(
@@ -522,7 +586,7 @@ class DesktopApp(ctk.CTk):
             left_panel,
             text="Buka Folder Outputs",
             command=self._open_outputs_dir,
-        ).grid(row=22, column=0, padx=16, pady=(0, 16), sticky="ew")
+        ).grid(row=23, column=0, padx=16, pady=(0, 16), sticky="ew")
 
         self.start_new_session_button = ctk.CTkButton(
             left_panel,
@@ -530,36 +594,36 @@ class DesktopApp(ctk.CTk):
             command=self._start_new_session,
             state="disabled",
         )
-        self.start_new_session_button.grid(row=23, column=0, padx=16, pady=(0, 16), sticky="ew")
+        self.start_new_session_button.grid(row=24, column=0, padx=16, pady=(0, 16), sticky="ew")
 
         ctk.CTkLabel(
             left_panel,
             textvariable=self.status_var,
             justify="left",
             wraplength=300,
-        ).grid(row=24, column=0, padx=16, pady=(0, 8), sticky="w")
+        ).grid(row=25, column=0, padx=16, pady=(0, 8), sticky="w")
 
         ctk.CTkLabel(left_panel, text="Target output").grid(
-            row=25, column=0, padx=16, sticky="w"
+            row=26, column=0, padx=16, sticky="w"
         )
         ctk.CTkLabel(
             left_panel,
             textvariable=self.last_output_var,
             justify="left",
             wraplength=300,
-        ).grid(row=26, column=0, padx=16, pady=(0, 12), sticky="w")
+        ).grid(row=27, column=0, padx=16, pady=(0, 12), sticky="w")
 
         ctk.CTkLabel(
             left_panel,
             text="Job Summary",
             font=ctk.CTkFont(weight="bold"),
-        ).grid(row=27, column=0, padx=16, sticky="w")
+        ).grid(row=28, column=0, padx=16, sticky="w")
         ctk.CTkLabel(
             left_panel,
             textvariable=self.job_summary_var,
             justify="left",
             wraplength=300,
-        ).grid(row=28, column=0, padx=16, pady=(0, 16), sticky="w")
+        ).grid(row=29, column=0, padx=16, pady=(0, 16), sticky="w")
 
         ctk.CTkLabel(
             right_panel,
@@ -570,6 +634,52 @@ class DesktopApp(ctk.CTk):
         self.log_box = ctk.CTkTextbox(right_panel, wrap="word")
         self.log_box.grid(row=1, column=0, padx=16, pady=(0, 16), sticky="nsew")
         self.log_box.configure(state="disabled")
+
+    def _bind_drop_target(self, widget: ctk.CTkLabel) -> None:
+        if DND_FILES is None:
+            return
+        drop_target_register = getattr(widget, "drop_target_register", None)
+        dnd_bind = getattr(widget, "dnd_bind", None)
+        if not callable(drop_target_register) or not callable(dnd_bind):
+            self.source_drop_hint_var.set(
+                "Drag-and-drop source belum aktif di runtime ini. Gunakan tombol Pilih Source."
+            )
+            return
+        drop_target_register(DND_FILES)
+        dnd_bind("<<Drop>>", self._on_source_dropped)
+
+    def _apply_source_path(self, source_path: Path, *, log_prefix: str) -> None:
+        self.source_path = source_path
+        self.source_var.set(str(source_path))
+        self._set_pending_session_state(None)
+        self._persist_session_state()
+        self._append_log(f"{log_prefix}: {source_path.name}")
+        self._schedule_preflight()
+        self._update_execute_state()
+        self._update_hints()
+
+    def _handle_dropped_source(self, raw_drop_data: str) -> bool:
+        dropped_files = _parse_dropped_files(raw_drop_data)
+        if not dropped_files:
+            self._append_log("Drop source diabaikan: tidak ada file yang terbaca.")
+            return False
+        if len(dropped_files) != 1:
+            self._append_log("Drop source ditolak: hanya satu file yang boleh dijatuhkan.")
+            return False
+
+        source_path = Path(dropped_files[0])
+        errors = validate_source_file(source_path)
+        if errors:
+            self._append_log(f"Drop source invalid: {'; '.join(errors)}")
+            return False
+
+        self._apply_source_path(source_path, log_prefix="Source dijatuhkan")
+        return True
+
+    def _on_source_dropped(self, event: Any) -> str | None:
+        raw_drop_data = getattr(event, "data", "")
+        self._handle_dropped_source(str(raw_drop_data))
+        return None
 
     def _restore_window_geometry(self) -> None:
         session_state = load_session_state(self.paths.project_root)
@@ -870,14 +980,7 @@ class DesktopApp(ctk.CTk):
             self._append_log(f"Source invalid: {error_message}")
             return
 
-        self.source_path = source_path
-        self.source_var.set(str(source_path))
-        self._set_pending_session_state(None)
-        self._persist_session_state()
-        self._append_log(f"Source dipilih: {source_path.name}")
-        self._schedule_preflight()
-        self._update_execute_state()
-        self._update_hints()
+        self._apply_source_path(source_path, log_prefix="Source dipilih")
 
     def _on_job_selected(self, _: str) -> None:
         self._update_job_info()

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from pathlib import Path
 
 from app.services import PreflightResult
-from app.ui.main_window import DesktopApp
+from app.ui.main_window import DesktopApp, _parse_dropped_files
 
 
 class DummyVar:
@@ -399,3 +399,60 @@ def test_start_new_session_clears_job_summary():
     DesktopApp._set_job_summary_idle(app)
 
     assert app.job_summary_var.get() == "Belum ada proses yang selesai."
+
+
+def test_parse_dropped_files_supports_single_and_braced_paths():
+    assert _parse_dropped_files(r"C:\Data\source.xlsx") == (r"C:\Data\source.xlsx",)
+    assert _parse_dropped_files(r"{C:\Data Folder\source.xlsx}") == (
+        r"C:\Data Folder\source.xlsx",
+    )
+
+
+def test_handle_dropped_source_rejects_multiple_files(monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    logs: list[str] = []
+    app._append_log = logs.append
+
+    result = DesktopApp._handle_dropped_source(
+        app,
+        r"{C:\Data\one.xlsx} {C:\Data\two.xlsx}",
+    )
+
+    assert result is False
+    assert logs == ["Drop source ditolak: hanya satu file yang boleh dijatuhkan."]
+
+
+def test_handle_dropped_source_rejects_invalid_extension(monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    logs: list[str] = []
+    app._append_log = logs.append
+    monkeypatch.setattr("app.ui.main_window.validate_source_file", lambda _path: ["format tidak didukung"])
+
+    result = DesktopApp._handle_dropped_source(app, r"C:\Data\source.txt")
+
+    assert result is False
+    assert logs == ["Drop source invalid: format tidak didukung"]
+
+
+def test_handle_dropped_source_rejects_missing_file(monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    logs: list[str] = []
+    app._append_log = logs.append
+    monkeypatch.setattr("app.ui.main_window.validate_source_file", lambda _path: ["file tidak ditemukan"])
+
+    result = DesktopApp._handle_dropped_source(app, r"C:\Data\missing.xlsx")
+
+    assert result is False
+    assert logs == ["Drop source invalid: file tidak ditemukan"]
+
+
+def test_handle_dropped_source_applies_valid_file(monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    calls: list[tuple[Path, str]] = []
+    monkeypatch.setattr("app.ui.main_window.validate_source_file", lambda _path: [])
+    app._apply_source_path = lambda source_path, *, log_prefix: calls.append((source_path, log_prefix))
+
+    result = DesktopApp._handle_dropped_source(app, r"{C:\Data Folder\source.xlsx}")
+
+    assert result is True
+    assert calls == [(Path(r"C:\Data Folder\source.xlsx"), "Source dijatuhkan")]
