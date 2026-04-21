@@ -14,8 +14,10 @@ from app.services import (
     ConfigSummary,
     JobProfileSummary,
     PipelineResult,
+    PreflightResult,
     discover_configs,
     discover_job_profiles,
+    run_preflight,
     run_pipeline,
     upsert_job_profile_record,
     validate_source_file,
@@ -292,6 +294,12 @@ class DesktopApp(ctk.CTk):
         self.config_by_label: dict[str, ConfigSummary] = {}
         self.job_by_label: dict[str, JobProfileSummary] = {}
         self._job_settings_dialog: JobSettingsDialog | None = None
+        self._preflight_queue: Queue[tuple[str, object]] | None = None
+        self._preflight_thread: Thread | None = None
+        self._preflight_request_id = 0
+        self._latest_preflight_request_id = 0
+        self._active_preflight_request_id: int | None = None
+        self._preflight_result: PreflightResult | None = None
         self._worker_queue: Queue[tuple[str, object]] | None = None
         self._worker_thread: Thread | None = None
 
@@ -302,6 +310,8 @@ class DesktopApp(ctk.CTk):
         self.source_var = ctk.StringVar(value="")
         self.selected_job_var = ctk.StringVar(value="")
         self.job_info_var = ctk.StringVar(value="Belum ada pekerjaan terpilih.")
+        self.preflight_status_var = ctk.StringVar(value="Preflight: Belum dicek")
+        self.preflight_summary_var = ctk.StringVar(value="Pilih source dan pekerjaan untuk memulai pemeriksaan otomatis.")
         self.status_var = ctk.StringVar(value="Status: Idle")
         self.last_output_var = ctk.StringVar(value="-")
 
@@ -382,6 +392,26 @@ class DesktopApp(ctk.CTk):
             wraplength=300,
         ).grid(row=9, column=0, padx=16, pady=(0, 16), sticky="w")
 
+        ctk.CTkLabel(
+            left_panel,
+            text="Preflight",
+            font=ctk.CTkFont(weight="bold"),
+        ).grid(row=10, column=0, padx=16, pady=(0, 4), sticky="w")
+
+        ctk.CTkLabel(
+            left_panel,
+            textvariable=self.preflight_status_var,
+            justify="left",
+            wraplength=300,
+        ).grid(row=11, column=0, padx=16, pady=(0, 4), sticky="w")
+
+        ctk.CTkLabel(
+            left_panel,
+            textvariable=self.preflight_summary_var,
+            justify="left",
+            wraplength=300,
+        ).grid(row=12, column=0, padx=16, pady=(0, 16), sticky="w")
+
         self.execute_button = ctk.CTkButton(
             left_panel,
             text="Execute",
@@ -389,30 +419,30 @@ class DesktopApp(ctk.CTk):
             state="disabled",
             height=42,
         )
-        self.execute_button.grid(row=10, column=0, padx=16, pady=(0, 8), sticky="ew")
+        self.execute_button.grid(row=13, column=0, padx=16, pady=(0, 8), sticky="ew")
 
         ctk.CTkButton(
             left_panel,
             text="Buka Folder Outputs",
             command=self._open_outputs_dir,
-        ).grid(row=11, column=0, padx=16, pady=(0, 16), sticky="ew")
+        ).grid(row=14, column=0, padx=16, pady=(0, 16), sticky="ew")
 
         ctk.CTkLabel(
             left_panel,
             textvariable=self.status_var,
             justify="left",
             wraplength=300,
-        ).grid(row=12, column=0, padx=16, pady=(0, 8), sticky="w")
+        ).grid(row=15, column=0, padx=16, pady=(0, 8), sticky="w")
 
         ctk.CTkLabel(left_panel, text="Target output").grid(
-            row=13, column=0, padx=16, sticky="w"
+            row=16, column=0, padx=16, sticky="w"
         )
         ctk.CTkLabel(
             left_panel,
             textvariable=self.last_output_var,
             justify="left",
             wraplength=300,
-        ).grid(row=14, column=0, padx=16, pady=(0, 16), sticky="w")
+        ).grid(row=17, column=0, padx=16, pady=(0, 16), sticky="w")
 
         ctk.CTkLabel(
             right_panel,
@@ -452,10 +482,12 @@ class DesktopApp(ctk.CTk):
         self.source_path = source_path
         self.source_var.set(str(source_path))
         self._append_log(f"Source dipilih: {source_path.name}")
+        self._schedule_preflight()
         self._update_execute_state()
 
     def _on_job_selected(self, _: str) -> None:
         self._update_job_info()
+        self._schedule_preflight()
         self._update_execute_state()
 
     def refresh_jobs(self, initial: bool = False) -> None:
@@ -484,6 +516,7 @@ class DesktopApp(ctk.CTk):
             self.selected_job_var.set(placeholder)
 
         self._update_job_info()
+        self._schedule_preflight()
         self._update_execute_state()
 
         valid_count = len(selectable_labels)
@@ -523,13 +556,172 @@ class DesktopApp(ctk.CTk):
 
     def _update_execute_state(self) -> None:
         worker_running = self._worker_thread is not None and self._worker_thread.is_alive()
+        preflight_running = self._preflight_thread is not None and self._preflight_thread.is_alive()
         if worker_running:
             self.execute_button.configure(state="disabled")
             return
-        if self.source_path is not None and self._selected_job() is not None:
+        if preflight_running:
+            self.execute_button.configure(state="disabled")
+            return
+        if (
+            self.source_path is not None
+            and self._selected_job() is not None
+            and self._preflight_result is not None
+            and self._preflight_result.can_execute
+        ):
             self.execute_button.configure(state="normal")
         else:
             self.execute_button.configure(state="disabled")
+
+    def _set_preflight_idle(self) -> None:
+        self._preflight_result = None
+        self.preflight_status_var.set("Preflight: Belum dicek")
+        self.preflight_summary_var.set(
+            "Pilih source dan pekerjaan untuk memulai pemeriksaan otomatis."
+        )
+        self.last_output_var.set("-")
+
+    def _format_preflight_summary(self, result: PreflightResult) -> str:
+        if not result.findings:
+            return "Semua pemeriksaan lolos."
+
+        summary = (
+            f"{result.error_count} error, {result.warning_count} warning, {result.info_count} info"
+        )
+        top_finding = result.findings[0]
+        return f"{summary}. {top_finding.summary}"
+
+    def _apply_preflight_result(self, result: PreflightResult) -> None:
+        self._preflight_result = result
+        self.preflight_status_var.set(f"Preflight: {result.status}")
+        self.preflight_summary_var.set(self._format_preflight_summary(result))
+        if result.output_path is not None:
+            self.last_output_var.set(str(result.output_path))
+        self._update_execute_state()
+
+    def _schedule_preflight(self) -> None:
+        job = self._selected_job()
+        if self.source_path is None or job is None or job.config_path is None:
+            self._set_preflight_idle()
+            self._update_execute_state()
+            return
+
+        self._preflight_request_id += 1
+        request_id = self._preflight_request_id
+        self._latest_preflight_request_id = request_id
+        self.preflight_status_var.set("Preflight: Memeriksa...")
+        self.preflight_summary_var.set("Memvalidasi source, config, master, dan target output...")
+        self._update_execute_state()
+
+        if self._preflight_thread is not None and self._preflight_thread.is_alive():
+            return
+
+        self._start_preflight_worker()
+
+    def _start_preflight_worker(self) -> None:
+        if self._preflight_thread is not None and self._preflight_thread.is_alive():
+            return
+        if self.source_path is None:
+            return
+        job = self._selected_job()
+        if job is None or job.config_path is None:
+            return
+
+        self._active_preflight_request_id = self._latest_preflight_request_id
+        self._preflight_queue = Queue()
+        self._preflight_thread = Thread(
+            target=self._run_preflight_worker,
+            args=(
+                self._active_preflight_request_id,
+                self.source_path,
+                job.config_path,
+                self._preflight_queue,
+            ),
+            daemon=True,
+        )
+        self._preflight_thread.start()
+        self.after(120, self._poll_preflight_events)
+
+    def _run_preflight_worker(
+        self,
+        request_id: int,
+        source_path: Path,
+        config_path: Path,
+        event_queue: Queue[tuple[str, object]],
+    ) -> None:
+        try:
+            result = run_preflight(
+                paths=self.paths,
+                source_path=source_path,
+                config_path=config_path,
+            )
+            event_queue.put(("result", (request_id, result)))
+        except Exception as exc:
+            event_queue.put(("error", (request_id, str(exc))))
+        finally:
+            event_queue.put(("done", request_id))
+
+    def _poll_preflight_events(self) -> None:
+        if self._preflight_queue is None:
+            return
+
+        done_received = False
+        while True:
+            try:
+                kind, payload = self._preflight_queue.get_nowait()
+            except Empty:
+                break
+
+            if kind == "result":
+                request_id, result = payload
+                if (
+                    isinstance(request_id, int)
+                    and isinstance(result, PreflightResult)
+                    and request_id == self._latest_preflight_request_id
+                ):
+                    self._apply_preflight_result(result)
+                    self._append_log(
+                        f"Preflight selesai: {result.status} "
+                        f"({result.error_count} error, {result.warning_count} warning, {result.info_count} info)."
+                    )
+            elif kind == "error":
+                request_id, error_message = payload
+                if isinstance(request_id, int) and request_id == self._latest_preflight_request_id:
+                    fallback = PreflightResult(
+                        status="Blocked",
+                        findings=(),
+                        output_path=None,
+                    )
+                    self._preflight_result = fallback
+                    self.preflight_status_var.set("Preflight: Blocked")
+                    self.preflight_summary_var.set(
+                        "Preflight gagal dijalankan. Periksa source/job aktif lalu coba lagi. "
+                        f"Detail: {error_message}"
+                    )
+                    self._append_log(f"Preflight error: {error_message}")
+                    self.last_output_var.set("-")
+                    self._update_execute_state()
+            elif kind == "done":
+                done_received = True
+
+        if done_received:
+            completed_request_id = self._active_preflight_request_id
+            self._preflight_queue = None
+            self._preflight_thread = None
+            self._active_preflight_request_id = None
+            if (
+                isinstance(completed_request_id, int)
+                and self._latest_preflight_request_id > completed_request_id
+            ):
+                self._start_preflight_worker()
+                return
+            if self._preflight_result is None and self.source_path is not None and self._selected_job() is not None:
+                self._schedule_preflight()
+                return
+            self._update_execute_state()
+            return
+
+        self.after(120, self._poll_preflight_events)
 
     def _execute_pipeline(self) -> None:
         job = self._selected_job()
@@ -537,6 +729,20 @@ class DesktopApp(ctk.CTk):
             messagebox.showwarning(
                 "Input belum lengkap",
                 "Pilih source dan pekerjaan yang valid terlebih dahulu.",
+            )
+            return
+
+        if self._preflight_result is None:
+            messagebox.showwarning(
+                "Preflight belum siap",
+                "Tunggu preflight selesai sebelum menjalankan execute.",
+            )
+            return
+
+        if not self._preflight_result.can_execute:
+            messagebox.showwarning(
+                "Preflight memblokir execute",
+                "Perbaiki temuan preflight yang masih Blocked sebelum menjalankan execute.",
             )
             return
 
