@@ -7,7 +7,7 @@ import re
 import pandas as pd
 
 from app.services.dataframe_io_service import read_tabular_file
-from app.utils.path_safety import normalize_relative_path_string, resolve_casefold_relative_path
+from app.utils.path_safety import resolve_runtime_relative_path
 
 
 LogFn = Callable[[str], None]
@@ -31,15 +31,10 @@ SUPPORTED_SYMPTOM_MATCH_TYPES = {"equals", "contains", "regex"}
 
 def resolve_master_path(master_file: str, project_root: Path, masters_dir: Path) -> Path:
     try:
-        normalized_ref = normalize_relative_path_string(master_file)
+        resolved = resolve_runtime_relative_path(project_root, master_file, root_name="masters")
     except ValueError as exc:
         raise ValueError(f"Path master tidak valid: {exc}") from exc
 
-    path_parts = normalized_ref.split("/")
-    if not path_parts or path_parts[0].casefold() != "masters":
-        raise ValueError("Path master harus relatif dan berada di folder masters/.")
-
-    resolved = resolve_casefold_relative_path(project_root, normalized_ref).resolve()
     masters_root = masters_dir.resolve()
     if not resolved.is_relative_to(masters_root):
         raise ValueError(

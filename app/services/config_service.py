@@ -5,7 +5,7 @@ from pathlib import Path
 
 import yaml
 
-from app.utils.path_safety import normalize_relative_path_string
+from app.utils.path_safety import normalize_relative_path_string, resolve_runtime_relative_path, validate_runtime_relative_path
 from app.services.transform_service import (
     SUPPORTED_FORMULA_OPERATIONS,
     SUPPORTED_GROUPBY_AGGFUNCS,
@@ -41,15 +41,12 @@ def _validate_master_file_path(
         return
 
     try:
-        normalized = normalize_relative_path_string(raw_path)
+        normalized = validate_runtime_relative_path(raw_path, root_name="masters")
     except ValueError as exc:
         errors.append(f"{path} tidak valid: {exc}")
         return
 
     parts = normalized.split("/")
-    if parts[0].casefold() != "masters":
-        errors.append(f"{path} wajib berada di bawah folder masters/.")
-
     if Path(parts[-1]).suffix.lower() not in {".csv", ".xlsx"}:
         errors.append(f"{path} hanya mendukung file .csv atau .xlsx.")
 
@@ -93,9 +90,17 @@ def list_config_files(configs_dir: Path) -> list[Path]:
     if not configs_dir.exists():
         return []
 
-    files = list(configs_dir.glob("*.yaml"))
-    files.extend(configs_dir.glob("*.yml"))
-    return sorted(set(files), key=lambda item: item.name.casefold())
+    root = configs_dir.parent
+    files = [
+        path
+        for path in configs_dir.iterdir()
+        if path.is_file() and path.suffix.lower() in {".yaml", ".yml"}
+    ]
+    safe_files = [
+        resolve_runtime_relative_path(root, f"configs/{path.name}", root_name="configs")
+        for path in files
+    ]
+    return sorted(set(safe_files), key=lambda item: item.name.casefold())
 
 
 def _validate_condition_rule(
@@ -723,8 +728,23 @@ def discover_configs(configs_dir: Path) -> list[ConfigSummary]:
 
 
 def load_config_payload(path: Path) -> dict:
+    if path.parent.name.casefold() != "configs":
+        raise ValueError("Path config tidak valid: file wajib berada di folder configs/.")
+
     try:
-        payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+        safe_path = resolve_runtime_relative_path(
+            path.parent.parent,
+            f"configs/{path.name}",
+            root_name="configs",
+        )
+    except ValueError as exc:
+        raise ValueError(f"Path config tidak valid: {exc}") from exc
+
+    if path.resolve() != safe_path:
+        raise ValueError("Path config tidak valid: file wajib berada di folder configs/.")
+
+    try:
+        payload = yaml.safe_load(safe_path.read_text(encoding="utf-8"))
     except OSError as exc:
         raise ValueError(f"Gagal membaca config: {exc}") from exc
     except yaml.YAMLError as exc:
