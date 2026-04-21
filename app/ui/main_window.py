@@ -335,6 +335,8 @@ class DesktopApp(ctk.CTk):
         self.selected_job_var = ctk.StringVar(value="")
         self.job_info_var = ctk.StringVar(value="Belum ada pekerjaan terpilih.")
         self.session_restore_var = ctk.StringVar(value="")
+        self.primary_hint_var = ctk.StringVar(value="")
+        self.execute_hint_var = ctk.StringVar(value="")
         self.preflight_status_var = ctk.StringVar(value="Preflight: Belum dicek")
         self.preflight_summary_var = ctk.StringVar(value="Pilih source dan pekerjaan untuk memulai pemeriksaan otomatis.")
         self.status_var = ctk.StringVar(value="Status: Idle")
@@ -443,23 +445,37 @@ class DesktopApp(ctk.CTk):
 
         ctk.CTkLabel(
             left_panel,
+            textvariable=self.primary_hint_var,
+            justify="left",
+            wraplength=300,
+        ).grid(row=12, column=0, padx=16, pady=(0, 8), sticky="w")
+
+        ctk.CTkLabel(
+            left_panel,
+            textvariable=self.execute_hint_var,
+            justify="left",
+            wraplength=300,
+        ).grid(row=13, column=0, padx=16, pady=(0, 16), sticky="w")
+
+        ctk.CTkLabel(
+            left_panel,
             text="Preflight",
             font=ctk.CTkFont(weight="bold"),
-        ).grid(row=12, column=0, padx=16, pady=(0, 4), sticky="w")
+        ).grid(row=14, column=0, padx=16, pady=(0, 4), sticky="w")
 
         ctk.CTkLabel(
             left_panel,
             textvariable=self.preflight_status_var,
             justify="left",
             wraplength=300,
-        ).grid(row=13, column=0, padx=16, pady=(0, 4), sticky="w")
+        ).grid(row=15, column=0, padx=16, pady=(0, 4), sticky="w")
 
         ctk.CTkLabel(
             left_panel,
             textvariable=self.preflight_summary_var,
             justify="left",
             wraplength=300,
-        ).grid(row=14, column=0, padx=16, pady=(0, 16), sticky="w")
+        ).grid(row=16, column=0, padx=16, pady=(0, 16), sticky="w")
 
         self.execute_button = ctk.CTkButton(
             left_panel,
@@ -468,16 +484,16 @@ class DesktopApp(ctk.CTk):
             state="disabled",
             height=42,
         )
-        self.execute_button.grid(row=15, column=0, padx=16, pady=(0, 8), sticky="ew")
+        self.execute_button.grid(row=17, column=0, padx=16, pady=(0, 8), sticky="ew")
 
         ctk.CTkLabel(
             left_panel,
             text="Progress",
             font=ctk.CTkFont(weight="bold"),
-        ).grid(row=16, column=0, padx=16, pady=(0, 4), sticky="w")
+        ).grid(row=18, column=0, padx=16, pady=(0, 4), sticky="w")
 
         self.progress_bar = ctk.CTkProgressBar(left_panel)
-        self.progress_bar.grid(row=17, column=0, padx=16, pady=(0, 4), sticky="ew")
+        self.progress_bar.grid(row=19, column=0, padx=16, pady=(0, 4), sticky="ew")
         self.progress_bar.set(0)
 
         ctk.CTkLabel(
@@ -485,10 +501,10 @@ class DesktopApp(ctk.CTk):
             textvariable=self.progress_summary_var,
             justify="left",
             wraplength=300,
-        ).grid(row=18, column=0, padx=16, pady=(0, 8), sticky="w")
+        ).grid(row=20, column=0, padx=16, pady=(0, 8), sticky="w")
 
         progress_frame = ctk.CTkFrame(left_panel, fg_color="transparent")
-        progress_frame.grid(row=19, column=0, padx=16, pady=(0, 16), sticky="ew")
+        progress_frame.grid(row=21, column=0, padx=16, pady=(0, 16), sticky="ew")
         progress_frame.grid_columnconfigure(0, weight=1)
         for row_idx, (step_id, _) in enumerate(PIPELINE_STEP_ORDER):
             ctk.CTkLabel(
@@ -503,7 +519,7 @@ class DesktopApp(ctk.CTk):
             left_panel,
             text="Buka Folder Outputs",
             command=self._open_outputs_dir,
-        ).grid(row=20, column=0, padx=16, pady=(0, 16), sticky="ew")
+        ).grid(row=22, column=0, padx=16, pady=(0, 16), sticky="ew")
 
         self.start_new_session_button = ctk.CTkButton(
             left_panel,
@@ -511,24 +527,24 @@ class DesktopApp(ctk.CTk):
             command=self._start_new_session,
             state="disabled",
         )
-        self.start_new_session_button.grid(row=21, column=0, padx=16, pady=(0, 16), sticky="ew")
+        self.start_new_session_button.grid(row=23, column=0, padx=16, pady=(0, 16), sticky="ew")
 
         ctk.CTkLabel(
             left_panel,
             textvariable=self.status_var,
             justify="left",
             wraplength=300,
-        ).grid(row=22, column=0, padx=16, pady=(0, 8), sticky="w")
+        ).grid(row=24, column=0, padx=16, pady=(0, 8), sticky="w")
 
         ctk.CTkLabel(left_panel, text="Target output").grid(
-            row=23, column=0, padx=16, sticky="w"
+            row=25, column=0, padx=16, sticky="w"
         )
         ctk.CTkLabel(
             left_panel,
             textvariable=self.last_output_var,
             justify="left",
             wraplength=300,
-        ).grid(row=24, column=0, padx=16, pady=(0, 16), sticky="w")
+        ).grid(row=26, column=0, padx=16, pady=(0, 16), sticky="w")
 
         ctk.CTkLabel(
             right_panel,
@@ -685,6 +701,82 @@ class DesktopApp(ctk.CTk):
 
     def _set_status(self, text: str) -> None:
         self.status_var.set(f"Status: {text}")
+        self._update_hints()
+
+    def _set_hint_values(self, primary: str, execute: str) -> None:
+        if "primary_hint_var" not in self.__dict__ or "execute_hint_var" not in self.__dict__:
+            return
+        self.primary_hint_var.set(primary)
+        self.execute_hint_var.set(execute)
+
+    def _hint_job_count(self) -> int:
+        job_by_label = self.__dict__.get("job_by_label")
+        return len(job_by_label) if isinstance(job_by_label, dict) else 0
+
+    def _hint_source_path(self) -> Path | None:
+        source_path = self.__dict__.get("source_path")
+        return source_path if isinstance(source_path, Path) else None
+
+    def _hint_status_text(self) -> str:
+        status_var = self.__dict__.get("status_var")
+        if status_var is None:
+            return "Status: Idle"
+        return str(status_var.get())
+
+    def _hint_preflight_status_text(self) -> str:
+        preflight_status_var = self.__dict__.get("preflight_status_var")
+        if preflight_status_var is None:
+            return "Preflight: Belum dicek"
+        return str(preflight_status_var.get())
+
+    def _hint_preflight_result(self) -> PreflightResult | None:
+        result = self.__dict__.get("_preflight_result")
+        return result if isinstance(result, PreflightResult) else None
+
+    def _resolve_primary_hint(self) -> str:
+        worker_running = self._worker_thread is not None and self._worker_thread.is_alive()
+        if self._hint_job_count() == 0:
+            return "Belum ada pekerjaan valid. Cek file configs/job_profiles.yaml dan config yang dirujuk."
+        if worker_running:
+            return "Proses sedang berjalan. Tunggu hingga semua langkah selesai."
+        if self._hint_status_text() == "Status: Sukses":
+            return "Proses selesai. Periksa Job Summary atau buka folder outputs."
+        if self._hint_status_text() == "Status: Gagal":
+            return "Proses gagal. Periksa log untuk detail lalu perbaiki source atau config aktif."
+        if self._hint_source_path() is None:
+            return "Pilih source file untuk pekerjaan yang aktif."
+        preflight_running = self._preflight_thread is not None and self._preflight_thread.is_alive()
+        if preflight_running or self._hint_preflight_status_text() == "Preflight: Memeriksa...":
+            return "Preflight sedang memeriksa kecocokan source, config, dan output."
+        preflight_result = self._hint_preflight_result()
+        if preflight_result is not None and preflight_result.status == "Blocked":
+            return "Execute dinonaktifkan karena masih ada error preflight. Lihat ringkasan preflight atau log untuk detail."
+        if preflight_result is not None and preflight_result.can_execute:
+            return "Source siap diproses. Jalankan Execute untuk membuat output."
+        return "Pilih source dan pekerjaan untuk memulai pemeriksaan otomatis."
+
+    def _resolve_execute_hint(self) -> str:
+        worker_running = self._worker_thread is not None and self._worker_thread.is_alive()
+        if self._hint_job_count() == 0:
+            return "Tambahkan atau perbaiki pekerjaan valid sebelum menjalankan execute."
+        if worker_running:
+            return "Execute dinonaktifkan selama proses masih berjalan."
+        preflight_running = self._preflight_thread is not None and self._preflight_thread.is_alive()
+        if self._hint_source_path() is None:
+            return "Pilih source terlebih dahulu."
+        if self._selected_job() is None:
+            return "Pilih pekerjaan valid terlebih dahulu."
+        if preflight_running or self._hint_preflight_status_text() == "Preflight: Memeriksa...":
+            return "Tunggu preflight selesai sebelum menjalankan execute."
+        preflight_result = self._hint_preflight_result()
+        if preflight_result is None:
+            return "Preflight belum siap."
+        if not preflight_result.can_execute:
+            return "Execute dinonaktifkan sampai semua error preflight diselesaikan."
+        return "Execute siap dijalankan."
+
+    def _update_hints(self) -> None:
+        self._set_hint_values(self._resolve_primary_hint(), self._resolve_execute_hint())
 
     def _select_source(self) -> None:
         file_path = select_source_file(self.paths.project_root)
@@ -710,12 +802,14 @@ class DesktopApp(ctk.CTk):
         self._append_log(f"Source dipilih: {source_path.name}")
         self._schedule_preflight()
         self._update_execute_state()
+        self._update_hints()
 
     def _on_job_selected(self, _: str) -> None:
         self._update_job_info()
         self._persist_session_state()
         self._schedule_preflight()
         self._update_execute_state()
+        self._update_hints()
 
     def refresh_jobs(self, initial: bool = False) -> None:
         job_items = discover_job_profiles(self.paths.configs_dir)
@@ -762,6 +856,8 @@ class DesktopApp(ctk.CTk):
         if initial:
             self._load_pending_session_state()
 
+        self._update_hints()
+
     def _update_job_info(self) -> None:
         selected_label = self.selected_job_var.get()
         selected = self.job_by_label.get(selected_label)
@@ -806,6 +902,7 @@ class DesktopApp(ctk.CTk):
             self.execute_button.configure(state="normal")
         else:
             self.execute_button.configure(state="disabled")
+        self._update_hints()
 
     def _set_preflight_idle(self) -> None:
         self._preflight_result = None
@@ -815,6 +912,7 @@ class DesktopApp(ctk.CTk):
         )
         self.last_output_var.set("-")
         self._reset_progress_state()
+        self._update_hints()
 
     def _can_start_new_session(self) -> bool:
         worker_running = self._worker_thread is not None and self._worker_thread.is_alive()
@@ -847,6 +945,7 @@ class DesktopApp(ctk.CTk):
         self.refresh_jobs(initial=False)
         self._append_log("Sesi baru dimulai.")
         self._update_execute_state()
+        self._update_hints()
 
     def _format_preflight_summary(self, result: PreflightResult) -> str:
         if not result.findings:
@@ -865,6 +964,7 @@ class DesktopApp(ctk.CTk):
         if result.output_path is not None:
             self.last_output_var.set(str(result.output_path))
         self._update_execute_state()
+        self._update_hints()
 
     def _schedule_preflight(self) -> None:
         job = self._selected_job()
@@ -879,6 +979,7 @@ class DesktopApp(ctk.CTk):
         self.preflight_status_var.set("Preflight: Memeriksa...")
         self.preflight_summary_var.set("Memvalidasi source, config, master, dan target output...")
         self._update_execute_state()
+        self._update_hints()
 
         if self._preflight_thread is not None and self._preflight_thread.is_alive():
             return
@@ -968,6 +1069,7 @@ class DesktopApp(ctk.CTk):
                     self._append_log(f"Preflight error: {error_message}")
                     self.last_output_var.set("-")
                     self._update_execute_state()
+                    self._update_hints()
             elif kind == "done":
                 done_received = True
 
@@ -986,6 +1088,7 @@ class DesktopApp(ctk.CTk):
                 self._schedule_preflight()
                 return
             self._update_execute_state()
+            self._update_hints()
             return
 
         self.after(120, self._poll_preflight_events)
@@ -1085,10 +1188,12 @@ class DesktopApp(ctk.CTk):
                     self._append_log(
                         f"Output berhasil dibuat ({result.sheets_written} sheet)."
                     )
+                    self._update_hints()
             elif kind == "error":
                 error_message = str(payload)
                 self._set_status("Gagal")
                 self._append_log(f"Error: {error_message}")
+                self._update_hints()
                 messagebox.showerror(
                     "Eksekusi gagal",
                     sanitize_exception_message(error_message, project_root=self.paths.project_root),
@@ -1100,6 +1205,7 @@ class DesktopApp(ctk.CTk):
             self._worker_queue = None
             self._worker_thread = None
             self._update_execute_state()
+            self._update_hints()
             return
 
         self.after(120, self._poll_worker_events)

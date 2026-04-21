@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from pathlib import Path
 
+from app.services import PreflightResult
 from app.ui.main_window import DesktopApp
 
 
@@ -40,6 +41,8 @@ class DummyJob:
         self.label = label
         self.is_valid = True
         self.config_path = Path("config.yaml")
+        self.config_file = "config.yaml"
+        self.master_files = ("master.xlsx",)
 
 
 def test_can_start_new_session_only_after_terminal_status():
@@ -239,3 +242,93 @@ def test_use_last_session_restores_job_source_and_runs_preflight(tmp_path, monke
         "preflight",
         "execute",
     ]
+
+
+def _make_hint_app() -> DesktopApp:
+    app = DesktopApp.__new__(DesktopApp)
+    app.job_by_label = {}
+    app.selected_job_var = DummyVar("")
+    app.source_path = None
+    app._preflight_result = None
+    app._preflight_thread = None
+    app._worker_thread = None
+    app.status_var = DummyVar("Status: Idle")
+    app.preflight_status_var = DummyVar("Preflight: Belum dicek")
+    app.primary_hint_var = DummyVar()
+    app.execute_hint_var = DummyVar()
+    app._selected_job = lambda: None
+    return app
+
+
+def test_update_hints_at_startup_without_valid_job():
+    app = _make_hint_app()
+
+    DesktopApp._update_hints(app)
+
+    assert app.primary_hint_var.get() == (
+        "Belum ada pekerjaan valid. Cek file configs/job_profiles.yaml dan config yang dirujuk."
+    )
+    assert app.execute_hint_var.get() == (
+        "Tambahkan atau perbaiki pekerjaan valid sebelum menjalankan execute."
+    )
+
+
+def test_update_hints_when_source_not_selected():
+    app = _make_hint_app()
+    app.job_by_label = {"Report Bulanan": DummyJob("report-bulanan")}
+    app.selected_job_var = DummyVar("Report Bulanan")
+    app._selected_job = lambda: app.job_by_label["Report Bulanan"]
+
+    DesktopApp._update_hints(app)
+
+    assert app.primary_hint_var.get() == "Pilih source file untuk pekerjaan yang aktif."
+    assert app.execute_hint_var.get() == "Pilih source terlebih dahulu."
+
+
+def test_update_hints_when_preflight_blocked():
+    app = _make_hint_app()
+    app.job_by_label = {"Report Bulanan": DummyJob("report-bulanan")}
+    app.selected_job_var = DummyVar("Report Bulanan")
+    app.source_path = Path("source.xlsx")
+    app._selected_job = lambda: app.job_by_label["Report Bulanan"]
+    app._preflight_result = PreflightResult(status="Blocked", findings=(), output_path=None)
+    app.preflight_status_var = DummyVar("Preflight: Blocked")
+
+    DesktopApp._update_hints(app)
+
+    assert app.primary_hint_var.get() == (
+        "Execute dinonaktifkan karena masih ada error preflight. Lihat ringkasan preflight atau log untuk detail."
+    )
+    assert app.execute_hint_var.get() == (
+        "Execute dinonaktifkan sampai semua error preflight diselesaikan."
+    )
+
+
+def test_update_hints_when_ready_to_execute():
+    app = _make_hint_app()
+    app.job_by_label = {"Report Bulanan": DummyJob("report-bulanan")}
+    app.selected_job_var = DummyVar("Report Bulanan")
+    app.source_path = Path("source.xlsx")
+    app._selected_job = lambda: app.job_by_label["Report Bulanan"]
+    app._preflight_result = PreflightResult(status="Ready", findings=(), output_path=None)
+    app.preflight_status_var = DummyVar("Preflight: Ready")
+
+    DesktopApp._update_hints(app)
+
+    assert app.primary_hint_var.get() == "Source siap diproses. Jalankan Execute untuk membuat output."
+    assert app.execute_hint_var.get() == "Execute siap dijalankan."
+
+
+def test_update_hints_after_success_and_failure():
+    app = _make_hint_app()
+    app.job_by_label = {"Report Bulanan": DummyJob("report-bulanan")}
+
+    app.status_var.set("Status: Sukses")
+    DesktopApp._update_hints(app)
+    assert app.primary_hint_var.get() == "Proses selesai. Periksa Job Summary atau buka folder outputs."
+
+    app.status_var.set("Status: Gagal")
+    DesktopApp._update_hints(app)
+    assert app.primary_hint_var.get() == (
+        "Proses gagal. Periksa log untuk detail lalu perbaiki source atau config aktif."
+    )
