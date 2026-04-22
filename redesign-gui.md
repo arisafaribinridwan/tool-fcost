@@ -106,6 +106,26 @@ Catatan:
 - perubahan visual detail untuk source experience, readiness emphasis, progress, dan state badge tetap ditangani pada tahap berikutnya
 - selama review Tahap 2 ditambahkan fallback aman untuk drag-and-drop jika `tkinterdnd2` terimpor tetapi runtime `tkdnd` tidak aktif pada package Linux
 
+### Tahap 3
+
+Status: selesai.
+
+Keputusan yang sudah diimplementasikan:
+
+- `Source card` sekarang menampilkan panel `Source aktif` yang lebih mudah dipindai daripada field input polos
+- area dropzone source dibuat lebih menonjol secara visual dan tetap memakai wiring `self.source_drop_label` yang sudah ada
+- aksi `Clear Source` ditambahkan untuk mengosongkan source aktif tanpa mengubah flow validasi yang sudah ada
+- implementasi `Clear Source` disinkronkan dengan reset preflight, update hint, dan gating `Execute`
+- `Job/readiness card` dirapikan menjadi blok yang lebih jelas untuk pemilihan job, ringkasan job aktif, dan readiness/preflight
+- info sesi terakhir sekarang ditampilkan hanya jika `session_state_service` benar-benar memiliki `last_job_id` atau `last_source_path`
+- persistence session state diperbaiki agar menyimpan `last_job_id` dan `last_source_path` nyata, bukan hanya geometry window
+- coverage test ditambahkan untuk clear source, info sesi terakhir, dan persistence session state
+
+Catatan:
+
+- Tahap 3 tetap tidak menambahkan auto-restore session baru; perubahan dibatasi pada presentasi info sesi terakhir yang memang sudah punya backend data
+- perubahan progress bar, state badge, dan execute card yang lebih ekspresif tetap ditangani pada Tahap 4
+
 ## Gap Analysis: JSX Prototype vs UI Python Saat Ini
 
 ### Sudah ada di UI Python

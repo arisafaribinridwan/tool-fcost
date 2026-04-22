@@ -408,8 +408,11 @@ class DesktopApp(ctk.CTk):
         self.log_panel_frame: ctk.CTkFrame | None = None
         self.state_badge_label: ctk.CTkLabel | None = None
         self.progress_bar: ctk.CTkProgressBar | None = None
+        self.clear_source_button: ctk.CTkButton | None = None
+        self.last_session_info_label: ctk.CTkLabel | None = None
         self.progress_label_var = ctk.StringVar(value="Progress: Belum dimulai")
         self.progress_steps_var = ctk.StringVar(value=self._format_pipeline_step_lines())
+        self.last_session_info_var = ctk.StringVar(value="")
 
     def _format_pipeline_step_lines(self) -> str:
         return "\n".join(f"- {label}" for _, label in PIPELINE_STEP_ORDER)
@@ -518,26 +521,88 @@ class DesktopApp(ctk.CTk):
             description="Pilih file source Excel atau CSV yang akan diproses.",
         )
 
-        ctk.CTkLabel(self.source_card_frame, text="Source file (.xlsx / .csv)").grid(
-            row=next_row,
-            column=0,
-            padx=16,
-            pady=(0, 4),
-            sticky="w",
+        source_actions = ctk.CTkFrame(self.source_card_frame, fg_color="transparent")
+        source_actions.grid(row=next_row, column=0, padx=16, pady=(0, 8), sticky="ew")
+        source_actions.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            source_actions,
+            text="Source file (.xlsx / .csv)",
+            font=ctk.CTkFont(weight="bold"),
+        ).grid(row=0, column=0, sticky="w")
+
+        self.clear_source_button = ctk.CTkButton(
+            source_actions,
+            text="Clear Source",
+            command=self._clear_source,
+            width=98,
+            height=30,
+            state="disabled",
+            fg_color="transparent",
+            text_color=("gray35", "gray70"),
+            border_width=1,
+            border_color=("gray75", "gray30"),
+            hover_color=("gray88", "gray22"),
         )
-        ctk.CTkEntry(self.source_card_frame, textvariable=self.source_var).grid(
-            row=next_row + 1,
-            column=0,
-            padx=16,
-            pady=(0, 8),
-            sticky="ew",
+        self.clear_source_button.grid(row=0, column=1, sticky="e")
+
+        selected_source_panel = ctk.CTkFrame(
+            self.source_card_frame,
+            fg_color=("gray95", "gray15"),
+            border_width=1,
+            border_color=("gray88", "gray25"),
+            corner_radius=14,
         )
+        selected_source_panel.grid(row=next_row + 1, column=0, padx=16, pady=(0, 10), sticky="ew")
+        selected_source_panel.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            selected_source_panel,
+            text="Source aktif",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=("gray45", "gray55"),
+            anchor="w",
+        ).grid(row=0, column=0, padx=14, pady=(12, 2), sticky="w")
+
+        ctk.CTkLabel(
+            selected_source_panel,
+            textvariable=self.source_var,
+            justify="left",
+            wraplength=320,
+            anchor="w",
+        ).grid(row=1, column=0, padx=14, pady=(0, 12), sticky="ew")
+
         ctk.CTkButton(
             self.source_card_frame,
             text="Pilih Source",
             command=self._select_source,
             height=38,
-        ).grid(row=next_row + 2, column=0, padx=16, pady=(0, 12), sticky="ew")
+        ).grid(row=next_row + 2, column=0, padx=16, pady=(0, 10), sticky="ew")
+
+        dropzone_frame = ctk.CTkFrame(
+            self.source_card_frame,
+            fg_color=("#EEF2FF", "#1E293B"),
+            border_width=2,
+            border_color=("#C7D2FE", "#334155"),
+            corner_radius=16,
+        )
+        dropzone_frame.grid(row=next_row + 3, column=0, padx=16, pady=(0, 16), sticky="ew")
+        dropzone_frame.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            dropzone_frame,
+            text="Dropzone Source",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=("#4F46E5", "#A5B4FC"),
+        ).grid(row=0, column=0, padx=14, pady=(14, 2), sticky="w")
+
+        ctk.CTkLabel(
+            dropzone_frame,
+            text="Tarik satu file ke area ini atau gunakan tombol pilih source.",
+            justify="left",
+            wraplength=320,
+            text_color=("gray35", "gray65"),
+        ).grid(row=1, column=0, padx=14, pady=(0, 8), sticky="w")
 
         self.source_drop_hint_var = ctk.StringVar(
             value=(
@@ -547,118 +612,195 @@ class DesktopApp(ctk.CTk):
             )
         )
         self.source_drop_label = ctk.CTkLabel(
-            self.source_card_frame,
+            dropzone_frame,
             textvariable=self.source_drop_hint_var,
             justify="left",
             wraplength=320,
             anchor="w",
             corner_radius=10,
-            fg_color=("gray92", "gray18"),
+            fg_color=("#FFFFFF", "#0F172A"),
             padx=12,
             pady=14,
         )
         self.source_drop_label.grid(
-            row=next_row + 3,
+            row=2,
             column=0,
-            padx=16,
-            pady=(0, 16),
+            padx=14,
+            pady=(0, 14),
             sticky="ew",
         )
         self._bind_drop_target(self.source_drop_label)
+        self._update_source_actions()
 
     def _build_job_card(self, master: ctk.CTkFrame) -> None:
         self.job_card_frame = ctk.CTkFrame(master)
         self.job_card_frame.grid(row=2, column=0, padx=16, pady=(0, 12), sticky="ew")
         self.job_card_frame.grid_columnconfigure(0, weight=1)
-        self.job_card_frame.grid_columnconfigure(1, weight=0)
 
         next_row = self._build_card_title(
             self.job_card_frame,
             eyebrow="Langkah 2",
             title="Job dan Readiness",
-            description="Pilih pekerjaan aktif dan periksa kesiapan proses sebelum execute.",
+            description="Pilih pekerjaan aktif, cek konteks job, lalu pantau readiness sebelum execute.",
         )
 
-        ctk.CTkLabel(self.job_card_frame, text="Pekerjaan").grid(
-            row=next_row,
-            column=0,
-            padx=16,
-            pady=(0, 4),
-            sticky="w",
-        )
-        self.job_menu = ctk.CTkOptionMenu(
+        selection_panel = ctk.CTkFrame(
             self.job_card_frame,
+            fg_color=("gray95", "gray16"),
+            border_width=1,
+            border_color=("gray88", "gray25"),
+            corner_radius=14,
+        )
+        selection_panel.grid(row=next_row, column=0, padx=16, pady=(0, 12), sticky="ew")
+        selection_panel.grid_columnconfigure(0, weight=1)
+        selection_panel.grid_columnconfigure(1, weight=0)
+        selection_panel.grid_columnconfigure(2, weight=0)
+
+        ctk.CTkLabel(
+            selection_panel,
+            text="Pekerjaan aktif",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=("gray45", "gray55"),
+        ).grid(row=0, column=0, columnspan=3, padx=14, pady=(12, 4), sticky="w")
+
+        self.job_menu = ctk.CTkOptionMenu(
+            selection_panel,
             variable=self.selected_job_var,
             values=["Belum ada pekerjaan"],
             command=self._on_job_selected,
         )
-        self.job_menu.grid(row=next_row + 1, column=0, padx=16, pady=(0, 8), sticky="ew")
-
-        action_row = ctk.CTkFrame(self.job_card_frame, fg_color="transparent")
-        action_row.grid(row=next_row + 2, column=0, padx=16, pady=(0, 10), sticky="ew")
-        action_row.grid_columnconfigure(0, weight=1)
-        action_row.grid_columnconfigure(1, weight=1)
+        self.job_menu.grid(row=1, column=0, padx=(14, 8), pady=(0, 12), sticky="ew")
 
         ctk.CTkButton(
-            action_row,
-            text="Pengaturan",
-            command=self._open_job_settings,
-            height=34,
-        ).grid(row=0, column=0, padx=(0, 6), sticky="ew")
-        ctk.CTkButton(
-            action_row,
-            text="Refresh Pekerjaan",
+            selection_panel,
+            text="Refresh",
             command=self.refresh_jobs,
+            width=84,
             height=34,
-        ).grid(row=0, column=1, padx=(6, 0), sticky="ew")
+        ).grid(row=1, column=1, padx=(0, 8), pady=(0, 12), sticky="ew")
+
+        ctk.CTkButton(
+            selection_panel,
+            text="Settings",
+            command=self._open_job_settings,
+            width=84,
+            height=34,
+        ).grid(row=1, column=2, padx=(0, 14), pady=(0, 12), sticky="ew")
+
+        self.last_session_info_label = ctk.CTkLabel(
+            self.job_card_frame,
+            textvariable=self.last_session_info_var,
+            justify="left",
+            wraplength=320,
+            corner_radius=12,
+            fg_color=("#EFF6FF", "#172554"),
+            text_color=("#1D4ED8", "#BFDBFE"),
+            padx=12,
+            pady=10,
+        )
+        self.last_session_info_label.grid(
+            row=next_row + 1,
+            column=0,
+            padx=16,
+            pady=(0, 12),
+            sticky="ew",
+        )
+
+        job_info_panel = ctk.CTkFrame(
+            self.job_card_frame,
+            fg_color=("gray95", "gray16"),
+            border_width=1,
+            border_color=("gray88", "gray25"),
+            corner_radius=14,
+        )
+        job_info_panel.grid(row=next_row + 2, column=0, padx=16, pady=(0, 12), sticky="ew")
+        job_info_panel.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
-            self.job_card_frame,
+            job_info_panel,
+            text="Ringkasan job aktif",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=("gray45", "gray55"),
+        ).grid(row=0, column=0, padx=14, pady=(12, 2), sticky="w")
+
+        ctk.CTkLabel(
+            job_info_panel,
             textvariable=self.job_info_var,
             justify="left",
             wraplength=320,
-        ).grid(row=next_row + 3, column=0, padx=16, pady=(0, 12), sticky="w")
+            anchor="w",
+        ).grid(row=1, column=0, padx=14, pady=(0, 12), sticky="ew")
+
+        readiness_panel = ctk.CTkFrame(
+            self.job_card_frame,
+            fg_color=("#F8FAFC", "#111827"),
+            border_width=1,
+            border_color=("#E2E8F0", "#334155"),
+            corner_radius=14,
+        )
+        readiness_panel.grid(row=next_row + 3, column=0, padx=16, pady=(0, 16), sticky="ew")
+        readiness_panel.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
-            self.job_card_frame,
-            text="Kesiapan",
-            font=ctk.CTkFont(weight="bold"),
-        ).grid(row=next_row + 4, column=0, padx=16, pady=(0, 6), sticky="w")
+            readiness_panel,
+            text="Readiness",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=("#4F46E5", "#A5B4FC"),
+        ).grid(row=0, column=0, padx=14, pady=(12, 2), sticky="w")
 
         ctk.CTkLabel(
-            self.job_card_frame,
+            readiness_panel,
             textvariable=self.primary_hint_var,
             justify="left",
             wraplength=320,
-        ).grid(row=next_row + 5, column=0, padx=16, pady=(0, 8), sticky="w")
+            anchor="w",
+            font=ctk.CTkFont(weight="bold"),
+        ).grid(row=1, column=0, padx=14, pady=(0, 8), sticky="ew")
 
         ctk.CTkLabel(
-            self.job_card_frame,
+            readiness_panel,
             textvariable=self.execute_hint_var,
             justify="left",
             wraplength=320,
             text_color=("gray40", "gray60"),
-        ).grid(row=next_row + 6, column=0, padx=16, pady=(0, 12), sticky="w")
+            anchor="w",
+        ).grid(row=2, column=0, padx=14, pady=(0, 10), sticky="ew")
+
+        preflight_panel = ctk.CTkFrame(
+            readiness_panel,
+            fg_color=("#FFFFFF", "#0F172A"),
+            border_width=1,
+            border_color=("#E2E8F0", "#334155"),
+            corner_radius=12,
+        )
+        preflight_panel.grid(row=3, column=0, padx=14, pady=(0, 14), sticky="ew")
+        preflight_panel.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
-            self.job_card_frame,
+            preflight_panel,
             text="Preflight",
-            font=ctk.CTkFont(weight="bold"),
-        ).grid(row=next_row + 7, column=0, padx=16, pady=(0, 4), sticky="w")
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=("gray45", "gray55"),
+        ).grid(row=0, column=0, padx=12, pady=(10, 2), sticky="w")
 
         ctk.CTkLabel(
-            self.job_card_frame,
+            preflight_panel,
             textvariable=self.preflight_status_var,
             justify="left",
             wraplength=320,
-        ).grid(row=next_row + 8, column=0, padx=16, pady=(0, 4), sticky="w")
+            anchor="w",
+            font=ctk.CTkFont(weight="bold"),
+        ).grid(row=1, column=0, padx=12, pady=(0, 4), sticky="ew")
 
         ctk.CTkLabel(
-            self.job_card_frame,
+            preflight_panel,
             textvariable=self.preflight_summary_var,
             justify="left",
             wraplength=320,
-        ).grid(row=next_row + 9, column=0, padx=16, pady=(0, 16), sticky="w")
+            anchor="w",
+        ).grid(row=2, column=0, padx=12, pady=(0, 12), sticky="ew")
+
+        self._refresh_last_session_info()
 
     def _build_execute_card(self, master: ctk.CTkFrame) -> None:
         self.execute_card_frame = ctk.CTkFrame(master)
@@ -811,6 +953,61 @@ class DesktopApp(ctk.CTk):
                 "Drag-and-drop source belum aktif di runtime ini. Gunakan tombol Pilih Source."
             )
 
+    def _update_source_actions(self) -> None:
+        if self.clear_source_button is None:
+            return
+        self.clear_source_button.configure(
+            state="normal" if self.source_path is not None else "disabled"
+        )
+
+    def _selected_job_id(self) -> str | None:
+        selected = self._selected_job()
+        if selected is None:
+            return None
+        value = selected.id.strip()
+        return value or None
+
+    def _refresh_last_session_info(self) -> None:
+        if "last_session_info_var" not in self.__dict__:
+            return
+
+        session_state = load_session_state(self.paths.project_root)
+        if session_state is None:
+            self.last_session_info_var.set("")
+        else:
+            details: list[str] = []
+            if session_state.last_job_id is not None:
+                details.append(f"Job terakhir: {session_state.last_job_id}")
+            if session_state.last_source_path is not None:
+                details.append(f"Source terakhir: {session_state.last_source_path.name}")
+
+            if details:
+                details.append(f"Tersimpan: {session_state.updated_at}")
+                self.last_session_info_var.set("Sesi terakhir tersedia. " + " | ".join(details))
+            else:
+                self.last_session_info_var.set("")
+
+        if self.last_session_info_label is not None:
+            self.last_session_info_label.grid_remove()
+            if self.last_session_info_var.get():
+                self.last_session_info_label.grid()
+
+    def _clear_source(self) -> None:
+        if self.source_path is None:
+            return
+
+        self.source_path = None
+        self.source_var.set("")
+        self._preflight_request_id += 1
+        self._latest_preflight_request_id = self._preflight_request_id
+        self._active_preflight_request_id = None
+        self._set_preflight_idle()
+        self._persist_session_state()
+        self._append_log("Source dibersihkan dari sesi aktif.")
+        self._update_execute_state()
+        self._update_hints()
+        self._update_source_actions()
+
     def _apply_source_path(self, source_path: Path, *, log_prefix: str) -> None:
         self.source_path = source_path
         self.source_var.set(str(source_path))
@@ -819,6 +1016,8 @@ class DesktopApp(ctk.CTk):
         self._schedule_preflight()
         self._update_execute_state()
         self._update_hints()
+        self._update_source_actions()
+        self._refresh_last_session_info()
 
     def _handle_dropped_source(self, raw_drop_data: str) -> bool:
         dropped_files = _parse_dropped_files(raw_drop_data)
@@ -859,14 +1058,15 @@ class DesktopApp(ctk.CTk):
         return value if isinstance(value, str) and value else None
 
     def _persist_session_state(self) -> None:
-        if self._restoring_session or "paths" not in self.__dict__:
+        if getattr(self, "_restoring_session", False) or "paths" not in self.__dict__:
             return
         save_session_state(
             self.paths.project_root,
-            last_job_id=None,
-            last_source_path=None,
+            last_job_id=self._selected_job_id(),
+            last_source_path=self.source_path,
             window_geometry=self._current_window_geometry(),
         )
+        self._refresh_last_session_info()
 
     def _on_window_configure(self, _: Any) -> None:
         self._persist_session_state()
@@ -1054,6 +1254,7 @@ class DesktopApp(ctk.CTk):
         self._schedule_preflight()
         self._update_execute_state()
         self._update_hints()
+        self._refresh_last_session_info()
 
     def refresh_jobs(self, initial: bool = False) -> None:
         job_items = discover_job_profiles(self.paths.configs_dir)
@@ -1098,6 +1299,7 @@ class DesktopApp(ctk.CTk):
             self._job_settings_dialog.refresh()
 
         self._update_hints()
+        self._refresh_last_session_info()
 
     def _update_job_info(self) -> None:
         selected_label = self.selected_job_var.get()

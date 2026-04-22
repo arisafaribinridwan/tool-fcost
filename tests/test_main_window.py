@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from pathlib import Path
 
 from app.services import PreflightResult
+from app.services.session_state_service import SessionState
 from app.ui.main_window import PIPELINE_STEP_ORDER, DesktopApp, _parse_dropped_files
 
 
@@ -26,6 +27,17 @@ class DummyButton:
     def configure(self, *, state=None, **kwargs):
         if state is not None:
             self.state = state
+
+
+class DummyGridWidget:
+    def __init__(self):
+        self.hidden = False
+
+    def grid_remove(self):
+        self.hidden = True
+
+    def grid(self):
+        self.hidden = False
 
 
 class DummyThread:
@@ -124,6 +136,32 @@ def test_start_new_session_resets_ui_state_without_touching_outputs(tmp_path):
     assert "log" in reset_calls
     assert "execute" in reset_calls
     assert log_messages == ["Sesi baru dimulai."]
+
+
+def test_clear_source_resets_preflight_and_updates_actions(tmp_path):
+    app = DesktopApp.__new__(DesktopApp)
+    app.source_path = tmp_path / "source.csv"
+    app.source_var = DummyVar(str(app.source_path))
+    app._preflight_request_id = 3
+    app._latest_preflight_request_id = 3
+    app._active_preflight_request_id = 3
+    calls: list[str] = []
+    logs: list[str] = []
+    app._set_preflight_idle = lambda: calls.append("preflight")
+    app._persist_session_state = lambda: calls.append("persist")
+    app._append_log = logs.append
+    app._update_execute_state = lambda: calls.append("execute")
+    app._update_hints = lambda: calls.append("hints")
+    app._update_source_actions = lambda: calls.append("actions")
+
+    DesktopApp._clear_source(app)
+
+    assert app.source_path is None
+    assert app.source_var.get() == ""
+    assert app._latest_preflight_request_id == 4
+    assert app._active_preflight_request_id is None
+    assert calls == ["preflight", "persist", "execute", "hints", "actions"]
+    assert logs == ["Source dibersihkan dari sesi aktif."]
 
 
 def _make_hint_app() -> DesktopApp:
@@ -357,6 +395,87 @@ def test_bind_drop_target_falls_back_when_tkdnd_runtime_is_unavailable(monkeypat
     assert app.source_drop_hint_var.get() == (
         "Drag-and-drop source belum aktif di runtime ini. Gunakan tombol Pilih Source."
     )
+
+
+def test_refresh_last_session_info_uses_real_saved_session(monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    app.paths = SimpleNamespace(project_root=Path("."))
+    app.last_session_info_var = DummyVar()
+    app.last_session_info_label = DummyGridWidget()
+
+    monkeypatch.setattr(
+        "app.ui.main_window.load_session_state",
+        lambda _root: SessionState(
+            version=1,
+            last_job_id="report-bulanan",
+            last_source_path=Path("C:/Data/source.xlsx"),
+            window_geometry=None,
+            updated_at="2026-04-22T22:40:00",
+        ),
+    )
+
+    DesktopApp._refresh_last_session_info(app)
+
+    assert app.last_session_info_var.get() == (
+        "Sesi terakhir tersedia. Job terakhir: report-bulanan | "
+        "Source terakhir: source.xlsx | Tersimpan: 2026-04-22T22:40:00"
+    )
+    assert app.last_session_info_label.hidden is False
+
+
+def test_refresh_last_session_info_hides_block_when_session_has_no_job_or_source(monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    app.paths = SimpleNamespace(project_root=Path("."))
+    app.last_session_info_var = DummyVar("awal")
+    app.last_session_info_label = DummyGridWidget()
+
+    monkeypatch.setattr(
+        "app.ui.main_window.load_session_state",
+        lambda _root: SessionState(
+            version=1,
+            last_job_id=None,
+            last_source_path=None,
+            window_geometry=None,
+            updated_at="2026-04-22T22:40:00",
+        ),
+    )
+
+    DesktopApp._refresh_last_session_info(app)
+
+    assert app.last_session_info_var.get() == ""
+    assert app.last_session_info_label.hidden is True
+
+
+def test_persist_session_state_saves_selected_job_and_source(monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    app.paths = SimpleNamespace(project_root=Path("."))
+    app._restoring_session = False
+    app.source_path = Path("source.xlsx")
+    app.last_session_info_var = DummyVar()
+    app.last_session_info_label = DummyGridWidget()
+    app._selected_job_id = lambda: "report-bulanan"
+    app._current_window_geometry = lambda: "1120x720"
+
+    captured: dict[str, object] = {}
+
+    def fake_save_session_state(runtime_root, *, last_job_id, last_source_path, window_geometry):
+        captured["runtime_root"] = runtime_root
+        captured["last_job_id"] = last_job_id
+        captured["last_source_path"] = last_source_path
+        captured["window_geometry"] = window_geometry
+        return None
+
+    monkeypatch.setattr("app.ui.main_window.save_session_state", fake_save_session_state)
+    monkeypatch.setattr("app.ui.main_window.load_session_state", lambda _root: None)
+
+    DesktopApp._persist_session_state(app)
+
+    assert captured == {
+        "runtime_root": Path("."),
+        "last_job_id": "report-bulanan",
+        "last_source_path": Path("source.xlsx"),
+        "window_geometry": "1120x720",
+    }
 
 
 def test_pipeline_step_order_matches_design_brief():
