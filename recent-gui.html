@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Recent GUI Overview</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #e2e8f0;
+      --card: #ffffff;
+      --muted: #64748b;
+      --text: #0f172a;
+      --line: #cbd5e1;
+      --accent: #2563eb;
+      --accent-soft: #dbeafe;
+      --success-soft: #ecfeff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+      color: var(--text);
+    }
+
+    .page {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .hero {
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+    }
+
+    .hero h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .diagram {
+      background: #cbd5e1;
+      border-radius: 24px;
+      padding: 18px;
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 16px;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.45);
+    }
+
+    .panel {
+      background: #f8fafc;
+      border: 1px solid #94a3b8;
+      border-radius: 20px;
+      padding: 14px;
+      min-height: 680px;
+    }
+
+    .panel-title {
+      margin: 0 0 12px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #334155;
+    }
+
+    .stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px;
+      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+    }
+
+    .card h3 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+
+    .eyebrow {
+      display: inline-block;
+      margin-bottom: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .desc {
+      margin: 0 0 12px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .chip, .button, .field, .badge {
+      border-radius: 12px;
+      font-size: 12px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .button {
+      background: var(--accent-soft);
+      border-color: #93c5fd;
+      color: #1d4ed8;
+      font-weight: 700;
+    }
+
+    .button.secondary {
+      background: #f8fafc;
+      color: #334155;
+      border-color: #cbd5e1;
+    }
+
+    .button.ghost {
+      background: transparent;
+      border-style: dashed;
+      color: #64748b;
+    }
+
+    .field {
+      display: block;
+      width: 100%;
+      background: #f8fafc;
+      color: #334155;
+    }
+
+    .info-box {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 14px;
+      padding: 12px;
+      color: #1e40af;
+      font-size: 12px;
+      line-height: 1.5;
+      margin-bottom: 10px;
+    }
+
+    .detail-box {
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #334155;
+    }
+
+    .log-card {
+      min-height: 510px;
+      display: flex;
+      flex-direction: column;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-color: #1e293b;
+    }
+
+    .log-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #334155;
+    }
+
+    .log-box {
+      flex: 1;
+      background: #020617;
+      border: 1px solid #334155;
+      border-radius: 14px;
+      padding: 12px;
+      font-family: Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.7;
+      white-space: pre-line;
+    }
+
+    .legend {
+      margin-top: 20px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .legend-card {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px;
+    }
+
+    .legend-card h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+    }
+
+    .legend-card ul {
+      margin: 0;
+      padding-left: 18px;
+      line-height: 1.7;
+      color: #334155;
+    }
+
+    @media (max-width: 980px) {
+      .diagram,
+      .legend {
+        grid-template-columns: 1fr;
+      }
+
+      .panel {
+        min-height: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <h1>Struktur Halaman Utama GUI</h1>
+      <p>
+        Halaman utama tool ini memakai layout 2 kolom tetap. Kolom kiri adalah panel kontrol sesi dan input,
+        sedangkan kolom kanan adalah area aksi eksekusi dan monitor log proses.
+      </p>
+    </section>
+
+    <section class="diagram">
+      <div class="panel">
+        <div class="panel-title">Kolom Kiri / Scrollable Panel / Lebar 320px</div>
+        <div class="stack">
+          <div class="card">
+            <div class="eyebrow">Header</div>
+            <h3>Excel Automation Tool</h3>
+            <p class="desc">Area identitas aplikasi dan akses cepat ke pengaturan job.</p>
+            <div class="row">
+              <div class="field">Title: Excel Automation Tool</div>
+            </div>
+            <div class="row">
+              <div class="field">Subtitle: Pilih source, pilih pekerjaan, lalu jalankan proses.</div>
+            </div>
+            <div class="row">
+              <div class="button">Pengaturan Job</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="eyebrow">Langkah 1</div>
+            <h3>Source Input</h3>
+            <p class="desc">Area memilih dan membersihkan file source yang akan diproses.</p>
+            <div class="row">
+              <div class="chip">Label: Source file (.xlsx / .csv)</div>
+              <div class="button secondary">Clear Source</div>
+            </div>
+            <div class="detail-box">
+              Panel source aktif<br />
+              - Label: Source aktif<br />
+              - Nilai: path source yang sedang dipilih
+            </div>
+            <div class="row" style="margin-top:10px;">
+              <div class="button">Pilih Source</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="eyebrow">Langkah 2</div>
+            <h3>Job Aktif</h3>
+            <p class="desc">Area memilih job aktif, melihat sesi terakhir, lalu membaca detail job aktif.</p>
+            <div class="detail-box">
+              Panel pemilihan job<br />
+              - Label: Pekerjaan aktif<br />
+              - Dropdown: daftar job valid<br />
+              - Tombol: Refresh<br />
+              - Tombol: Settings
+            </div>
+            <div class="info-box">
+              Sesi terakhir tersedia bila ada state tersimpan.<br />
+              Isinya dapat memuat job terakhir, source terakhir, dan waktu penyimpanan.
+            </div>
+            <div class="detail-box">
+              Detail job aktif<br />
+              - Informasi job terpilih<br />
+              - Ringkasan config / master file / status validasi job
+            </div>
+            <div class="row" style="margin-top:10px;">
+              <div class="button secondary">Start New Session</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Kolom Kanan / Area Kerja Utama</div>
+        <div class="stack">
+          <div class="card">
+            <div class="eyebrow">Langkah 3</div>
+            <h3>Execute</h3>
+            <p class="desc">Panel aksi utama untuk menjalankan pipeline dan membuka folder hasil output.</p>
+            <div class="row">
+              <div class="button">Execute</div>
+            </div>
+            <div class="row">
+              <div class="button secondary">Buka Folder Outputs</div>
+            </div>
+          </div>
+
+          <div class="card log-card">
+            <div class="log-head">
+              <strong>Process Log</strong>
+              <span style="font-size:12px; color:#94a3b8;">Runtime monitor</span>
+            </div>
+            <div class="log-box">[10:00:00] Aplikasi siap digunakan
+[10:00:08] Source dipilih: data.xlsx
+[10:00:09] Preflight selesai
+[10:00:15] Eksekusi dimulai
+[10:00:25] Output berhasil dibuat</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="legend">
+      <div class="legend-card">
+        <h2>Ringkasan Layout</h2>
+        <ul>
+          <li>Window utama dibagi menjadi 2 kolom.</li>
+          <li>Kolom kiri bersifat scrollable dan fokus pada input serta konteks sesi.</li>
+          <li>Kolom kanan fokus pada aksi proses dan pemantauan log runtime.</li>
+          <li>Ukuran window saat ini fixed di 1280x720.</li>
+        </ul>
+      </div>
+
+      <div class="legend-card">
+        <h2>Daftar Elemen Saat Ini</h2>
+        <ul>
+          <li>Header: judul aplikasi, subtitle, tombol Pengaturan Job.</li>
+          <li>Source Input: label source, tombol Clear Source, panel source aktif, tombol Pilih Source.</li>
+          <li>Job Aktif: dropdown job, tombol Refresh, tombol Settings, info sesi terakhir, detail job aktif, tombol Start New Session.</li>
+          <li>Execute: tombol Execute, tombol Buka Folder Outputs.</li>
+          <li>Process Log: judul log, label Runtime monitor, textbox log.</li>
+        </ul>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

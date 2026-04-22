@@ -94,7 +94,6 @@ def test_start_new_session_resets_ui_state_without_touching_outputs(tmp_path):
     app.source_path = tmp_path / "source.csv"
     app.source_var = DummyVar(str(app.source_path))
     app.preflight_status_var = DummyVar("Preflight: Ready")
-    app.preflight_summary_var = DummyVar("siap")
     app.status_var = DummyVar("Status: Sukses")
     app.last_output_var = DummyVar(str(tmp_path / "outputs" / "hasil.xlsx"))
     app._preflight_request_id = 2
@@ -126,7 +125,6 @@ def test_start_new_session_resets_ui_state_without_touching_outputs(tmp_path):
     assert app.source_var.get() == ""
     assert app._preflight_result is None
     assert app.preflight_status_var.get() == "Preflight: Belum dicek"
-    assert app.preflight_summary_var.get() == "Pilih source dan pekerjaan untuk memulai pemeriksaan otomatis."
     assert app.status_var.get() == "Status: Idle"
     assert app.last_output_var.get() == "-"
     assert output_path.exists()
@@ -215,7 +213,7 @@ def test_update_hints_when_preflight_blocked():
     DesktopApp._update_hints(app)
 
     assert app.primary_hint_var.get() == (
-        "Execute dinonaktifkan karena masih ada error preflight. Lihat ringkasan preflight atau log untuk detail."
+        "Execute dinonaktifkan karena masih ada error preflight. Lihat log untuk detail."
     )
     assert app.execute_hint_var.get() == (
         "Execute dinonaktifkan sampai semua error preflight diselesaikan."
