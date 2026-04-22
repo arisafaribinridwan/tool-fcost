@@ -46,6 +46,7 @@ backups/
 tmp/
 temp/
 instance/
+.app_state/
 
 # Local/editor files
 .DS_Store
