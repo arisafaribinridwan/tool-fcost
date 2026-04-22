@@ -4,11 +4,12 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 import re
+from time import perf_counter
 
 from app import AppPaths
 from app.services.config_service import is_step_recipe_payload, load_config_payload
 from app.services.output_service import write_output_workbook
-from app.services.pipeline_types import PipelineError, PipelineResult
+from app.services.pipeline_types import PipelineError, PipelineResult, PipelineStepStatus
 from app.services.recipe_service import execute_step_recipe
 from app.services.source_service import (
     copy_source_to_uploads,
@@ -24,6 +25,7 @@ from app.services.transform_service import (
 
 
 LogFn = Callable[[str], None]
+ProgressFn = Callable[[PipelineStepStatus], None]
 
 _UNSAFE_FILENAME_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
 
@@ -40,24 +42,44 @@ def run_pipeline(
     source_path: Path,
     config_path: Path,
     log: LogFn,
+    progress: ProgressFn | None = None,
 ) -> PipelineResult:
+    started_at = perf_counter()
+
+    def emit_progress(step_key: str, step_label: str, state: str, detail: str = "") -> None:
+        if progress is None:
+            return
+        progress(
+            PipelineStepStatus(
+                step_key=step_key,
+                step_label=step_label,
+                state=state,
+                detail=detail,
+            )
+        )
+
     source_errors = validate_source_file(source_path)
     if source_errors:
         raise PipelineError("; ".join(source_errors))
 
+    emit_progress("load_config", "Load config", "running", config_path.name)
     log(f"Load config: {config_path.name}")
     try:
         config = load_config_payload(config_path)
     except ValueError as exc:
         raise PipelineError(str(exc)) from exc
+    emit_progress("load_config", "Load config", "done", config_path.name)
 
+    emit_progress("copy_source", "Copy source", "running", source_path.name)
     log("Salin source ke folder uploads/")
     try:
         source_copy = copy_source_to_uploads(source_path, paths.uploads_dir)
     except OSError as exc:
         raise PipelineError(f"Gagal menyalin source ke uploads/: {exc}") from exc
+    emit_progress("copy_source", "Copy source", "done", source_copy.name)
 
     if is_step_recipe_payload(config):
+        emit_progress("read_source", "Read source", "running", source_path.name)
         log(f"Read source workbook: {source_path.name}")
         try:
             recipe_result = execute_step_recipe(
@@ -71,8 +93,10 @@ def run_pipeline(
             raise PipelineError(str(exc)) from exc
         source_df = recipe_result.source_df_for_header
         output_sheets = recipe_result.output_sheets
+        emit_progress("read_source", "Read source", "done", f"{len(source_df)} baris")
     else:
         source_sheet = config["source_sheet"]
+        emit_progress("read_source", "Read source", "running", source_path.name)
         log(f"Read source: {source_path.name}")
         try:
             source_df = load_source_dataframe(
@@ -81,6 +105,7 @@ def run_pipeline(
             )
         except ValueError as exc:
             raise PipelineError(str(exc)) from exc
+        emit_progress("read_source", "Read source", "done", f"{len(source_df)} baris")
 
         try:
             validate_required_source_columns(
@@ -95,6 +120,7 @@ def run_pipeline(
         else:
             log(f"Source loaded: {len(source_df)} baris, {len(source_df.columns)} kolom.")
 
+        emit_progress("load_master", "Load master", "running")
         log("Load master & apply lookup")
         try:
             transformed_df = apply_master_lookups(
@@ -106,7 +132,9 @@ def run_pipeline(
             )
         except ValueError as exc:
             raise PipelineError(str(exc)) from exc
+        emit_progress("load_master", "Load master", "done")
 
+        emit_progress("transform", "Transform", "running")
         log("Apply transform rules")
         try:
             transformed_df = apply_transform_steps(
@@ -116,12 +144,15 @@ def run_pipeline(
             )
         except ValueError as exc:
             raise PipelineError(str(exc)) from exc
+        emit_progress("transform", "Transform", "done")
 
+        emit_progress("build_output", "Build output", "running")
         log("Build output sheets")
         try:
             output_sheets = build_output_sheets(config["outputs"], transformed_df, log)
         except ValueError as exc:
             raise PipelineError(str(exc)) from exc
+        emit_progress("build_output", "Build output", "done", f"{len(output_sheets)} sheet")
 
     config_name = str(config.get("name", config_path.stem))
     output_file_name = (
@@ -129,6 +160,7 @@ def run_pipeline(
     )
     output_path = paths.outputs_dir / output_file_name
 
+    emit_progress("write_output", "Write output", "running", output_path.name)
     log("Write workbook (.xlsx)")
     try:
         write_output_workbook(
@@ -142,10 +174,12 @@ def run_pipeline(
         )
     except Exception as exc:
         raise PipelineError(f"Gagal menulis file output: {exc}") from exc
+    emit_progress("write_output", "Write output", "done", output_path.name)
 
     log(f"Selesai. Output: {output_path.name}")
     return PipelineResult(
         output_path=output_path,
         source_copy_path=source_copy,
         sheets_written=len(output_sheets),
+        duration_ms=max(1, int(round((perf_counter() - started_at) * 1000))),
     )

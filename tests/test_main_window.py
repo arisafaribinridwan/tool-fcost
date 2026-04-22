@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from tkinter import TclError
 from types import SimpleNamespace
 from pathlib import Path
 
 from app.services import PreflightResult
 from app.services.session_state_service import SessionState
-from app.ui.main_window import PIPELINE_STEP_ORDER, DesktopApp, _parse_dropped_files
+from app.ui.main_window import PIPELINE_STEP_ORDER, DesktopApp
 
 
 class DummyVar:
@@ -179,17 +178,6 @@ def _make_hint_app() -> DesktopApp:
     app._selected_job = lambda: None
     return app
 
-
-def _make_summary_app() -> DesktopApp:
-    app = DesktopApp.__new__(DesktopApp)
-    app.paths = SimpleNamespace(project_root=Path("."))
-    app.source_path = Path("source.xlsx")
-    app.job_summary_var = DummyVar()
-    app._last_run_context = None
-    app._preflight_result = PreflightResult(status="Ready", findings=(), output_path=None)
-    return app
-
-
 def test_update_hints_at_startup_without_valid_job():
     app = _make_hint_app()
 
@@ -255,145 +243,12 @@ def test_update_hints_after_success_and_failure():
 
     app.status_var.set("Status: Sukses")
     DesktopApp._update_hints(app)
-    assert app.primary_hint_var.get() == "Proses selesai. Periksa Job Summary atau buka folder outputs."
+    assert app.primary_hint_var.get() == "Proses selesai. Periksa output terakhir atau buka folder outputs."
 
     app.status_var.set("Status: Gagal")
     DesktopApp._update_hints(app)
     assert app.primary_hint_var.get() == (
         "Proses gagal. Periksa log untuk detail lalu perbaiki source atau config aktif."
-    )
-
-
-def test_job_summary_empty_at_startup():
-    app = _make_summary_app()
-
-    DesktopApp._set_job_summary_idle(app)
-
-    assert app.job_summary_var.get() == "Belum ada proses yang selesai."
-
-
-def test_job_summary_success_is_filled():
-    app = _make_summary_app()
-    job = DummyJob("report-bulanan")
-    result = SimpleNamespace(
-        output_path=Path("outputs/hasil.xlsx"),
-        sheets_written=2,
-        duration_ms=1800,
-    )
-
-    DesktopApp._set_job_summary_success(app, job, result)
-
-    summary = app.job_summary_var.get()
-    assert "Status: Sukses" in summary
-    assert "Pekerjaan: Report Bulanan" in summary
-    assert "Source: source.xlsx" in summary
-    assert "Durasi: 1.8 detik" in summary
-    assert "Sheet output: 2" in summary
-    assert f"Output: {result.output_path}" in summary
-    assert "Preflight: 0 error, 0 warning, 0 info" in summary
-
-
-def test_job_summary_failure_shows_failed_status_without_output():
-    app = _make_summary_app()
-    app._last_run_context = {
-        "job_label": "Report Bulanan",
-        "source_name": "source.xlsx",
-        "duration_ms": None,
-    }
-
-    DesktopApp._set_job_summary_failure(app, "gagal total")
-
-    summary = app.job_summary_var.get()
-    assert "Status: Gagal" in summary
-    assert "Pekerjaan: Report Bulanan" in summary
-    assert "Source: source.xlsx" in summary
-    assert "Output: -" in summary
-    assert "Error: gagal total" in summary
-
-
-def test_start_new_session_clears_job_summary():
-    app = DesktopApp.__new__(DesktopApp)
-    app._last_run_context = {"job_label": "lama"}
-    app.job_summary_var = DummyVar("ada isi")
-
-    DesktopApp._set_job_summary_idle(app)
-
-    assert app.job_summary_var.get() == "Belum ada proses yang selesai."
-
-
-def test_parse_dropped_files_supports_single_and_braced_paths():
-    assert _parse_dropped_files(r"C:\Data\source.xlsx") == (r"C:\Data\source.xlsx",)
-    assert _parse_dropped_files(r"{C:\Data Folder\source.xlsx}") == (
-        r"C:\Data Folder\source.xlsx",
-    )
-
-
-def test_handle_dropped_source_rejects_multiple_files(monkeypatch):
-    app = DesktopApp.__new__(DesktopApp)
-    logs: list[str] = []
-    app._append_log = logs.append
-
-    result = DesktopApp._handle_dropped_source(
-        app,
-        r"{C:\Data\one.xlsx} {C:\Data\two.xlsx}",
-    )
-
-    assert result is False
-    assert logs == ["Drop source ditolak: hanya satu file yang boleh dijatuhkan."]
-
-
-def test_handle_dropped_source_rejects_invalid_extension(monkeypatch):
-    app = DesktopApp.__new__(DesktopApp)
-    logs: list[str] = []
-    app._append_log = logs.append
-    monkeypatch.setattr("app.ui.main_window.validate_source_file", lambda _path: ["format tidak didukung"])
-
-    result = DesktopApp._handle_dropped_source(app, r"C:\Data\source.txt")
-
-    assert result is False
-    assert logs == ["Drop source invalid: format tidak didukung"]
-
-
-def test_handle_dropped_source_rejects_missing_file(monkeypatch):
-    app = DesktopApp.__new__(DesktopApp)
-    logs: list[str] = []
-    app._append_log = logs.append
-    monkeypatch.setattr("app.ui.main_window.validate_source_file", lambda _path: ["file tidak ditemukan"])
-
-    result = DesktopApp._handle_dropped_source(app, r"C:\Data\missing.xlsx")
-
-    assert result is False
-    assert logs == ["Drop source invalid: file tidak ditemukan"]
-
-
-def test_handle_dropped_source_applies_valid_file(monkeypatch):
-    app = DesktopApp.__new__(DesktopApp)
-    calls: list[tuple[Path, str]] = []
-    monkeypatch.setattr("app.ui.main_window.validate_source_file", lambda _path: [])
-    app._apply_source_path = lambda source_path, *, log_prefix: calls.append((source_path, log_prefix))
-
-    result = DesktopApp._handle_dropped_source(app, r"{C:\Data Folder\source.xlsx}")
-
-    assert result is True
-    assert calls == [(Path(r"C:\Data Folder\source.xlsx"), "Source dijatuhkan")]
-
-
-def test_bind_drop_target_falls_back_when_tkdnd_runtime_is_unavailable(monkeypatch):
-    app = DesktopApp.__new__(DesktopApp)
-    app.source_drop_hint_var = DummyVar("awal")
-    monkeypatch.setattr("app.ui.main_window.DND_FILES", "DND_Files")
-
-    class DummyDropWidget:
-        def drop_target_register(self, _value):
-            raise TclError('invalid command name "tkdnd::drop_target"')
-
-        def dnd_bind(self, _event, _callback):
-            raise AssertionError("dnd_bind should not run when registration fails")
-
-    DesktopApp._bind_drop_target(app, DummyDropWidget())
-
-    assert app.source_drop_hint_var.get() == (
-        "Drag-and-drop source belum aktif di runtime ini. Gunakan tombol Pilih Source."
     )
 
 
