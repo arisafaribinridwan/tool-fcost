@@ -2,11 +2,6 @@
 
 1. warning fitur drag and drop
 2. munculkan kembali tombol "Buka Folder Output"
-3. hilangkan section summary info pojok kiri bahah yang ada tulisan :
-- [] load config
-- [] salin source
-- [] baca source
-- [] load master
 
 4. hilangkan tulisan preflight info di section kiri yang ada tulisan:
 - Preflight
@@ -17,5 +12,6 @@ Preflight : Ready
 - Proses Selesai. Periksa job summary atau buka folder output
 - Execute siap dijalankan
 
-6. hapus button dan fiturnya 'Use last Session'
 7. Redesign tampilan UI () agar lebih ringkas, namun tetap efektif untuk user
+
+
