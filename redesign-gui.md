@@ -81,6 +81,31 @@ Catatan:
 - Tahap 1 belum mengubah layout atau tampilan utama
 - perubahan sengaja dibatasi pada fondasi internal agar Tahap 2 dan seterusnya lebih aman
 
+### Tahap 2
+
+Status: selesai.
+
+Keputusan yang sudah diimplementasikan:
+
+- `DesktopApp._build_layout()` dipecah menjadi builder method yang lebih kecil dan spesifik
+- struktur main window dipisah menjadi:
+  - `_build_header_section()`
+  - `_build_source_card()`
+  - `_build_job_card()`
+  - `_build_execute_card()`
+  - `_build_result_card()`
+  - `_build_log_panel()`
+- area kiri sekarang tersusun sebagai section/card yang lebih jelas dibanding layout linear sebelumnya
+- header utama sekarang memiliki title, subtitle, dan akses cepat ke `Pengaturan Job`
+- panel kanan tetap dominan untuk `Process Log`
+- wiring widget existing tetap dipertahankan untuk `self.job_menu`, `self.execute_button`, `self.start_new_session_button`, `self.source_drop_label`, dan `self.log_box`
+
+Catatan:
+
+- Tahap 2 berfokus pada refactor struktur dan segmentasi layout
+- perubahan visual detail untuk source experience, readiness emphasis, progress, dan state badge tetap ditangani pada tahap berikutnya
+- selama review Tahap 2 ditambahkan fallback aman untuk drag-and-drop jika `tkinterdnd2` terimpor tetapi runtime `tkdnd` tidak aktif pada package Linux
+
 ## Gap Analysis: JSX Prototype vs UI Python Saat Ini
 
 ### Sudah ada di UI Python

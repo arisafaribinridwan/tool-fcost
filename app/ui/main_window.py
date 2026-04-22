@@ -5,7 +5,7 @@ from pathlib import Path
 from queue import Empty, Queue
 from threading import Thread
 from time import perf_counter
-from tkinter import messagebox
+from tkinter import TclError, messagebox
 from typing import Any
 
 try:
@@ -438,55 +438,106 @@ class DesktopApp(ctk.CTk):
 
         return "idle"
 
-    def _build_layout(self) -> None:
-        self.grid_columnconfigure(0, weight=0)
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_rowconfigure(0, weight=1)
-
-        left_panel = ctk.CTkFrame(self, width=360)
-        left_panel.grid(row=0, column=0, padx=(16, 8), pady=16, sticky="nsew")
-        left_panel.grid_columnconfigure(0, weight=1)
-        left_panel.grid_rowconfigure(5, weight=1)
-
-        right_panel = ctk.CTkFrame(self)
-        right_panel.grid(row=0, column=1, padx=(8, 16), pady=16, sticky="nsew")
-        right_panel.grid_columnconfigure(0, weight=1)
-        right_panel.grid_rowconfigure(1, weight=1)
+    def _build_card_title(
+        self,
+        master: ctk.CTkFrame,
+        *,
+        eyebrow: str,
+        title: str,
+        description: str | None = None,
+        row: int = 0,
+    ) -> int:
+        ctk.CTkLabel(
+            master,
+            text=eyebrow,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=("gray45", "gray55"),
+        ).grid(row=row, column=0, padx=16, pady=(16, 2), sticky="w")
 
         ctk.CTkLabel(
-            left_panel,
+            master,
+            text=title,
+            font=ctk.CTkFont(size=18, weight="bold"),
+            anchor="w",
+            justify="left",
+        ).grid(row=row + 1, column=0, padx=16, pady=(0, 4), sticky="ew")
+
+        if description is None:
+            return row + 2
+
+        ctk.CTkLabel(
+            master,
+            text=description,
+            justify="left",
+            wraplength=320,
+            text_color=("gray40", "gray60"),
+        ).grid(row=row + 2, column=0, padx=16, pady=(0, 12), sticky="w")
+        return row + 3
+
+    def _build_header_section(self, master: ctk.CTkFrame) -> None:
+        self.header_frame = ctk.CTkFrame(master, fg_color="transparent")
+        self.header_frame.grid(row=0, column=0, padx=16, pady=(16, 12), sticky="ew")
+        self.header_frame.grid_columnconfigure(0, weight=1)
+
+        title_group = ctk.CTkFrame(self.header_frame, fg_color="transparent")
+        title_group.grid(row=0, column=0, sticky="ew")
+        title_group.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            title_group,
             text="Excel Automation Tool",
             font=ctk.CTkFont(size=24, weight="bold"),
-        ).grid(row=0, column=0, padx=16, pady=(16, 8), sticky="w")
+            anchor="w",
+        ).grid(row=0, column=0, sticky="w")
 
         ctk.CTkLabel(
-            left_panel,
+            title_group,
             text="Pilih source, pilih pekerjaan, lalu jalankan proses.",
             justify="left",
             wraplength=300,
-        ).grid(row=1, column=0, padx=16, pady=(0, 16), sticky="w")
+            text_color=("gray40", "gray60"),
+        ).grid(row=1, column=0, pady=(4, 0), sticky="w")
 
-        input_frame = ctk.CTkFrame(left_panel)
-        input_frame.grid(row=2, column=0, padx=16, pady=(0, 12), sticky="ew")
-        input_frame.grid_columnconfigure(0, weight=1)
+        ctk.CTkButton(
+            self.header_frame,
+            text="Pengaturan Job",
+            command=self._open_job_settings,
+            width=140,
+            height=36,
+        ).grid(row=0, column=1, padx=(12, 0), sticky="e")
 
-        ctk.CTkLabel(
-            input_frame,
-            text="Input",
-            font=ctk.CTkFont(weight="bold"),
-        ).grid(row=0, column=0, padx=14, pady=(12, 8), sticky="w")
+    def _build_source_card(self, master: ctk.CTkFrame) -> None:
+        self.source_card_frame = ctk.CTkFrame(master)
+        self.source_card_frame.grid(row=1, column=0, padx=16, pady=(0, 12), sticky="ew")
+        self.source_card_frame.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(input_frame, text="Source file (.xlsx / .csv)").grid(
-            row=1, column=0, padx=14, sticky="w"
+        next_row = self._build_card_title(
+            self.source_card_frame,
+            eyebrow="Langkah 1",
+            title="Source Input",
+            description="Pilih file source Excel atau CSV yang akan diproses.",
         )
-        ctk.CTkEntry(input_frame, textvariable=self.source_var).grid(
-            row=2, column=0, padx=14, pady=(4, 8), sticky="ew"
+
+        ctk.CTkLabel(self.source_card_frame, text="Source file (.xlsx / .csv)").grid(
+            row=next_row,
+            column=0,
+            padx=16,
+            pady=(0, 4),
+            sticky="w",
+        )
+        ctk.CTkEntry(self.source_card_frame, textvariable=self.source_var).grid(
+            row=next_row + 1,
+            column=0,
+            padx=16,
+            pady=(0, 8),
+            sticky="ew",
         )
         ctk.CTkButton(
-            input_frame,
+            self.source_card_frame,
             text="Pilih Source",
             command=self._select_source,
-        ).grid(row=3, column=0, padx=14, pady=(0, 12), sticky="ew")
+            height=38,
+        ).grid(row=next_row + 2, column=0, padx=16, pady=(0, 12), sticky="ew")
 
         self.source_drop_hint_var = ctk.StringVar(
             value=(
@@ -496,164 +547,251 @@ class DesktopApp(ctk.CTk):
             )
         )
         self.source_drop_label = ctk.CTkLabel(
-            input_frame,
+            self.source_card_frame,
             textvariable=self.source_drop_hint_var,
             justify="left",
-            wraplength=300,
+            wraplength=320,
             anchor="w",
-            corner_radius=8,
-            fg_color=("gray86", "gray20"),
+            corner_radius=10,
+            fg_color=("gray92", "gray18"),
             padx=12,
-            pady=12,
+            pady=14,
         )
-        self.source_drop_label.grid(row=4, column=0, padx=14, pady=(0, 14), sticky="ew")
+        self.source_drop_label.grid(
+            row=next_row + 3,
+            column=0,
+            padx=16,
+            pady=(0, 16),
+            sticky="ew",
+        )
         self._bind_drop_target(self.source_drop_label)
 
-        ctk.CTkLabel(input_frame, text="Pekerjaan").grid(row=5, column=0, padx=14, sticky="w")
+    def _build_job_card(self, master: ctk.CTkFrame) -> None:
+        self.job_card_frame = ctk.CTkFrame(master)
+        self.job_card_frame.grid(row=2, column=0, padx=16, pady=(0, 12), sticky="ew")
+        self.job_card_frame.grid_columnconfigure(0, weight=1)
+        self.job_card_frame.grid_columnconfigure(1, weight=0)
+
+        next_row = self._build_card_title(
+            self.job_card_frame,
+            eyebrow="Langkah 2",
+            title="Job dan Readiness",
+            description="Pilih pekerjaan aktif dan periksa kesiapan proses sebelum execute.",
+        )
+
+        ctk.CTkLabel(self.job_card_frame, text="Pekerjaan").grid(
+            row=next_row,
+            column=0,
+            padx=16,
+            pady=(0, 4),
+            sticky="w",
+        )
         self.job_menu = ctk.CTkOptionMenu(
-            input_frame,
+            self.job_card_frame,
             variable=self.selected_job_var,
             values=["Belum ada pekerjaan"],
             command=self._on_job_selected,
         )
-        self.job_menu.grid(row=6, column=0, padx=14, pady=(4, 8), sticky="ew")
+        self.job_menu.grid(row=next_row + 1, column=0, padx=16, pady=(0, 8), sticky="ew")
+
+        action_row = ctk.CTkFrame(self.job_card_frame, fg_color="transparent")
+        action_row.grid(row=next_row + 2, column=0, padx=16, pady=(0, 10), sticky="ew")
+        action_row.grid_columnconfigure(0, weight=1)
+        action_row.grid_columnconfigure(1, weight=1)
 
         ctk.CTkButton(
-            input_frame,
+            action_row,
             text="Pengaturan",
             command=self._open_job_settings,
-        ).grid(row=7, column=0, padx=14, pady=(0, 8), sticky="ew")
-
+            height=34,
+        ).grid(row=0, column=0, padx=(0, 6), sticky="ew")
         ctk.CTkButton(
-            input_frame,
+            action_row,
             text="Refresh Pekerjaan",
             command=self.refresh_jobs,
-        ).grid(row=8, column=0, padx=14, pady=(0, 14), sticky="ew")
+            height=34,
+        ).grid(row=0, column=1, padx=(6, 0), sticky="ew")
 
         ctk.CTkLabel(
-            input_frame,
+            self.job_card_frame,
             textvariable=self.job_info_var,
             justify="left",
-            wraplength=300,
-        ).grid(row=9, column=0, padx=14, pady=(0, 14), sticky="w")
-
-        readiness_frame = ctk.CTkFrame(left_panel)
-        readiness_frame.grid(row=3, column=0, padx=16, pady=(0, 12), sticky="ew")
-        readiness_frame.grid_columnconfigure(0, weight=1)
+            wraplength=320,
+        ).grid(row=next_row + 3, column=0, padx=16, pady=(0, 12), sticky="w")
 
         ctk.CTkLabel(
-            readiness_frame,
+            self.job_card_frame,
             text="Kesiapan",
             font=ctk.CTkFont(weight="bold"),
-        ).grid(row=0, column=0, padx=14, pady=(12, 8), sticky="w")
+        ).grid(row=next_row + 4, column=0, padx=16, pady=(0, 6), sticky="w")
 
         ctk.CTkLabel(
-            readiness_frame,
+            self.job_card_frame,
             textvariable=self.primary_hint_var,
             justify="left",
-            wraplength=300,
-        ).grid(row=1, column=0, padx=14, pady=(0, 8), sticky="w")
+            wraplength=320,
+        ).grid(row=next_row + 5, column=0, padx=16, pady=(0, 8), sticky="w")
 
         ctk.CTkLabel(
-            readiness_frame,
+            self.job_card_frame,
             textvariable=self.execute_hint_var,
             justify="left",
-            wraplength=300,
-        ).grid(row=2, column=0, padx=14, pady=(0, 16), sticky="w")
+            wraplength=320,
+            text_color=("gray40", "gray60"),
+        ).grid(row=next_row + 6, column=0, padx=16, pady=(0, 12), sticky="w")
 
         ctk.CTkLabel(
-            readiness_frame,
+            self.job_card_frame,
             text="Preflight",
             font=ctk.CTkFont(weight="bold"),
-        ).grid(row=3, column=0, padx=14, pady=(0, 4), sticky="w")
+        ).grid(row=next_row + 7, column=0, padx=16, pady=(0, 4), sticky="w")
 
         ctk.CTkLabel(
-            readiness_frame,
+            self.job_card_frame,
             textvariable=self.preflight_status_var,
             justify="left",
-            wraplength=300,
-        ).grid(row=4, column=0, padx=14, pady=(0, 4), sticky="w")
+            wraplength=320,
+        ).grid(row=next_row + 8, column=0, padx=16, pady=(0, 4), sticky="w")
 
         ctk.CTkLabel(
-            readiness_frame,
+            self.job_card_frame,
             textvariable=self.preflight_summary_var,
             justify="left",
-            wraplength=300,
-        ).grid(row=5, column=0, padx=14, pady=(0, 16), sticky="w")
+            wraplength=320,
+        ).grid(row=next_row + 9, column=0, padx=16, pady=(0, 16), sticky="w")
+
+    def _build_execute_card(self, master: ctk.CTkFrame) -> None:
+        self.execute_card_frame = ctk.CTkFrame(master)
+        self.execute_card_frame.grid(row=3, column=0, padx=16, pady=(0, 12), sticky="ew")
+        self.execute_card_frame.grid_columnconfigure(0, weight=1)
+
+        next_row = self._build_card_title(
+            self.execute_card_frame,
+            eyebrow="Langkah 3",
+            title="Execute",
+            description="Jalankan proses saat source, job, dan preflight sudah siap.",
+        )
 
         self.execute_button = ctk.CTkButton(
-            readiness_frame,
+            self.execute_card_frame,
             text="Execute",
             command=self._execute_pipeline,
             state="disabled",
             height=42,
         )
-        self.execute_button.grid(row=6, column=0, padx=14, pady=(0, 14), sticky="ew")
+        self.execute_button.grid(row=next_row, column=0, padx=16, pady=(0, 16), sticky="ew")
 
-        result_frame = ctk.CTkFrame(left_panel)
-        result_frame.grid(row=4, column=0, padx=16, pady=(0, 16), sticky="nsew")
-        result_frame.grid_columnconfigure(0, weight=1)
+    def _build_result_card(self, master: ctk.CTkFrame) -> None:
+        self.result_card_frame = ctk.CTkFrame(master)
+        self.result_card_frame.grid(row=4, column=0, padx=16, pady=(0, 16), sticky="nsew")
+        self.result_card_frame.grid_columnconfigure(0, weight=1)
+
+        next_row = self._build_card_title(
+            self.result_card_frame,
+            eyebrow="Ringkasan",
+            title="Hasil Job",
+            description="Pantau hasil akhir, target output, dan ringkasan job terakhir.",
+        )
 
         ctk.CTkLabel(
-            result_frame,
-            text="Hasil",
-            font=ctk.CTkFont(weight="bold"),
-        ).grid(row=0, column=0, padx=14, pady=(12, 8), sticky="w")
-
-        ctk.CTkLabel(
-            result_frame,
+            self.result_card_frame,
             textvariable=self.status_var,
             justify="left",
-            wraplength=300,
-        ).grid(row=1, column=0, padx=14, pady=(0, 8), sticky="w")
+            wraplength=320,
+        ).grid(row=next_row, column=0, padx=16, pady=(0, 8), sticky="w")
+
+        ctk.CTkLabel(self.result_card_frame, text="Target output").grid(
+            row=next_row + 1,
+            column=0,
+            padx=16,
+            sticky="w",
+        )
 
         ctk.CTkLabel(
-            result_frame,
-            text="Target output",
-        ).grid(row=2, column=0, padx=14, sticky="w")
-
-        ctk.CTkLabel(
-            result_frame,
+            self.result_card_frame,
             textvariable=self.last_output_var,
             justify="left",
-            wraplength=300,
-        ).grid(row=3, column=0, padx=14, pady=(0, 12), sticky="w")
+            wraplength=320,
+        ).grid(row=next_row + 2, column=0, padx=16, pady=(0, 12), sticky="w")
 
         ctk.CTkLabel(
-            result_frame,
+            self.result_card_frame,
             text="Job Summary",
             font=ctk.CTkFont(weight="bold"),
-        ).grid(row=4, column=0, padx=14, sticky="w")
+        ).grid(row=next_row + 3, column=0, padx=16, sticky="w")
         ctk.CTkLabel(
-            result_frame,
+            self.result_card_frame,
             textvariable=self.job_summary_var,
             justify="left",
-            wraplength=300,
-        ).grid(row=5, column=0, padx=14, pady=(0, 14), sticky="w")
+            wraplength=320,
+        ).grid(row=next_row + 4, column=0, padx=16, pady=(0, 14), sticky="w")
 
         ctk.CTkButton(
-            result_frame,
+            self.result_card_frame,
             text="Buka Folder Outputs",
             command=self._open_outputs_dir,
-        ).grid(row=6, column=0, padx=14, pady=(0, 8), sticky="ew")
+            height=36,
+        ).grid(row=next_row + 5, column=0, padx=16, pady=(0, 8), sticky="ew")
 
         self.start_new_session_button = ctk.CTkButton(
-            result_frame,
+            self.result_card_frame,
             text="Start New Session",
             command=self._start_new_session,
             state="disabled",
+            height=36,
         )
-        self.start_new_session_button.grid(row=7, column=0, padx=14, pady=(0, 14), sticky="ew")
+        self.start_new_session_button.grid(
+            row=next_row + 6,
+            column=0,
+            padx=16,
+            pady=(0, 16),
+            sticky="ew",
+        )
+
+    def _build_log_panel(self, master: ctk.CTkFrame) -> None:
+        self.log_panel_frame = ctk.CTkFrame(master)
+        self.log_panel_frame.grid(row=0, column=1, padx=(8, 16), pady=16, sticky="nsew")
+        self.log_panel_frame.grid_columnconfigure(0, weight=1)
+        self.log_panel_frame.grid_rowconfigure(1, weight=1)
+
+        header = ctk.CTkFrame(self.log_panel_frame, fg_color="transparent")
+        header.grid(row=0, column=0, padx=16, pady=(16, 8), sticky="ew")
+        header.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
-            right_panel,
+            header,
             text="Process Log",
             font=ctk.CTkFont(size=18, weight="bold"),
-        ).grid(row=0, column=0, padx=16, pady=(16, 8), sticky="w")
+            anchor="w",
+        ).grid(row=0, column=0, sticky="w")
 
-        self.log_box = ctk.CTkTextbox(right_panel, wrap="word")
+        ctk.CTkLabel(
+            header,
+            text="Runtime monitor",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=("gray45", "gray55"),
+        ).grid(row=0, column=1, sticky="e")
+
+        self.log_box = ctk.CTkTextbox(self.log_panel_frame, wrap="word")
         self.log_box.grid(row=1, column=0, padx=16, pady=(0, 16), sticky="nsew")
         self.log_box.configure(state="disabled")
+
+    def _build_layout(self) -> None:
+        self.grid_columnconfigure(0, weight=0)
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        left_panel = ctk.CTkFrame(self, width=400)
+        left_panel.grid(row=0, column=0, padx=(16, 8), pady=16, sticky="nsew")
+        left_panel.grid_columnconfigure(0, weight=1)
+        left_panel.grid_rowconfigure(4, weight=1)
+
+        self._build_header_section(left_panel)
+        self._build_source_card(left_panel)
+        self._build_job_card(left_panel)
+        self._build_execute_card(left_panel)
+        self._build_result_card(left_panel)
+        self._build_log_panel(self)
 
     def _bind_drop_target(self, widget: ctk.CTkLabel) -> None:
         if DND_FILES is None:
@@ -665,8 +803,13 @@ class DesktopApp(ctk.CTk):
                 "Drag-and-drop source belum aktif di runtime ini. Gunakan tombol Pilih Source."
             )
             return
-        drop_target_register(DND_FILES)
-        dnd_bind("<<Drop>>", self._on_source_dropped)
+        try:
+            drop_target_register(DND_FILES)
+            dnd_bind("<<Drop>>", self._on_source_dropped)
+        except TclError:
+            self.source_drop_hint_var.set(
+                "Drag-and-drop source belum aktif di runtime ini. Gunakan tombol Pilih Source."
+            )
 
     def _apply_source_path(self, source_path: Path, *, log_prefix: str) -> None:
         self.source_path = source_path
