@@ -213,7 +213,7 @@ def test_update_hints_when_preflight_blocked():
     DesktopApp._update_hints(app)
 
     assert app.primary_hint_var.get() == (
-        "Execute dinonaktifkan karena masih ada error preflight. Lihat ringkasan preflight atau log untuk detail."
+        "Execute dinonaktifkan karena masih ada error preflight. Lihat log untuk detail."
     )
     assert app.execute_hint_var.get() == (
         "Execute dinonaktifkan sampai semua error preflight diselesaikan."
