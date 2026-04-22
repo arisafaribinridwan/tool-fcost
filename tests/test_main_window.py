@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tkinter import TclError
 from types import SimpleNamespace
 from pathlib import Path
 
@@ -337,6 +338,25 @@ def test_handle_dropped_source_applies_valid_file(monkeypatch):
 
     assert result is True
     assert calls == [(Path(r"C:\Data Folder\source.xlsx"), "Source dijatuhkan")]
+
+
+def test_bind_drop_target_falls_back_when_tkdnd_runtime_is_unavailable(monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    app.source_drop_hint_var = DummyVar("awal")
+    monkeypatch.setattr("app.ui.main_window.DND_FILES", "DND_Files")
+
+    class DummyDropWidget:
+        def drop_target_register(self, _value):
+            raise TclError('invalid command name "tkdnd::drop_target"')
+
+        def dnd_bind(self, _event, _callback):
+            raise AssertionError("dnd_bind should not run when registration fails")
+
+    DesktopApp._bind_drop_target(app, DummyDropWidget())
+
+    assert app.source_drop_hint_var.get() == (
+        "Drag-and-drop source belum aktif di runtime ini. Gunakan tombol Pilih Source."
+    )
 
 
 def test_pipeline_step_order_matches_design_brief():

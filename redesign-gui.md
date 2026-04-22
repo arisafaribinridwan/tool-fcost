@@ -104,6 +104,7 @@ Catatan:
 
 - Tahap 2 berfokus pada refactor struktur dan segmentasi layout
 - perubahan visual detail untuk source experience, readiness emphasis, progress, dan state badge tetap ditangani pada tahap berikutnya
+- selama review Tahap 2 ditambahkan fallback aman untuk drag-and-drop jika `tkinterdnd2` terimpor tetapi runtime `tkdnd` tidak aktif pada package Linux
 
 ## Gap Analysis: JSX Prototype vs UI Python Saat Ini
 

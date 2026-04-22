@@ -5,7 +5,7 @@ from pathlib import Path
 from queue import Empty, Queue
 from threading import Thread
 from time import perf_counter
-from tkinter import messagebox
+from tkinter import TclError, messagebox
 from typing import Any
 
 try:
@@ -803,8 +803,13 @@ class DesktopApp(ctk.CTk):
                 "Drag-and-drop source belum aktif di runtime ini. Gunakan tombol Pilih Source."
             )
             return
-        drop_target_register(DND_FILES)
-        dnd_bind("<<Drop>>", self._on_source_dropped)
+        try:
+            drop_target_register(DND_FILES)
+            dnd_bind("<<Drop>>", self._on_source_dropped)
+        except TclError:
+            self.source_drop_hint_var.set(
+                "Drag-and-drop source belum aktif di runtime ini. Gunakan tombol Pilih Source."
+            )
 
     def _apply_source_path(self, source_path: Path, *, log_prefix: str) -> None:
         self.source_path = source_path
