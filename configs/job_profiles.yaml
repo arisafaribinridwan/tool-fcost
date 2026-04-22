@@ -1,0 +1,5 @@
+jobs:
+- id: fcost-bulanan
+  label: fcost bulanan
+  config_file: monthly-report-recipe.yaml
+  enabled: true

@@ -337,7 +337,6 @@ class DesktopApp(ctk.CTk):
         self.primary_hint_var = ctk.StringVar(value="")
         self.execute_hint_var = ctk.StringVar(value="")
         self.preflight_status_var = ctk.StringVar(value="Preflight: Belum dicek")
-        self.preflight_summary_var = ctk.StringVar(value="Pilih source dan pekerjaan untuk memulai pemeriksaan otomatis.")
         self.status_var = ctk.StringVar(value="Status: Idle")
         self.last_output_var = ctk.StringVar(value="-")
         self._last_run_context: dict[str, object] | None = None
@@ -361,12 +360,12 @@ class DesktopApp(ctk.CTk):
         self.source_card_frame: ctk.CTkFrame | None = None
         self.job_card_frame: ctk.CTkFrame | None = None
         self.execute_card_frame: ctk.CTkFrame | None = None
-        self.result_card_frame: ctk.CTkFrame | None = None
         self.log_panel_frame: ctk.CTkFrame | None = None
         self.state_badge_label: ctk.CTkLabel | None = None
         self.progress_bar: ctk.CTkProgressBar | None = None
         self.clear_source_button: ctk.CTkButton | None = None
         self.last_session_info_label: ctk.CTkLabel | None = None
+        self.start_new_session_button: ctk.CTkButton | None = None
         self.progress_label_var = ctk.StringVar(value="Progress: Belum dimulai")
         self.progress_steps_var = ctk.StringVar(value=self._format_pipeline_step_lines())
         self.last_session_info_var = ctk.StringVar(value="")
@@ -546,8 +545,8 @@ class DesktopApp(ctk.CTk):
         next_row = self._build_card_title(
             self.job_card_frame,
             eyebrow="Langkah 2",
-            title="Job dan Readiness",
-            description="Pilih pekerjaan aktif, cek konteks job, lalu pantau readiness sebelum execute.",
+            title="Job Aktif",
+            description="Pilih pekerjaan aktif dan cek konteks job sebelum execute.",
         )
 
         selection_panel = ctk.CTkFrame(
@@ -624,7 +623,7 @@ class DesktopApp(ctk.CTk):
 
         ctk.CTkLabel(
             job_info_panel,
-            text="Ringkasan job aktif",
+            text="Detail job aktif",
             font=ctk.CTkFont(size=11, weight="bold"),
             text_color=("gray45", "gray55"),
         ).grid(row=0, column=0, padx=14, pady=(12, 2), sticky="w")
@@ -637,74 +636,20 @@ class DesktopApp(ctk.CTk):
             anchor="w",
         ).grid(row=1, column=0, padx=14, pady=(0, 12), sticky="ew")
 
-        readiness_panel = ctk.CTkFrame(
+        self.start_new_session_button = ctk.CTkButton(
             self.job_card_frame,
-            fg_color=("#F8FAFC", "#111827"),
-            border_width=1,
-            border_color=("#E2E8F0", "#334155"),
-            corner_radius=14,
+            text="Start New Session",
+            command=self._start_new_session,
+            state="disabled",
+            height=36,
         )
-        readiness_panel.grid(row=next_row + 3, column=0, padx=16, pady=(0, 16), sticky="ew")
-        readiness_panel.grid_columnconfigure(0, weight=1)
-
-        ctk.CTkLabel(
-            readiness_panel,
-            text="Readiness",
-            font=ctk.CTkFont(size=11, weight="bold"),
-            text_color=("#4F46E5", "#A5B4FC"),
-        ).grid(row=0, column=0, padx=14, pady=(12, 2), sticky="w")
-
-        ctk.CTkLabel(
-            readiness_panel,
-            textvariable=self.primary_hint_var,
-            justify="left",
-            wraplength=320,
-            anchor="w",
-            font=ctk.CTkFont(weight="bold"),
-        ).grid(row=1, column=0, padx=14, pady=(0, 8), sticky="ew")
-
-        ctk.CTkLabel(
-            readiness_panel,
-            textvariable=self.execute_hint_var,
-            justify="left",
-            wraplength=320,
-            text_color=("gray40", "gray60"),
-            anchor="w",
-        ).grid(row=2, column=0, padx=14, pady=(0, 10), sticky="ew")
-
-        preflight_panel = ctk.CTkFrame(
-            readiness_panel,
-            fg_color=("#FFFFFF", "#0F172A"),
-            border_width=1,
-            border_color=("#E2E8F0", "#334155"),
-            corner_radius=12,
+        self.start_new_session_button.grid(
+            row=next_row + 3,
+            column=0,
+            padx=16,
+            pady=(0, 16),
+            sticky="ew",
         )
-        preflight_panel.grid(row=3, column=0, padx=14, pady=(0, 14), sticky="ew")
-        preflight_panel.grid_columnconfigure(0, weight=1)
-
-        ctk.CTkLabel(
-            preflight_panel,
-            text="Preflight",
-            font=ctk.CTkFont(size=11, weight="bold"),
-            text_color=("gray45", "gray55"),
-        ).grid(row=0, column=0, padx=12, pady=(10, 2), sticky="w")
-
-        ctk.CTkLabel(
-            preflight_panel,
-            textvariable=self.preflight_status_var,
-            justify="left",
-            wraplength=320,
-            anchor="w",
-            font=ctk.CTkFont(weight="bold"),
-        ).grid(row=1, column=0, padx=12, pady=(0, 4), sticky="ew")
-
-        ctk.CTkLabel(
-            preflight_panel,
-            textvariable=self.preflight_summary_var,
-            justify="left",
-            wraplength=320,
-            anchor="w",
-        ).grid(row=2, column=0, padx=12, pady=(0, 12), sticky="ew")
 
         self._refresh_last_session_info()
 
@@ -717,7 +662,7 @@ class DesktopApp(ctk.CTk):
             self.execute_card_frame,
             eyebrow="Langkah 3",
             title="Execute",
-            description="Jalankan proses saat source, job, dan preflight sudah siap.",
+            description="Jalankan proses saat source dan job valid, lalu pantau hasil akhirnya di panel ini.",
         )
 
         self.execute_button = ctk.CTkButton(
@@ -729,60 +674,12 @@ class DesktopApp(ctk.CTk):
         )
         self.execute_button.grid(row=next_row, column=0, padx=16, pady=(0, 16), sticky="ew")
 
-    def _build_result_card(self, master: ctk.CTkFrame) -> None:
-        self.result_card_frame = ctk.CTkFrame(master)
-        self.result_card_frame.grid(row=4, column=0, padx=16, pady=(0, 16), sticky="nsew")
-        self.result_card_frame.grid_columnconfigure(0, weight=1)
-
-        next_row = self._build_card_title(
-            self.result_card_frame,
-            eyebrow="Ringkasan",
-            title="Hasil Job",
-            description="Pantau hasil akhir, target output, dan ringkasan job terakhir.",
-        )
-
-        ctk.CTkLabel(
-            self.result_card_frame,
-            textvariable=self.status_var,
-            justify="left",
-            wraplength=320,
-        ).grid(row=next_row, column=0, padx=16, pady=(0, 8), sticky="w")
-
-        ctk.CTkLabel(self.result_card_frame, text="Target output").grid(
-            row=next_row + 1,
-            column=0,
-            padx=16,
-            sticky="w",
-        )
-
-        ctk.CTkLabel(
-            self.result_card_frame,
-            textvariable=self.last_output_var,
-            justify="left",
-            wraplength=320,
-        ).grid(row=next_row + 2, column=0, padx=16, pady=(0, 12), sticky="w")
-
         ctk.CTkButton(
-            self.result_card_frame,
+            self.execute_card_frame,
             text="Buka Folder Outputs",
             command=self._open_outputs_dir,
             height=36,
-        ).grid(row=next_row + 3, column=0, padx=16, pady=(0, 8), sticky="ew")
-
-        self.start_new_session_button = ctk.CTkButton(
-            self.result_card_frame,
-            text="Start New Session",
-            command=self._start_new_session,
-            state="disabled",
-            height=36,
-        )
-        self.start_new_session_button.grid(
-            row=next_row + 4,
-            column=0,
-            padx=16,
-            pady=(0, 16),
-            sticky="ew",
-        )
+        ).grid(row=next_row + 1, column=0, padx=16, pady=(0, 8), sticky="ew")
 
     def _build_log_panel(self, master: ctk.CTkFrame) -> None:
         self.log_panel_frame = ctk.CTkFrame(master)
@@ -829,7 +726,6 @@ class DesktopApp(ctk.CTk):
         self._build_header_section(left_panel)
         self._build_source_card(left_panel)
         self._build_job_card(left_panel)
-        self._build_result_card(left_panel)
         self._build_execute_card(right_panel)
         self._build_log_panel(right_panel)
 
@@ -999,7 +895,7 @@ class DesktopApp(ctk.CTk):
             return "Preflight sedang memeriksa kecocokan source, config, dan output."
         preflight_result = self._hint_preflight_result()
         if preflight_result is not None and preflight_result.status == "Blocked":
-            return "Execute dinonaktifkan karena masih ada error preflight. Lihat ringkasan preflight atau log untuk detail."
+            return "Execute dinonaktifkan karena masih ada error preflight. Lihat log untuk detail."
         if preflight_result is not None and preflight_result.can_execute:
             return "Source siap diproses. Jalankan Execute untuk membuat output."
         return "Pilih source dan pekerjaan untuk memulai pemeriksaan otomatis."
@@ -1148,9 +1044,6 @@ class DesktopApp(ctk.CTk):
     def _set_preflight_idle(self) -> None:
         self._preflight_result = None
         self.preflight_status_var.set("Preflight: Belum dicek")
-        self.preflight_summary_var.set(
-            "Pilih source dan pekerjaan untuk memulai pemeriksaan otomatis."
-        )
         self.last_output_var.set("-")
         self._reset_progress_state()
         self._update_hints()
@@ -1188,20 +1081,9 @@ class DesktopApp(ctk.CTk):
         self._update_execute_state()
         self._update_hints()
 
-    def _format_preflight_summary(self, result: PreflightResult) -> str:
-        if not result.findings:
-            return "Semua pemeriksaan lolos."
-
-        summary = (
-            f"{result.error_count} error, {result.warning_count} warning, {result.info_count} info"
-        )
-        top_finding = result.findings[0]
-        return f"{summary}. {top_finding.summary}"
-
     def _apply_preflight_result(self, result: PreflightResult) -> None:
         self._preflight_result = result
         self.preflight_status_var.set(f"Preflight: {result.status}")
-        self.preflight_summary_var.set(self._format_preflight_summary(result))
         if result.output_path is not None:
             self.last_output_var.set(str(result.output_path))
         self._update_execute_state()
@@ -1218,7 +1100,6 @@ class DesktopApp(ctk.CTk):
         request_id = self._preflight_request_id
         self._latest_preflight_request_id = request_id
         self.preflight_status_var.set("Preflight: Memeriksa...")
-        self.preflight_summary_var.set("Memvalidasi source, config, master, dan target output...")
         self._update_execute_state()
         self._update_hints()
 
@@ -1303,10 +1184,6 @@ class DesktopApp(ctk.CTk):
                     )
                     self._preflight_result = fallback
                     self.preflight_status_var.set("Preflight: Blocked")
-                    self.preflight_summary_var.set(
-                        "Preflight gagal dijalankan. Periksa source/job aktif lalu coba lagi. "
-                        f"Detail: {sanitize_exception_message(error_message, project_root=self.paths.project_root)}"
-                    )
                     self._append_log(f"Preflight error: {error_message}")
                     self.last_output_var.set("-")
                     self._update_execute_state()
