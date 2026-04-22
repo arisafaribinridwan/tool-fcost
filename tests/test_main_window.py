@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from pathlib import Path
 
 from app.services import PreflightResult
-from app.ui.main_window import DesktopApp, _parse_dropped_files
+from app.ui.main_window import PIPELINE_STEP_ORDER, DesktopApp, _parse_dropped_files
 
 
 class DummyVar:
@@ -337,3 +337,66 @@ def test_handle_dropped_source_applies_valid_file(monkeypatch):
 
     assert result is True
     assert calls == [(Path(r"C:\Data Folder\source.xlsx"), "Source dijatuhkan")]
+
+
+def test_pipeline_step_order_matches_design_brief():
+    assert PIPELINE_STEP_ORDER == (
+        ("load_config", "Load config"),
+        ("copy_source", "Copy source"),
+        ("read_source", "Read source"),
+        ("load_master", "Load master"),
+        ("transform", "Transform"),
+        ("build_output", "Build output"),
+        ("write_output", "Write output"),
+    )
+
+
+def test_format_pipeline_step_lines_uses_defined_order():
+    app = DesktopApp.__new__(DesktopApp)
+
+    result = DesktopApp._format_pipeline_step_lines(app)
+
+    assert result == (
+        "- Load config\n"
+        "- Copy source\n"
+        "- Read source\n"
+        "- Load master\n"
+        "- Transform\n"
+        "- Build output\n"
+        "- Write output"
+    )
+
+
+def test_resolve_visual_state_prefers_running():
+    app = _make_hint_app()
+    app._worker_thread = DummyThread(True)
+    app._preflight_thread = DummyThread(True)
+    app._preflight_result = PreflightResult(status="Ready", findings=(), output_path=None)
+    app.status_var = DummyVar("Status: Idle")
+
+    assert DesktopApp._resolve_visual_state(app) == "running"
+
+
+def test_resolve_visual_state_reports_blocked_and_ready():
+    blocked_app = _make_hint_app()
+    blocked_app._preflight_result = PreflightResult(status="Blocked", findings=(), output_path=None)
+    blocked_app.preflight_status_var = DummyVar("Preflight: Blocked")
+    assert DesktopApp._resolve_visual_state(blocked_app) == "blocked"
+
+    ready_app = _make_hint_app()
+    ready_app._preflight_result = PreflightResult(status="Ready", findings=(), output_path=None)
+    ready_app.preflight_status_var = DummyVar("Preflight: Ready")
+    assert DesktopApp._resolve_visual_state(ready_app) == "ready"
+
+
+def test_resolve_visual_state_reports_success_failed_and_idle():
+    success_app = _make_hint_app()
+    success_app.status_var = DummyVar("Status: Sukses")
+    assert DesktopApp._resolve_visual_state(success_app) == "success"
+
+    failed_app = _make_hint_app()
+    failed_app.status_var = DummyVar("Status: Gagal")
+    assert DesktopApp._resolve_visual_state(failed_app) == "failed"
+
+    idle_app = _make_hint_app()
+    assert DesktopApp._resolve_visual_state(idle_app) == "idle"

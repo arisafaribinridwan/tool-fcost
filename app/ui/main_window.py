@@ -41,6 +41,17 @@ from app.utils import (
 )
 
 
+PIPELINE_STEP_ORDER: tuple[tuple[str, str], ...] = (
+    ("load_config", "Load config"),
+    ("copy_source", "Copy source"),
+    ("read_source", "Read source"),
+    ("load_master", "Load master"),
+    ("transform", "Transform"),
+    ("build_output", "Build output"),
+    ("write_output", "Write output"),
+)
+
+
 def _parse_dropped_files(raw_drop_data: str) -> tuple[str, ...]:
     value = raw_drop_data.strip()
     if not value:
@@ -373,6 +384,7 @@ class DesktopApp(ctk.CTk):
         self.last_output_var = ctk.StringVar(value="-")
         self.job_summary_var = ctk.StringVar(value="Belum ada proses yang selesai.")
         self._last_run_context: dict[str, object] | None = None
+        self._init_redesign_foundation_refs()
 
         self._build_layout()
         self._restore_window_geometry()
@@ -384,6 +396,47 @@ class DesktopApp(ctk.CTk):
         if stale_warning:
             self._append_log(stale_warning)
             self.after(50, lambda: messagebox.showwarning("Bundle stale", stale_warning))
+
+    def _init_redesign_foundation_refs(self) -> None:
+        # Tahap 1 redesign hanya menyiapkan reference dan state foundation.
+        # Widget akan diisi pada tahap layout redesign berikutnya.
+        self.header_frame: ctk.CTkFrame | None = None
+        self.source_card_frame: ctk.CTkFrame | None = None
+        self.job_card_frame: ctk.CTkFrame | None = None
+        self.execute_card_frame: ctk.CTkFrame | None = None
+        self.result_card_frame: ctk.CTkFrame | None = None
+        self.log_panel_frame: ctk.CTkFrame | None = None
+        self.state_badge_label: ctk.CTkLabel | None = None
+        self.progress_bar: ctk.CTkProgressBar | None = None
+        self.progress_label_var = ctk.StringVar(value="Progress: Belum dimulai")
+        self.progress_steps_var = ctk.StringVar(value=self._format_pipeline_step_lines())
+
+    def _format_pipeline_step_lines(self) -> str:
+        return "\n".join(f"- {label}" for _, label in PIPELINE_STEP_ORDER)
+
+    def _resolve_visual_state(self) -> str:
+        worker_running = self._worker_thread is not None and self._worker_thread.is_alive()
+        if worker_running:
+            return "running"
+
+        preflight_running = self._preflight_thread is not None and self._preflight_thread.is_alive()
+        if preflight_running or self._hint_preflight_status_text() == "Preflight: Memeriksa...":
+            return "checking"
+
+        if self._hint_status_text() == "Status: Sukses":
+            return "success"
+
+        if self._hint_status_text() == "Status: Gagal":
+            return "failed"
+
+        preflight_result = self._hint_preflight_result()
+        if preflight_result is not None and preflight_result.status == "Blocked":
+            return "blocked"
+
+        if preflight_result is not None and preflight_result.can_execute:
+            return "ready"
+
+        return "idle"
 
     def _build_layout(self) -> None:
         self.grid_columnconfigure(0, weight=0)
