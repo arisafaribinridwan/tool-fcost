@@ -58,3 +58,4 @@ instance/
 # Local tool state
 opencode.json
 .claude/
+.codex/

@@ -1,0 +1,796 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Learning Guide - Main Window UI</title>
+  <style>
+    :root {
+      --bg: #10151f;
+      --bg-soft: #18202d;
+      --panel: rgba(22, 29, 41, 0.92);
+      --panel-2: rgba(16, 22, 31, 0.94);
+      --text: #edf3f8;
+      --muted: #aab9c8;
+      --line: #2d3a4d;
+      --accent: #7dd3fc;
+      --accent-2: #fbbf24;
+      --accent-3: #86efac;
+      --danger: #fca5a5;
+      --shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
+      --code: #0d1420;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      line-height: 1.65;
+      background:
+        radial-gradient(circle at top left, rgba(125, 211, 252, 0.12), transparent 28%),
+        radial-gradient(circle at top right, rgba(251, 191, 36, 0.1), transparent 22%),
+        linear-gradient(180deg, #0f1722, #131b28 46%, #0f141d 100%);
+    }
+
+    a {
+      color: var(--accent);
+    }
+
+    code,
+    pre {
+      font-family: Consolas, "Courier New", monospace;
+    }
+
+    code {
+      padding: 0.08rem 0.35rem;
+      border-radius: 6px;
+      background: rgba(13, 20, 32, 0.95);
+      color: #d8f4ff;
+    }
+
+    pre {
+      margin: 1rem 0;
+      padding: 1rem 1.1rem;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--code);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 1.25rem;
+      background: rgba(10, 15, 23, 0.86);
+      border-right: 1px solid var(--line);
+      backdrop-filter: blur(12px);
+      overflow: auto;
+    }
+
+    .brand,
+    .toc,
+    .meta,
+    .panel,
+    .callout,
+    .mini-card,
+    table {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .brand,
+    .toc,
+    .meta {
+      padding: 1rem 1.05rem;
+      margin-bottom: 1rem;
+    }
+
+    .brand h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.28rem;
+      line-height: 1.3;
+    }
+
+    .brand p,
+    .meta p,
+    .sidebar li,
+    .sidebar a {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .eyebrow {
+      display: inline-block;
+      margin-bottom: 0.7rem;
+      color: var(--accent);
+      font-size: 0.76rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .toc a {
+      display: block;
+      text-decoration: none;
+      padding: 0.48rem 0.65rem;
+      margin-bottom: 0.35rem;
+      border-radius: 10px;
+      border: 1px solid transparent;
+    }
+
+    .toc a:hover {
+      border-color: var(--line);
+      background: rgba(125, 211, 252, 0.06);
+      color: var(--text);
+    }
+
+    .content {
+      padding: 1.75rem clamp(1rem, 4vw, 3rem) 3rem;
+    }
+
+    .hero {
+      padding: 1.5rem 1.6rem;
+      margin-bottom: 1.35rem;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background:
+        linear-gradient(145deg, rgba(22, 29, 41, 0.96), rgba(11, 18, 28, 0.96)),
+        var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+      margin: 0 0 0.8rem;
+      line-height: 1.25;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 4vw, 3rem);
+    }
+
+    h2 {
+      margin-top: 2rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--line);
+      font-size: clamp(1.35rem, 2vw, 1.9rem);
+    }
+
+    h3 {
+      margin-top: 1.3rem;
+      font-size: 1.12rem;
+    }
+
+    p {
+      margin: 0.35rem 0 1rem;
+    }
+
+    ul,
+    ol {
+      margin: 0.35rem 0 1rem;
+      padding-left: 1.2rem;
+    }
+
+    li {
+      margin-bottom: 0.36rem;
+    }
+
+    .panel,
+    .callout {
+      padding: 1rem 1.1rem;
+      margin: 1rem 0;
+    }
+
+    .callout strong {
+      color: var(--accent-3);
+    }
+
+    .warn strong {
+      color: var(--accent-2);
+    }
+
+    .danger strong {
+      color: var(--danger);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+
+    .mini-card {
+      padding: 0.95rem 1rem;
+      background: var(--panel-2);
+    }
+
+    .mini-card h3 {
+      margin-top: 0;
+    }
+
+    .step-list {
+      counter-reset: section;
+      list-style: none;
+      padding-left: 0;
+    }
+
+    .step-list li {
+      position: relative;
+      padding: 0.9rem 0.9rem 0.9rem 3.5rem;
+      margin-bottom: 0.8rem;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(15, 22, 34, 0.9);
+    }
+
+    .step-list li::before {
+      counter-increment: section;
+      content: counter(section);
+      position: absolute;
+      left: 1rem;
+      top: 0.9rem;
+      width: 1.75rem;
+      height: 1.75rem;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      color: #082032;
+      background: linear-gradient(135deg, var(--accent), #c4f1ff);
+    }
+
+    .flow {
+      display: grid;
+      gap: 0.8rem;
+      margin: 1rem 0;
+    }
+
+    .flow-node {
+      padding: 1rem 1.05rem;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(20, 28, 40, 0.95), rgba(11, 18, 28, 0.95));
+      position: relative;
+    }
+
+    .flow-node::after {
+      content: "↓";
+      position: absolute;
+      left: 50%;
+      bottom: -1.08rem;
+      transform: translateX(-50%);
+      color: var(--accent);
+      font-size: 1.2rem;
+    }
+
+    .flow-node:last-child::after {
+      content: "";
+    }
+
+    .flow-title {
+      display: block;
+      margin-bottom: 0.3rem;
+      color: var(--accent);
+      font-size: 0.86rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      margin: 1rem 0;
+    }
+
+    th,
+    td {
+      padding: 0.78rem 0.82rem;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--line);
+    }
+
+    th {
+      background: rgba(125, 211, 252, 0.08);
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .footer-space {
+      height: 2rem;
+    }
+
+    @media (max-width: 980px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: static;
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <section class="brand">
+        <span class="eyebrow">Python Learning</span>
+        <h1>Belajar dari UI App</h1>
+        <p>Panduan belajar untuk memahami <code>app/ui/main_window.py</code>, alur aplikasi, dan pola desain desktop app yang dipakai proyek ini.</p>
+      </section>
+
+      <section class="meta">
+        <span class="eyebrow">Isi Dokumen</span>
+        <p>Dokumen ini menggabungkan penjelasan struktur file, walkthrough bertahap, dan diagram alur aplikasi sampai proses <code>Execute</code>.</p>
+        <p>File penting: <a href="../app/ui/main_window.py"><code>app/ui/main_window.py</code></a>, <a href="../app/ui/__init__.py"><code>app/ui/__init__.py</code></a>, <a href="../app/services/__init__.py"><code>app/services/__init__.py</code></a>.</p>
+      </section>
+
+      <nav class="toc">
+        <span class="eyebrow">Navigasi</span>
+        <a href="#gambaran">Gambaran Umum</a>
+        <a href="#bagian-file">Bagian File</a>
+        <a href="#walkthrough">Walkthrough Bertahap</a>
+        <a href="#alur">Alur Aplikasi</a>
+        <a href="#diagram">Diagram Visual</a>
+        <a href="#referensi">Referensi File</a>
+        <a href="#mental-model">Mental Model</a>
+        <a href="#tips">Cara Membaca File</a>
+        <a href="#istilah">Istilah Penting</a>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <section class="hero" id="gambaran">
+        <span class="eyebrow">Main Window Guide</span>
+        <h1>Memahami <code>app/ui/main_window.py</code> dengan bahasa pemula</h1>
+        <p>File ini adalah pusat UI desktop berbasis <code>CustomTkinter</code>. Tugas utamanya bukan memproses Excel secara langsung, tetapi menghubungkan klik user dengan service, memantau status, dan menampilkan hasil proses secara aman.</p>
+        <div class="grid">
+          <article class="mini-card">
+            <h3>Peran file ini</h3>
+            <p>Mengatur tampilan, state UI, interaksi user, preflight, worker background, log, dan status eksekusi.</p>
+          </article>
+          <article class="mini-card">
+            <h3>Inti arsitektur</h3>
+            <p><strong>UI</strong> meminta aksi, <strong>service</strong> menjalankan logika bisnis, <strong>thread</strong> menangani kerja berat, dan <strong>queue</strong> mengirim hasil kembali ke UI.</p>
+          </article>
+        </div>
+        <div class="callout">
+          <p><strong>Buka source terkait:</strong> <a href="../app/ui/main_window.py"><code>app/ui/main_window.py</code></a>, <a href="../app/ui/components/__init__.py"><code>app/ui/components/__init__.py</code></a>, <a href="../app/services/__init__.py"><code>app/services/__init__.py</code></a>, <a href="../app/utils/__init__.py"><code>app/utils/__init__.py</code></a>.</p>
+        </div>
+      </section>
+
+      <section id="bagian-file">
+        <h2>Penjelasan per bagian file</h2>
+
+        <div class="panel">
+          <h3>1. Import dan konstanta</h3>
+          <ul>
+            <li>Import standar seperti <code>Path</code>, <code>Thread</code>, <code>Queue</code>, dan <code>datetime</code> dipakai untuk path file, kerja background, antrean event, dan log waktu.</li>
+            <li><code>import customtkinter as ctk</code> berarti semua widget UI dibuat dari library <code>CustomTkinter</code>.</li>
+            <li>Import dari <code>app.services</code> berisi logika bisnis seperti mencari config, validasi source, preflight, dan menjalankan pipeline.</li>
+            <li>Import dari <code>app.utils</code> berisi utilitas seperti membuka file picker, membuka folder output, dan membersihkan pesan error.</li>
+            <li><code>PIPELINE_STEP_ORDER</code> menyimpan urutan langkah pipeline supaya progress ditampilkan konsisten.</li>
+          </ul>
+        </div>
+
+        <div class="panel">
+          <h3>2. <code>JobSettingsDialog</code></h3>
+          <ul>
+            <li>Class ini adalah popup untuk membuat, memilih, dan mengubah job.</li>
+            <li><code>class JobSettingsDialog(ctk.CTkToplevel)</code> berarti class ini mewarisi jendela popup dari <code>CustomTkinter</code>.</li>
+            <li><code>__init__</code> menyiapkan state awal, ukuran window, variabel form, lalu memanggil <code>_build_layout()</code>.</li>
+            <li><code>refresh()</code> membaca ulang config dan job dari disk agar isi dialog tetap sinkron.</li>
+            <li><code>_save_job()</code> menyerahkan penyimpanan ke service agar validasi tidak tersebar di UI.</li>
+          </ul>
+          <div class="callout">
+            <p><strong>Kenapa dipisah jadi dialog?</strong> Karena layar utama harus tetap fokus ke alur utama: pilih source, pilih job, lalu execute. Tugas sekunder seperti mengelola job lebih nyaman ditempatkan di popup.</p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>3. <code>DesktopApp</code></h3>
+          <ul>
+            <li>Ini adalah window utama aplikasi.</li>
+            <li><code>class DesktopApp(ctk.CTk)</code> berarti class ini mewarisi root window utama.</li>
+            <li>Class ini menyimpan state UI seperti source aktif, job aktif, hasil preflight, thread worker, queue event, dan teks hint.</li>
+            <li><code>__init__()</code> bertugas menyiapkan state, membangun layout, memuat job, dan mendaftarkan event window.</li>
+          </ul>
+        </div>
+
+        <div class="grid">
+          <article class="mini-card">
+            <h3>4. State UI</h3>
+            <p><code>StringVar</code> dipakai untuk menghubungkan nilai Python ke widget. Saat nilainya berubah, tampilan yang terhubung bisa ikut berubah otomatis.</p>
+          </article>
+          <article class="mini-card">
+            <h3>5. Fondasi layout</h3>
+            <p><code>_init_redesign_foundation_refs()</code> menyiapkan atribut widget dengan nilai awal <code>None</code> agar aman dicek dari method lain saat UI dibangun bertahap.</p>
+          </article>
+        </div>
+
+        <div class="panel">
+          <h3>6. Builder UI: <code>_build_*</code></h3>
+          <ul>
+            <li>UI dipecah menjadi beberapa method kecil seperti <code>_build_header_section()</code>, <code>_build_source_card()</code>, dan <code>_build_log_panel()</code>.</li>
+            <li>Pendekatan ini membuat file lebih mudah dipelajari daripada satu method panjang yang mencampur semua widget sekaligus.</li>
+            <li><code>_build_card_title()</code> adalah helper untuk membuat pola judul kartu yang berulang.</li>
+          </ul>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Bagian</th>
+              <th>Apa yang dikerjakan</th>
+              <th>Kenapa penting</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Source card</td>
+              <td>Memilih dan membersihkan file input</td>
+              <td>User harus tahu file mana yang aktif sebelum proses jalan</td>
+            </tr>
+            <tr>
+              <td>Job card</td>
+              <td>Memilih pekerjaan dan melihat detail config</td>
+              <td>Satu source bisa diproses dengan job yang berbeda</td>
+            </tr>
+            <tr>
+              <td>Execute card</td>
+              <td>Menjalankan pipeline dan membuka folder hasil</td>
+              <td>Titik keputusan utama ada di sini</td>
+            </tr>
+            <tr>
+              <td>Log panel</td>
+              <td>Menampilkan jejak proses runtime</td>
+              <td>User butuh observabilitas tanpa membuka terminal</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="panel">
+          <h3>7. Source, job, hint, dan status</h3>
+          <ul>
+            <li><code>_select_source()</code> menangani file picker dan validasi awal source.</li>
+            <li><code>_apply_source_path()</code> memusatkan efek samping setelah source berubah: update state, simpan sesi, log, dan trigger preflight.</li>
+            <li><code>refresh_jobs()</code> membaca job profile dari folder config lalu hanya menawarkan job yang valid ke user.</li>
+            <li><code>_resolve_primary_hint()</code> dan <code>_resolve_execute_hint()</code> menerjemahkan state internal menjadi kalimat panduan yang mudah dibaca.</li>
+          </ul>
+        </div>
+
+        <div class="panel">
+          <h3>8. Session state, log, preflight, dan execute</h3>
+          <ul>
+            <li><code>_persist_session_state()</code> menyimpan source/job terakhir agar user bisa melanjutkan pekerjaan sebelumnya.</li>
+            <li><code>_append_log()</code> menjadi satu pintu untuk semua log agar format timestamp dan sanitasi konsisten.</li>
+            <li><code>_schedule_preflight()</code> menjalankan pemeriksaan otomatis saat source atau job berubah.</li>
+            <li><code>_execute_pipeline()</code> adalah pintu masuk proses utama, tetapi hanya akan berjalan jika semua syarat sudah aman.</li>
+          </ul>
+          <div class="callout warn">
+            <p><strong>Kenapa preflight penting?</strong> Karena preflight mendeteksi masalah lebih awal, sehingga tombol <code>Execute</code> hanya aktif saat source, job, dan kondisi output sudah layak diproses.</p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>9. Thread dan queue</h3>
+          <ul>
+            <li><code>_run_preflight_worker()</code> dan <code>_run_pipeline_worker()</code> menjalankan kerja berat di thread background.</li>
+            <li>Hasilnya dikirim lewat <code>Queue</code>, lalu dibaca oleh <code>_poll_preflight_events()</code> dan <code>_poll_worker_events()</code>.</li>
+            <li>Ini dipilih karena Tkinter tidak aman diubah langsung dari worker thread.</li>
+          </ul>
+          <div class="callout danger">
+            <p><strong>Masalah yang dihindari:</strong> jika kerja berat dijalankan langsung di main thread, window bisa terasa macet atau <em>not responding</em>.</p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>10. Entry point</h3>
+          <ul>
+            <li><code>run_desktop_app(paths)</code> adalah pintu masuk UI desktop.</li>
+            <li>Fungsi ini mengatur appearance/theme, membuat <code>DesktopApp</code>, lalu memanggil <code>mainloop()</code>.</li>
+            <li><code>mainloop()</code> adalah loop utama Tkinter; tanpa itu window tidak akan hidup dan responsif.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="walkthrough">
+        <h2>Walkthrough bertahap untuk pemula</h2>
+        <p>Kalau kamu baru belajar, jangan baca file ini dari atas ke bawah secara buta. Lebih mudah kalau dibaca berdasarkan urutan peran di aplikasi.</p>
+
+        <ol class="step-list">
+          <li>
+            <strong>Mulai dari entry point.</strong>
+            Cari <code>run_desktop_app(paths)</code>. Dari sini kamu tahu titik awal UI dibuat dan tahu bahwa <code>DesktopApp</code> adalah class utama yang harus dipahami.
+          </li>
+          <li>
+            <strong>Lanjut ke konstruktor <code>DesktopApp.__init__</code>.</strong>
+            Di sini kamu melihat state apa saja yang disiapkan: source, job, thread, queue, status, hint, dan log. Ini membantu memahami “data apa yang hidup” selama aplikasi berjalan.
+          </li>
+          <li>
+            <strong>Baca semua method <code>_build_*</code>.</strong>
+            Fokus dulu ke struktur layar, bukan logika bisnis. Pahami bahwa panel kiri mengurus input dan konteks, sedangkan panel kanan fokus ke execute dan log.
+          </li>
+          <li>
+            <strong>Pahami interaksi user paling awal.</strong>
+            Baca <code>_select_source()</code> lalu <code>_apply_source_path()</code>. Dari sini terlihat bagaimana satu aksi user bisa memicu validasi, log, simpan sesi, dan preflight.
+          </li>
+          <li>
+            <strong>Pahami pemilihan job.</strong>
+            Baca <code>refresh_jobs()</code>, <code>_selected_job()</code>, dan <code>_update_job_info()</code>. Tiga method ini menjelaskan bagaimana dropdown diisi dan bagaimana UI tahu job mana yang benar-benar valid.</li>
+          <li>
+            <strong>Masuk ke preflight.</strong>
+            Baca <code>_schedule_preflight()</code>, <code>_start_preflight_worker()</code>, <code>_run_preflight_worker()</code>, dan <code>_poll_preflight_events()</code>. Ini bagian penting untuk belajar pola thread dan queue.</li>
+          <li>
+            <strong>Baru masuk ke execute.</strong>
+            Baca <code>_execute_pipeline()</code> dan perhatikan guard clause-nya. Ini contoh bagus bagaimana Python dipakai untuk “menolak lebih awal” kondisi yang belum aman.</li>
+          <li>
+            <strong>Tutup dengan worker utama dan log.</strong>
+            Baca <code>_run_pipeline_worker()</code>, <code>_poll_worker_events()</code>, dan <code>_append_log()</code>. Di titik ini kamu akan melihat bagaimana hasil pipeline kembali ke UI.</li>
+        </ol>
+
+        <div class="grid">
+          <article class="mini-card">
+            <h3>Yang sebaiknya dicari saat membaca</h3>
+            <ul>
+              <li>Method ini mengubah state apa?</li>
+              <li>Method ini dipanggil oleh siapa?</li>
+              <li>Method ini hanya UI atau juga logika bisnis?</li>
+              <li>Apa efek sampingnya ke log, tombol, atau preflight?</li>
+            </ul>
+          </article>
+          <article class="mini-card">
+            <h3>Kesalahan umum pemula</h3>
+            <ul>
+              <li>Mengira semua method harus dibaca berurutan dari atas.</li>
+              <li>Mencampur peran UI dengan peran service.</li>
+              <li>Tidak membedakan main thread dan worker thread.</li>
+              <li>Melupakan bahwa <code>StringVar</code> dipakai untuk binding ke widget.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="alur">
+        <h2>Peta alur aplikasi</h2>
+        <p>Berikut alur aplikasi dari start sampai proses <code>Execute</code> berjalan dan hasilnya kembali ke UI.</p>
+
+        <pre><code>run_desktop_app(paths)
+-> set appearance/theme
+-> buat DesktopApp(paths)
+   -> __init__()
+      -> siapkan state
+      -> _build_layout()
+         -> _build_header_section()
+         -> _build_source_card()
+         -> _build_job_card()
+         -> _build_execute_card()
+         -> _build_log_panel()
+      -> _restore_window_geometry()
+      -> refresh_jobs(initial=True)
+      -> bind event window
+-> app.mainloop()</code></pre>
+
+        <div class="panel">
+          <h3>Alur saat user memakai aplikasi</h3>
+          <ul>
+            <li>User membuka aplikasi dan <code>refresh_jobs()</code> memuat daftar job valid.</li>
+            <li>User klik <code>Pilih Source</code>, lalu <code>_select_source()</code> membuka file picker.</li>
+            <li>Source divalidasi dengan <code>validate_source_file(...)</code>.</li>
+            <li>Jika valid, <code>_apply_source_path(...)</code> menyimpan source dan memicu <code>_schedule_preflight()</code>.</li>
+            <li>User memilih job di dropdown, lalu <code>_on_job_selected()</code> memicu preflight lagi.</li>
+            <li><code>_run_preflight_worker()</code> menjalankan <code>run_preflight(...)</code> di thread background.</li>
+            <li>Hasil preflight masuk ke queue dan diproses oleh <code>_poll_preflight_events()</code>.</li>
+            <li>Jika aman, tombol <code>Execute</code> aktif.</li>
+            <li>User klik <code>Execute</code>, lalu <code>_execute_pipeline()</code> membuat worker pipeline.</li>
+            <li><code>_run_pipeline_worker()</code> menjalankan <code>run_pipeline(...)</code>, mengirim log dan progress ke queue.</li>
+            <li><code>_poll_worker_events()</code> membaca hasil, memperbarui status, dan menampilkan output/log.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="diagram">
+        <h2>Diagram visual alur source - preflight - execute - output</h2>
+        <div class="flow">
+          <article class="flow-node">
+            <span class="flow-title">1. App Start</span>
+            <p><code>run_desktop_app()</code> membuat <code>DesktopApp</code>, membangun layout, dan memuat daftar job awal.</p>
+          </article>
+          <article class="flow-node">
+            <span class="flow-title">2. User Pilih Source</span>
+            <p><code>_select_source()</code> membuka file picker, lalu memvalidasi file yang dipilih.</p>
+          </article>
+          <article class="flow-node">
+            <span class="flow-title">3. Source Disimpan ke State</span>
+            <p><code>_apply_source_path()</code> mengisi <code>self.source_path</code>, update label UI, simpan sesi, dan menulis log.</p>
+          </article>
+          <article class="flow-node">
+            <span class="flow-title">4. User Pilih Job</span>
+            <p>Dropdown job memilih <code>JobProfileSummary</code> valid yang sudah dibaca dari config.</p>
+          </article>
+          <article class="flow-node">
+            <span class="flow-title">5. Preflight Dijadwalkan</span>
+            <p><code>_schedule_preflight()</code> memastikan source dan job lengkap, lalu menandai status <code>Memeriksa...</code>.</p>
+          </article>
+          <article class="flow-node">
+            <span class="flow-title">6. Worker Preflight Jalan</span>
+            <p><code>_start_preflight_worker()</code> dan <code>_run_preflight_worker()</code> menjalankan pemeriksaan di thread background.</p>
+          </article>
+          <article class="flow-node">
+            <span class="flow-title">7. Hasil Masuk ke Queue</span>
+            <p>Worker tidak menyentuh widget langsung; ia hanya mengirim event ke <code>Queue</code>.</p>
+          </article>
+          <article class="flow-node">
+            <span class="flow-title">8. Main Thread Memproses Hasil</span>
+            <p><code>_poll_preflight_events()</code> membaca hasil queue lalu memperbarui status dan enable/disable tombol execute.</p>
+          </article>
+          <article class="flow-node">
+            <span class="flow-title">9. User Klik Execute</span>
+            <p><code>_execute_pipeline()</code> memeriksa guard clause: source ada, job valid, preflight selesai, dan preflight mengizinkan eksekusi.</p>
+          </article>
+          <article class="flow-node">
+            <span class="flow-title">10. Worker Pipeline Jalan</span>
+            <p><code>_run_pipeline_worker()</code> memanggil <code>run_pipeline(...)</code>, lalu mengirim log, progress, sukses, atau error ke queue.</p>
+          </article>
+          <article class="flow-node">
+            <span class="flow-title">11. UI Menampilkan Hasil</span>
+            <p><code>_poll_worker_events()</code> membaca queue, memperbarui log, status, dan path output terakhir.</p>
+          </article>
+          <article class="flow-node">
+            <span class="flow-title">12. User Lihat Output</span>
+            <p>User bisa membuka folder hasil lewat <code>_open_outputs_dir()</code> atau memulai sesi baru setelah proses selesai.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="referensi">
+        <h2>Referensi file terkait</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>Peran</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><a href="../app/ui/main_window.py"><code>app/ui/main_window.py</code></a></td>
+              <td>Window utama aplikasi desktop, dialog job, handler UI, preflight, worker, dan log.</td>
+            </tr>
+            <tr>
+              <td><a href="../app/ui/__init__.py"><code>app/ui/__init__.py</code></a></td>
+              <td>Pintu masuk package UI yang mengekspor simbol utama.</td>
+            </tr>
+            <tr>
+              <td><a href="../app/ui/components/__init__.py"><code>app/ui/components/__init__.py</code></a></td>
+              <td>Penanda area untuk widget reusable jika UI nanti dipecah menjadi komponen kecil.</td>
+            </tr>
+            <tr>
+              <td><a href="../app/services/__init__.py"><code>app/services/__init__.py</code></a></td>
+              <td>Pusat ekspor service yang dipanggil oleh UI seperti preflight, pipeline, dan discovery job/config.</td>
+            </tr>
+            <tr>
+              <td><a href="../app/utils/__init__.py"><code>app/utils/__init__.py</code></a></td>
+              <td>Ekspor utilitas yang dipakai UI seperti file picker, sanitasi pesan, dan buka folder.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="mental-model">
+        <h2>Mental model sederhana</h2>
+        <div class="grid">
+          <article class="mini-card">
+            <h3>UI</h3>
+            <p>Menerima klik, menampilkan status, dan mengelola widget.</p>
+          </article>
+          <article class="mini-card">
+            <h3>Service</h3>
+            <p>Mengerjakan logika bisnis seperti validasi, preflight, dan pipeline.</p>
+          </article>
+          <article class="mini-card">
+            <h3>Thread</h3>
+            <p>Menjalankan pekerjaan berat tanpa membuat UI macet.</p>
+          </article>
+          <article class="mini-card">
+            <h3>Queue</h3>
+            <p>Jalur aman untuk mengirim hasil dari worker ke UI.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="tips">
+        <h2>Cara membaca file ini sebagai pemula</h2>
+        <ol>
+          <li>Mulai dari <code>run_desktop_app()</code> untuk tahu titik masuk aplikasi.</li>
+          <li>Baca <code>DesktopApp.__init__</code> untuk tahu state dan setup awal.</li>
+          <li>Baca semua method <code>_build_*</code> untuk paham susunan layar.</li>
+          <li>Baca handler utama: <code>_select_source()</code>, <code>_on_job_selected()</code>, <code>_schedule_preflight()</code>, dan <code>_execute_pipeline()</code>.</li>
+          <li>Tutup dengan worker dan polling event agar paham hubungan thread dan UI.</li>
+        </ol>
+      </section>
+
+      <section id="istilah">
+        <h2>Istilah Python yang muncul di file ini</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Istilah</th>
+              <th>Arti sederhananya</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>class</code></td>
+              <td>Cetakan atau blueprint untuk membuat object.</td>
+            </tr>
+            <tr>
+              <td><code>__init__</code></td>
+              <td>Method yang berjalan saat object baru dibuat.</td>
+            </tr>
+            <tr>
+              <td><code>self</code></td>
+              <td>Referensi ke object yang sedang aktif.</td>
+            </tr>
+            <tr>
+              <td><code>StringVar</code></td>
+              <td>Variabel khusus Tkinter yang bisa terhubung langsung ke widget.</td>
+            </tr>
+            <tr>
+              <td><code>Path</code></td>
+              <td>Object Python untuk merepresentasikan path file/folder.</td>
+            </tr>
+            <tr>
+              <td><code>Thread</code></td>
+              <td>Jalur eksekusi terpisah untuk menjalankan pekerjaan lain secara paralel ringan.</td>
+            </tr>
+            <tr>
+              <td><code>Queue</code></td>
+              <td>Antrean data untuk komunikasi aman antar thread.</td>
+            </tr>
+            <tr>
+              <td><code>guard clause</code></td>
+              <td>Pengecekan awal yang membuat function keluar cepat saat syarat belum terpenuhi.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <div class="footer-space"></div>
+    </main>
+  </div>
+</body>
+</html>

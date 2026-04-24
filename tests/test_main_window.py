@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from pathlib import Path
 
 from app.services import PreflightResult
-from app.services.session_state_service import SessionState
 from app.ui.main_window import PIPELINE_STEP_ORDER, DesktopApp
 
 
@@ -26,17 +25,6 @@ class DummyButton:
     def configure(self, *, state=None, **kwargs):
         if state is not None:
             self.state = state
-
-
-class DummyGridWidget:
-    def __init__(self):
-        self.hidden = False
-
-    def grid_remove(self):
-        self.hidden = True
-
-    def grid(self):
-        self.hidden = False
 
 
 class DummyThread:
@@ -250,62 +238,11 @@ def test_update_hints_after_success_and_failure():
     )
 
 
-def test_refresh_last_session_info_uses_real_saved_session(monkeypatch):
-    app = DesktopApp.__new__(DesktopApp)
-    app.paths = SimpleNamespace(project_root=Path("."))
-    app.last_session_info_var = DummyVar()
-    app.last_session_info_label = DummyGridWidget()
-
-    monkeypatch.setattr(
-        "app.ui.main_window.load_session_state",
-        lambda _root: SessionState(
-            version=1,
-            last_job_id="report-bulanan",
-            last_source_path=Path("C:/Data/source.xlsx"),
-            window_geometry=None,
-            updated_at="2026-04-22T22:40:00",
-        ),
-    )
-
-    DesktopApp._refresh_last_session_info(app)
-
-    assert app.last_session_info_var.get() == (
-        "Sesi terakhir tersedia. Job terakhir: report-bulanan | "
-        "Source terakhir: source.xlsx | Tersimpan: 2026-04-22T22:40:00"
-    )
-    assert app.last_session_info_label.hidden is False
-
-
-def test_refresh_last_session_info_hides_block_when_session_has_no_job_or_source(monkeypatch):
-    app = DesktopApp.__new__(DesktopApp)
-    app.paths = SimpleNamespace(project_root=Path("."))
-    app.last_session_info_var = DummyVar("awal")
-    app.last_session_info_label = DummyGridWidget()
-
-    monkeypatch.setattr(
-        "app.ui.main_window.load_session_state",
-        lambda _root: SessionState(
-            version=1,
-            last_job_id=None,
-            last_source_path=None,
-            window_geometry=None,
-            updated_at="2026-04-22T22:40:00",
-        ),
-    )
-
-    DesktopApp._refresh_last_session_info(app)
-
-    assert app.last_session_info_var.get() == ""
-    assert app.last_session_info_label.hidden is True
-
-
 def test_persist_session_state_saves_selected_job_and_source(monkeypatch):
     app = DesktopApp.__new__(DesktopApp)
     app.paths = SimpleNamespace(project_root=Path("."))
     app._restoring_session = False
     app.source_path = Path("source.xlsx")
-    app.last_session_info_var = DummyVar()
-    app.last_session_info_label = DummyGridWidget()
     app._selected_job_id = lambda: "report-bulanan"
     app._current_window_geometry = lambda: "1120x720"
 
@@ -319,7 +256,6 @@ def test_persist_session_state_saves_selected_job_and_source(monkeypatch):
         return None
 
     monkeypatch.setattr("app.ui.main_window.save_session_state", fake_save_session_state)
-    monkeypatch.setattr("app.ui.main_window.load_session_state", lambda _root: None)
 
     DesktopApp._persist_session_state(app)
 
