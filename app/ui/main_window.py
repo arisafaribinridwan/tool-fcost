@@ -21,7 +21,6 @@ from app.services import (
     clear_session_state,
     discover_configs,
     discover_job_profiles,
-    load_session_state,
     run_preflight,
     run_pipeline,
     save_session_state,
@@ -364,11 +363,9 @@ class DesktopApp(ctk.CTk):
         self.state_badge_label: ctk.CTkLabel | None = None
         self.progress_bar: ctk.CTkProgressBar | None = None
         self.clear_source_button: ctk.CTkButton | None = None
-        self.last_session_info_label: ctk.CTkLabel | None = None
         self.start_new_session_button: ctk.CTkButton | None = None
         self.progress_label_var = ctk.StringVar(value="Progress: Belum dimulai")
         self.progress_steps_var = ctk.StringVar(value=self._format_pipeline_step_lines())
-        self.last_session_info_var = ctk.StringVar(value="")
 
     def _format_pipeline_step_lines(self) -> str:
         return "\n".join(f"- {label}" for _, label in PIPELINE_STEP_ORDER)
@@ -487,7 +484,7 @@ class DesktopApp(ctk.CTk):
             fg_color=("gray95", "gray15"),
             border_width=1,
             border_color=("gray88", "gray25"),
-            height=38,
+            height=56,
         )
         selected_source_panel.grid(row=next_row, column=0, padx=16, pady=(0, 10), sticky="ew")
         selected_source_panel.grid_columnconfigure(0, weight=1)
@@ -498,9 +495,10 @@ class DesktopApp(ctk.CTk):
             selected_source_panel,
             textvariable=self.source_var,
             justify="left",
-            wraplength=320,
-            anchor="w",
-        ).grid(row=0, column=0, padx=14, pady=0, sticky="ew")
+            wraplength=420,
+            corner_radius=16,
+            anchor="nw",
+        ).grid(row=0, column=0, padx=0, pady=8, sticky="nsew")
 
         ctk.CTkButton(
             self.source_card_frame,
@@ -520,7 +518,7 @@ class DesktopApp(ctk.CTk):
             self.job_card_frame,
             eyebrow="Langkah 2. Job Selection",
             title="",
-            description="Pilih pekerjaan aktif dan cek konteks job sebelum execute.",
+            description="",
             description_wraplength=1000,
             description_bottom_pady=2,
         )
@@ -538,8 +536,8 @@ class DesktopApp(ctk.CTk):
 
         ctk.CTkLabel(
             selection_panel,
-            text="Pekerjaan aktif",
-            font=ctk.CTkFont(size=11, weight="bold"),
+            text="Pilih pekerjaan aktif dan cek konteks job sebelum execute.",
+            font=ctk.CTkFont(size=11, weight="normal"),
             text_color=("gray45", "gray55"),
         ).grid(row=0, column=0, columnspan=2, padx=14, pady=(8, 3), sticky="w")
 
@@ -548,6 +546,7 @@ class DesktopApp(ctk.CTk):
             variable=self.selected_job_var,
             values=["Belum ada pekerjaan"],
             command=self._on_job_selected,
+            height=34,
         )
         self.job_menu.grid(row=1, column=0, padx=(14, 8), pady=(0, 10), sticky="ew")
 
@@ -559,25 +558,6 @@ class DesktopApp(ctk.CTk):
             height=34,
         ).grid(row=1, column=1, padx=(0, 14), pady=(0, 10), sticky="ew")
 
-        self.last_session_info_label = ctk.CTkLabel(
-            self.job_card_frame,
-            textvariable=self.last_session_info_var,
-            justify="left",
-            wraplength=320,
-            corner_radius=12,
-            fg_color=("#EFF6FF", "#172554"),
-            text_color=("#1D4ED8", "#BFDBFE"),
-            padx=12,
-            pady=10,
-        )
-        self.last_session_info_label.grid(
-            row=next_row + 1,
-            column=0,
-            padx=16,
-            pady=(0, 12),
-            sticky="ew",
-        )
-
         job_info_panel = ctk.CTkFrame(
             self.job_card_frame,
             fg_color=("gray95", "gray16"),
@@ -585,7 +565,7 @@ class DesktopApp(ctk.CTk):
             border_color=("gray88", "gray25"),
             corner_radius=14,
         )
-        job_info_panel.grid(row=next_row + 2, column=0, padx=16, pady=(0, 12), sticky="ew")
+        job_info_panel.grid(row=next_row + 1, column=0, padx=16, pady=(0, 12), sticky="ew")
         job_info_panel.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
@@ -611,14 +591,12 @@ class DesktopApp(ctk.CTk):
             height=36,
         )
         self.start_new_session_button.grid(
-            row=next_row + 3,
+            row=next_row + 2,
             column=0,
             padx=16,
             pady=(0, 16),
             sticky="ew",
         )
-
-        self._refresh_last_session_info()
 
     def _build_execute_card(self, master: ctk.CTkFrame) -> None:
         self.execute_card_frame = ctk.CTkFrame(master)
@@ -681,7 +659,7 @@ class DesktopApp(ctk.CTk):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        left_panel = ctk.CTkScrollableFrame(self, width=420, corner_radius=16)
+        left_panel = ctk.CTkFrame(self, width=420, corner_radius=16)
         left_panel.grid(row=0, column=0, padx=(16, 8), pady=16, sticky="nsew")
         left_panel.grid_columnconfigure(0, weight=1)
  
@@ -710,34 +688,6 @@ class DesktopApp(ctk.CTk):
         value = selected.id.strip()
         return value or None
 
-    def _refresh_last_session_info(self) -> None:
-        if "last_session_info_var" not in self.__dict__:
-            return
-
-        session_state = load_session_state(self.paths.project_root)
-        if session_state is None:
-            self.last_session_info_var.set("")
-        else:
-            details: list[str] = []
-            if session_state.last_job_id is not None:
-                details.append(f"Job terakhir: {session_state.last_job_id}")
-            if session_state.last_source_path is not None:
-                details.append(f"Source terakhir: {session_state.last_source_path.name}")
-
-            if details:
-                details.append(f"Tersimpan: {session_state.updated_at}")
-                self.last_session_info_var.set("Sesi terakhir tersedia. " + " | ".join(details))
-            else:
-                self.last_session_info_var.set("")
-
-        if self.last_session_info_label is not None:
-            winfo_exists = getattr(self.last_session_info_label, "winfo_exists", None)
-            if callable(winfo_exists) and not bool(winfo_exists()):
-                return
-            self.last_session_info_label.grid_remove()
-            if self.last_session_info_var.get():
-                self.last_session_info_label.grid()
-
     def _clear_source(self) -> None:
         if self.source_path is None:
             return
@@ -763,7 +713,6 @@ class DesktopApp(ctk.CTk):
         self._update_execute_state()
         self._update_hints()
         self._update_source_actions()
-        self._refresh_last_session_info()
 
     def _restore_window_geometry(self) -> None:
         self.geometry("1280x720")
@@ -780,7 +729,6 @@ class DesktopApp(ctk.CTk):
             last_source_path=self.source_path,
             window_geometry=self._current_window_geometry(),
         )
-        self._refresh_last_session_info()
 
     def _on_window_configure(self, _: Any) -> None:
         self._persist_session_state()
@@ -915,7 +863,6 @@ class DesktopApp(ctk.CTk):
         self._schedule_preflight()
         self._update_execute_state()
         self._update_hints()
-        self._refresh_last_session_info()
 
     def refresh_jobs(self, initial: bool = False) -> None:
         job_items = discover_job_profiles(self.paths.configs_dir)
@@ -960,7 +907,6 @@ class DesktopApp(ctk.CTk):
             self._job_settings_dialog.refresh()
 
         self._update_hints()
-        self._refresh_last_session_info()
 
     def _update_job_info(self) -> None:
         selected_label = self.selected_job_var.get()
