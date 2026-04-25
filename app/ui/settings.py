@@ -1,3 +1,6 @@
+from pathlib import Path
+from tkinter import filedialog, messagebox
+
 import customtkinter as ctk
 
 ctk.set_appearance_mode("light")
@@ -6,58 +9,36 @@ ctk.set_default_color_theme("blue")
 # ── Design Tokens ──────────────────────────────────────────────
 C = {
     # Backgrounds
-    "sidebar_bg":    "#F8FAFC",
-    "main_bg":       "#FFFFFF",
-    "footer_bg":     "#F8FAFC",
-    "input_bg":      "#F8FAFC",
-    "preview_bg":    "#0F172A",
-    "section_bg":    "#F1F5F9",
-
+    "sidebar_bg": "#F8FAFC",
+    "main_bg": "#FFFFFF",
+    "footer_bg": "#F8FAFC",
+    "input_bg": "#F8FAFC",
+    "preview_bg": "#0F172A",
+    "section_bg": "#F1F5F9",
     # Text
-    "text_primary":  "#0F172A",
-    "text_secondary":"#64748B",
-    "text_muted":    "#94A3B8",
-    "text_on_dark":  "#E2E8F0",
-
+    "text_primary": "#0F172A",
+    "text_secondary": "#64748B",
+    "text_muted": "#94A3B8",
+    "text_on_dark": "#E2E8F0",
     # Brand / Accent (slate-blue)
-    "accent":        "#4F46E5",
-    "accent_hover":  "#4338CA",
-    "accent_light":  "#EEF2FF",
+    "accent": "#4F46E5",
+    "accent_hover": "#4338CA",
+    "accent_light": "#EEF2FF",
     "accent_border": "#C7D2FE",
-    "accent_text":   "#3730A3",
-    "accent_sub":    "#6366F1",
-
+    "accent_text": "#3730A3",
+    "accent_sub": "#6366F1",
     # Borders
-    "border":        "#E2E8F0",
+    "border": "#E2E8F0",
     "border_strong": "#CBD5E1",
-
     # Status
-    "green":         "#22C55E",
-    "red":           "#EF4444",
-    "gray_dot":      "#CBD5E1",
-
+    "green": "#22C55E",
+    "red": "#EF4444",
+    "gray_dot": "#CBD5E1",
     # Buttons
-    "btn_danger":    "#EF4444",
-    "btn_danger_h":  "#DC2626",
-    "btn_ghost_h":   "#E2E8F0",
+    "btn_danger": "#EF4444",
+    "btn_danger_h": "#DC2626",
+    "btn_ghost_h": "#E2E8F0",
 }
-
-FONT = {
-    "h1":    ("bold", 17),
-    "h2":    ("bold", 13),
-    "body":  ("normal", 12),
-    "small": ("normal", 11),
-    "label": ("bold", 9),
-    "mono":  ("normal", 11),
-}
-
-def mk_font(key, override_weight=None, override_size=None):
-    weight, size = FONT[key]
-    return ctk.CTkFont(
-        family="SF Pro Display" if key in ("h1", "h2") else "SF Pro Text",
-        size=override_size or size,
-        weight=override_weight or weight
-    )
 
 
 # ── Main App ───────────────────────────────────────────────────
@@ -65,17 +46,46 @@ class JobSettingsApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Job Configuration")
-        self.geometry("720x460")
+        self.geometry("680x580")
         self.resizable(False, False)
         self.configure(fg_color=C["main_bg"])
 
         self.jobs = [
-            {"id": "1", "label": "Laporan Bulanan",  "config": "monthly-report.yaml",  "enabled": True,  "valid": True,  "masters": ["masters/table_a.xlsx", "masters/ref_b.xlsx"]},
-            {"id": "2", "label": "Sync Mingguan",    "config": "weekly-sync.yaml",     "enabled": True,  "valid": True,  "masters": ["masters/data.csv"]},
-            {"id": "3", "label": "Validasi Error",   "config": "error-config.yaml",    "enabled": True,  "valid": False, "masters": []},
+            {
+                "id": "1",
+                "label": "Laporan Bulanan",
+                "config": "monthly-report.yaml",
+                "enabled": True,
+                "valid": True,
+                "masters": ["masters/table_a.xlsx", "masters/ref_b.xlsx"],
+            },
+            {
+                "id": "2",
+                "label": "Sync Mingguan",
+                "config": "weekly-sync.yaml",
+                "enabled": True,
+                "valid": True,
+                "masters": ["masters/data.csv"],
+            },
+            {
+                "id": "3",
+                "label": "Validasi Error",
+                "config": "error-config.yaml",
+                "enabled": True,
+                "valid": False,
+                "masters": [],
+            },
         ]
+
         self.selected_job_index = 0
         self.job_buttons = []
+
+        self.ui_mode = "edit"
+        self.config_mode = "Pilih existing"
+        self.precheck_status = "Non Valid"
+
+        self.imported_config_path: str | None = None
+        self.master_items: list[str] = []
 
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
@@ -87,53 +97,56 @@ class JobSettingsApp(ctk.CTk):
     # ── SIDEBAR ────────────────────────────────────────────────
     def _build_sidebar(self):
         self.sidebar = ctk.CTkFrame(
-            self, width=228, corner_radius=0,
+            self,
+            width=228,
+            corner_radius=0,
             fg_color=C["sidebar_bg"],
-            border_width=0
+            border_width=0,
         )
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         self.sidebar.grid_propagate(False)
         self.sidebar.grid_rowconfigure(2, weight=1)
         self.sidebar.grid_columnconfigure(0, weight=1)
 
-        # ── Header row
         hdr = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         hdr.grid(row=0, column=0, sticky="ew", padx=14, pady=(14, 8))
         hdr.columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
-            hdr, text="DAFTAR JOB",
+            hdr,
+            text="DAFTAR JOB",
             font=ctk.CTkFont(size=9, weight="bold"),
-            text_color=C["text_muted"]
+            text_color=C["text_muted"],
         ).grid(row=0, column=0, sticky="w")
 
         self.add_btn = ctk.CTkButton(
-            hdr, text="+", width=26, height=26,
-            fg_color=C["accent"], hover_color=C["accent_hover"],
+            hdr,
+            text="+",
+            width=26,
+            height=26,
+            fg_color=C["accent"],
+            hover_color=C["accent_hover"],
             corner_radius=7,
             font=ctk.CTkFont(size=15, weight="bold"),
-            command=self._on_add_job
+            command=self._on_add_job,
         )
         self.add_btn.grid(row=0, column=1)
 
-        # ── Search
         self.search_entry = ctk.CTkEntry(
             self.sidebar,
             placeholder_text="  Cari job...",
-            height=34, corner_radius=8,
+            height=34,
+            corner_radius=8,
             border_width=1,
             border_color=C["border"],
             fg_color="white",
             font=ctk.CTkFont(size=12),
             text_color=C["text_primary"],
-            placeholder_text_color=C["text_muted"]
+            placeholder_text_color=C["text_muted"],
         )
         self.search_entry.grid(row=1, column=0, sticky="ew", padx=12, pady=(0, 6))
 
-        # ── Job List
-        self.job_list_frame = ctk.CTkScrollableFrame(
-            self.sidebar, fg_color="transparent", label_text=""
-        )
+        self.job_list_frame = ctk.CTkScrollableFrame(self.sidebar, fg_color="transparent", label_text="")
         self.job_list_frame.grid(row=2, column=0, sticky="nsew", padx=6, pady=(0, 10))
         self.job_list_frame.grid_columnconfigure(0, weight=1)
 
@@ -143,64 +156,59 @@ class JobSettingsApp(ctk.CTk):
         self.job_list_frame.bind("<Configure>", self._resize_job_items)
         self.after(50, self._resize_job_items)
 
-        # ── Sidebar bottom divider
-        ctk.CTkFrame(
-            self.sidebar, height=1, fg_color=C["border"]
-        ).grid(row=3, column=0, sticky="ew", padx=0)
+        ctk.CTkFrame(self.sidebar, height=1, fg_color=C["border"]).grid(row=3, column=0, sticky="ew", padx=0)
 
     def _create_job_item(self, index, job):
-        is_sel = (index == self.selected_job_index)
+        is_sel = index == self.selected_job_index
 
         btn = ctk.CTkFrame(
             self.job_list_frame,
-            width=1, height=58,
+            width=1,
+            height=58,
             fg_color=C["accent_light"] if is_sel else "transparent",
             corner_radius=8,
             border_width=1 if is_sel else 0,
             border_color=C["accent_border"] if is_sel else C["sidebar_bg"],
-            cursor="hand2"
+            cursor="hand2",
         )
         btn.grid(row=index, column=0, sticky="ew", pady=1)
         btn.grid_propagate(False)
 
         lbl_title = ctk.CTkLabel(
-            btn, text=job["label"],
+            btn,
+            text=job["label"],
             font=ctk.CTkFont(size=12, weight="bold"),
             text_color=C["accent_text"] if is_sel else C["text_primary"],
             fg_color="transparent",
             height=14,
-            cursor="hand2"
+            cursor="hand2",
         )
         lbl_title.place(x=12, y=10)
 
         lbl_cfg = ctk.CTkLabel(
-            btn, text=job["config"],
+            btn,
+            text=job["config"],
             font=ctk.CTkFont(size=10),
             text_color=C["accent_sub"] if is_sel else C["text_muted"],
             fg_color="transparent",
             height=12,
-            cursor="hand2"
+            cursor="hand2",
         )
         lbl_cfg.place(x=12, y=30)
 
-        # Status dot
-        dot_color = (
-            C["gray_dot"] if not job["enabled"]
-            else C["green"] if job["valid"]
-            else C["red"]
-        )
+        dot_color = C["gray_dot"] if not job["enabled"] else C["green"] if job["valid"] else C["red"]
         dot = ctk.CTkFrame(btn, width=7, height=7, corner_radius=4, fg_color=dot_color, cursor="hand2")
         dot.place(relx=1.0, x=-12, y=13, anchor="ne")
 
-        def on_enter(e, i=index):
+        def on_enter(_e, i=index):
             if self.selected_job_index != i:
                 self.job_buttons[i].configure(fg_color="#F1F5F9")
 
-        def on_leave(e, i=index):
+        def on_leave(_e, i=index):
             if self.selected_job_index != i:
                 self.job_buttons[i].configure(fg_color="transparent")
 
-        def on_click(e, i=index):
+        def on_click(_e, i=index):
             self._load_job_data(i)
 
         for w in (btn, lbl_title, lbl_cfg, dot):
@@ -209,7 +217,7 @@ class JobSettingsApp(ctk.CTk):
             w.bind("<Button-1>", on_click)
 
         btn._labels = (lbl_title, lbl_cfg)
-        btn._dot    = dot
+        btn._dot = dot
         self.job_buttons.append(btn)
 
     def _resize_job_items(self, _=None):
@@ -221,203 +229,329 @@ class JobSettingsApp(ctk.CTk):
 
     # ── MAIN CONTENT ───────────────────────────────────────────
     def _build_main(self):
-        self.main_frame = ctk.CTkFrame(
-            self, fg_color=C["main_bg"], corner_radius=0,
-            border_width=0
-        )
+        self.main_frame = ctk.CTkFrame(self, fg_color=C["main_bg"], corner_radius=0, border_width=0)
         self.main_frame.grid(row=0, column=1, sticky="nsew")
         self.main_frame.grid_rowconfigure(1, weight=1)
         self.main_frame.grid_columnconfigure(0, weight=1)
 
-        # ── Top border
-        ctk.CTkFrame(
-            self.main_frame, height=1, fg_color=C["border"], corner_radius=0
-        ).grid(row=0, column=0, sticky="ew")
+        ctk.CTkFrame(self.main_frame, height=1, fg_color=C["border"], corner_radius=0).grid(row=0, column=0, sticky="ew")
 
-        # ── Scrollable content area
-        self.content = ctk.CTkFrame(self.main_frame, fg_color="transparent")
-        self.content.grid(row=1, column=0, sticky="nsew", padx=20, pady=(16, 0))
-        self.content.grid_columnconfigure(0, weight=1)
+        self.content_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        self.content_frame.grid(row=1, column=0, sticky="nsew", padx=20, pady=(16, 0))
+        self.content_frame.grid_columnconfigure(0, weight=1)
 
-        # Page header
+        self.content = self.content_frame
+
         self.lbl_page_title = ctk.CTkLabel(
-            self.content, text="Detail Konfigurasi",
+            self.content,
+            text="Detail Konfigurasi (Edit Job)",
             font=ctk.CTkFont(size=17, weight="bold"),
-            text_color=C["text_primary"]
+            text_color=C["text_primary"],
         )
         self.lbl_page_title.grid(row=0, column=0, sticky="w")
 
         self.lbl_page_sub = ctk.CTkLabel(
             self.content,
-            text="Kelola parameter preset kerja dan file master sistem.",
+            text="Kelola parameter preset kerja, config, dan file master.",
             font=ctk.CTkFont(size=11),
-            text_color=C["text_secondary"]
+            text_color=C["text_secondary"],
         )
         self.lbl_page_sub.grid(row=1, column=0, sticky="w", pady=(1, 12))
 
-        # ── Section: Job Info
         self._section_label(self.content, "NAMA JOB", row=2)
         self.entry_label = self._entry(self.content, row=3)
 
-        # ── Section: Config + Status row
+        self._section_label(self.content, "MODE CONFIG", row=4, pady=(8, 1))
+        config_mode_row = ctk.CTkFrame(self.content, fg_color="transparent")
+        config_mode_row.grid(row=5, column=0, sticky="ew", pady=(0, 0))
+        config_mode_row.grid_columnconfigure(0, weight=1)
+
+        self.config_mode_selector = ctk.CTkSegmentedButton(
+            config_mode_row,
+            values=["Pilih existing", "Import config"],
+            command=self._on_config_mode_changed,
+            fg_color=C["section_bg"],
+            selected_color=C["accent"],
+            selected_hover_color=C["accent_hover"],
+            unselected_color="#E2E8F0",
+            unselected_hover_color="#CBD5E1",
+            text_color="white",
+            height=32,
+        )
+        self.config_mode_selector.grid(row=0, column=0, sticky="ew", padx=(0, 10))
+        self.config_mode_selector.set("Pilih existing")
+
+        self.btn_import_config = ctk.CTkButton(
+            config_mode_row,
+            text="Pilih/Import Config (.yaml/.yml)",
+            height=32,
+            fg_color=C["accent_light"],
+            text_color=C["accent_text"],
+            hover_color="#DDE6FF",
+            command=self.on_import_config_click,
+        )
+        self.btn_import_config.grid(row=0, column=1, sticky="e")
+
+        self.imported_config_label = ctk.CTkLabel(
+            self.content,
+            text="Config import: belum dipilih",
+            font=ctk.CTkFont(size=10),
+            text_color=C["text_muted"],
+            anchor="w",
+        )
+        self.imported_config_label.grid(row=6, column=0, sticky="ew", pady=(5, 0))
+
         row_cfg = ctk.CTkFrame(self.content, fg_color="transparent")
-        row_cfg.grid(row=4, column=0, sticky="ew", pady=(8, 0))
+        row_cfg.grid(row=7, column=0, sticky="ew", pady=(8, 0))
         row_cfg.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(row_cfg, text="ATURAN CONFIG",
+        ctk.CTkLabel(
+            row_cfg,
+            text="ATURAN CONFIG",
             font=ctk.CTkFont(size=9, weight="bold"),
-            text_color=C["text_muted"]
+            text_color=C["text_muted"],
         ).grid(row=0, column=0, sticky="w")
 
-        ctk.CTkLabel(row_cfg, text="STATUS",
+        ctk.CTkLabel(
+            row_cfg,
+            text="STATUS",
             font=ctk.CTkFont(size=9, weight="bold"),
-            text_color=C["text_muted"]
+            text_color=C["text_muted"],
         ).grid(row=0, column=1, sticky="w", padx=(12, 0))
 
         self.combo_config = ctk.CTkComboBox(
             row_cfg,
             values=["monthly-report.yaml", "weekly-sync.yaml", "error-config.yaml", "daily.yaml"],
-            height=32, corner_radius=8, border_width=1,
+            height=32,
+            corner_radius=8,
+            border_width=1,
             border_color=C["border"],
             fg_color="white",
             button_color=C["border"],
             button_hover_color=C["border_strong"],
             dropdown_fg_color="white",
             font=ctk.CTkFont(size=12),
-            text_color=C["text_primary"]
+            text_color=C["text_primary"],
         )
         self.combo_config.grid(row=1, column=0, sticky="ew", pady=(3, 0))
 
-        # Status card
         status_card = ctk.CTkFrame(
-            row_cfg, fg_color=C["input_bg"],
-            corner_radius=8, border_width=1,
-            border_color=C["border"], height=32
+            row_cfg,
+            fg_color=C["input_bg"],
+            corner_radius=8,
+            border_width=1,
+            border_color=C["border"],
+            height=32,
         )
         status_card.grid(row=1, column=1, sticky="ew", padx=(12, 0), pady=(3, 0))
         status_card.grid_propagate(False)
 
         self.switch_enabled = ctk.CTkSwitch(
-            status_card, text="Aktif",
+            status_card,
+            text="Aktif",
             font=ctk.CTkFont(size=11, weight="bold"),
-            switch_width=32, switch_height=17,
+            switch_width=32,
+            switch_height=17,
             progress_color=C["accent"],
             button_color="white",
-            button_hover_color="#F0F0F0"
+            button_hover_color="#F0F0F0",
         )
         self.switch_enabled.pack(anchor="center", padx=10, pady=7)
 
-        # ── Section: Master Files
-        self._section_label(self.content, "PREVIEW FILE MASTER", row=5, pady=(12, 4))
+        master_header = ctk.CTkFrame(self.content, fg_color="transparent")
+        master_header.grid(row=8, column=0, sticky="ew", pady=(12, 4))
+        master_header.grid_columnconfigure(0, weight=1)
 
-        self.preview_box = ctk.CTkFrame(
+        ctk.CTkLabel(
+            master_header,
+            text="MASTER FILE INPUT",
+            font=ctk.CTkFont(size=9, weight="bold"),
+            text_color=C["text_muted"],
+        ).grid(row=0, column=0, sticky="w")
+
+        self.btn_import_master = ctk.CTkButton(
+            master_header,
+            text="Pilih/Import Master (.csv/.xlsx)",
+            height=28,
+            fg_color=C["accent_light"],
+            text_color=C["accent_text"],
+            hover_color="#DDE6FF",
+            command=self.on_import_master_click,
+        )
+        self.btn_import_master.grid(row=0, column=1, sticky="e")
+
+        self.master_list_box = ctk.CTkFrame(
             self.content,
-            fg_color=C["preview_bg"],
-            corner_radius=10, height=90
+            fg_color="#F8FAFC",
+            corner_radius=8,
+            border_width=1,
+            border_color=C["border"],
+            height=80,
         )
-        self.preview_box.grid(row=6, column=0, sticky="ew")
-        self.preview_box.grid_propagate(False)
-        self.preview_box.grid_columnconfigure(0, weight=1)
+        self.master_list_box.grid(row=9, column=0, sticky="ew")
+        self.master_list_box.pack_propagate(False)
 
-        # ── Validation badge row
-        self.badge_row = ctk.CTkFrame(self.content, fg_color="transparent")
-        self.badge_row.grid(row=7, column=0, sticky="ew", pady=(8, 0))
-        self.badge_row.grid_columnconfigure(0, weight=1)
+        self.master_list_content = ctk.CTkScrollableFrame(self.master_list_box, fg_color="transparent", label_text="")
+        self.master_list_content.pack(fill="both", expand=True, padx=8, pady=6)
 
-        self.validity_badge = ctk.CTkLabel(
-            self.badge_row, text="",
+        precheck_row = ctk.CTkFrame(self.content, fg_color="transparent")
+        precheck_row.grid(row=10, column=0, sticky="ew", pady=(10, 0))
+        precheck_row.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(
+            precheck_row,
+            text="PRECHECK",
+            font=ctk.CTkFont(size=9, weight="bold"),
+            text_color=C["text_muted"],
+        ).grid(row=0, column=0, sticky="w")
+
+        self.precheck_badge = ctk.CTkLabel(
+            precheck_row,
+            text="Non Valid",
             font=ctk.CTkFont(size=10, weight="bold"),
-            corner_radius=5, height=22, width=10
+            corner_radius=6,
+            width=84,
+            height=24,
+            fg_color="#FEE2E2",
+            text_color="#B91C1C",
         )
-        self.validity_badge.grid(row=0, column=0, sticky="w")
+        self.precheck_badge.grid(row=0, column=1, sticky="w", padx=(8, 0))
 
-        # ── Footer
+        self.btn_run_precheck = ctk.CTkButton(
+            precheck_row,
+            text="Run Precheck",
+            width=118,
+            height=28,
+            fg_color=C["accent"],
+            hover_color=C["accent_hover"],
+            command=self.on_run_precheck_click,
+        )
+        self.btn_run_precheck.grid(row=0, column=2, sticky="e")
+
         self._build_footer()
 
     def _section_label(self, parent, text, row, pady=(8, 3)):
         ctk.CTkLabel(
-            parent, text=text,
+            parent,
+            text=text,
             font=ctk.CTkFont(size=9, weight="bold"),
-            text_color=C["text_muted"]
+            text_color=C["text_muted"],
         ).grid(row=row, column=0, sticky="w", pady=pady)
 
     def _entry(self, parent, row):
         e = ctk.CTkEntry(
-            parent, height=32, corner_radius=8,
-            border_width=1, border_color=C["border"],
+            parent,
+            height=32,
+            corner_radius=8,
+            border_width=1,
+            border_color=C["border"],
             fg_color="white",
             font=ctk.CTkFont(size=12),
             text_color=C["text_primary"],
-            placeholder_text_color=C["text_muted"]
+            placeholder_text_color=C["text_muted"],
         )
-        e.grid(row=row, column=0, sticky="ew", pady=(3, 0))
+        e.grid(row=row, column=0, sticky="ew", pady=(0, 0))
         return e
 
     def _build_footer(self):
-        # Thin top border
-        ctk.CTkFrame(
-            self.main_frame, height=1,
-            fg_color=C["border"], corner_radius=0
-        ).grid(row=2, column=0, sticky="ew")
+        ctk.CTkFrame(self.main_frame, height=1, fg_color=C["border"], corner_radius=0).grid(row=2, column=0, sticky="ew")
 
-        footer = ctk.CTkFrame(
-            self.main_frame, height=54,
-            fg_color=C["footer_bg"], corner_radius=0
-        )
+        footer = ctk.CTkFrame(self.main_frame, height=54, fg_color=C["footer_bg"], corner_radius=0)
         footer.grid(row=3, column=0, sticky="ew")
         footer.grid_propagate(False)
         footer.grid_columnconfigure(0, weight=1)
 
-        # Left: job id hint
         self.footer_hint = ctk.CTkLabel(
-            footer, text="",
+            footer,
+            text="",
             font=ctk.CTkFont(size=10),
-            text_color=C["text_muted"]
+            text_color=C["text_muted"],
         )
         self.footer_hint.grid(row=0, column=0, sticky="w", padx=16, pady=16)
 
-        # Right: buttons
         btn_frame = ctk.CTkFrame(footer, fg_color="transparent")
         btn_frame.grid(row=0, column=1, padx=14, pady=10)
 
         ctk.CTkButton(
-            btn_frame, text="Batal",
+            btn_frame,
+            text="Batal",
             fg_color="transparent",
             text_color=C["text_secondary"],
             hover_color=C["btn_ghost_h"],
-            width=68, height=32, corner_radius=8,
+            width=68,
+            height=32,
+            corner_radius=8,
             font=ctk.CTkFont(size=11),
-            border_width=1, border_color=C["border"],
-            command=self.quit
+            border_width=1,
+            border_color=C["border"],
+            command=self.quit,
         ).pack(side="left", padx=(0, 8))
 
         ctk.CTkButton(
-            btn_frame, text="Simpan Perubahan",
-            fg_color=C["accent"], hover_color=C["accent_hover"],
+            btn_frame,
+            text="Simpan Perubahan",
+            fg_color=C["accent"],
+            hover_color=C["accent_hover"],
             text_color="white",
-            width=130, height=32, corner_radius=8,
+            width=130,
+            height=32,
+            corner_radius=8,
             font=ctk.CTkFont(size=11, weight="bold"),
-            command=self._on_save
+            command=self._on_save,
         ).pack(side="left")
+
+    # ── UI STATE ────────────────────────────────────────────────
+    def _set_mode(self, mode: str) -> None:
+        self.ui_mode = mode
+        if mode == "create":
+            self.lbl_page_title.configure(text="Detail Konfigurasi (Create Job)")
+            self.footer_hint.configure(text="Mode: Create job baru")
+            return
+        self.lbl_page_title.configure(text="Detail Konfigurasi (Edit Job)")
+
+    def _on_config_mode_changed(self, value: str) -> None:
+        self.config_mode = value
+        if self.config_mode == "Pilih existing":
+            self.imported_config_label.configure(text="Config import: belum dipilih", text_color=C["text_muted"])
+            self.imported_config_path = None
+        else:
+            text = "Config import: belum dipilih"
+            if self.imported_config_path:
+                text = f"Config import: {Path(self.imported_config_path).name}"
+            self.imported_config_label.configure(text=text, text_color=C["accent_text"])
+        self._sync_control_state()
+
+    def _sync_control_state(self) -> None:
+        use_existing = self.config_mode == "Pilih existing"
+        self.combo_config.configure(state="normal" if use_existing else "disabled")
+
+    def _set_precheck_status(self, is_valid: bool, detail: str | None = None) -> None:
+        self.precheck_status = "Valid" if is_valid else "Non Valid"
+        if is_valid:
+            self.precheck_badge.configure(text="Valid", fg_color="#DCFCE7", text_color="#15803D")
+            return
+        self.precheck_badge.configure(text="Non Valid", fg_color="#FEE2E2", text_color="#B91C1C")
+        if detail:
+            messagebox.showwarning("Precheck Non Valid", detail)
 
     # ── DATA LOADING ───────────────────────────────────────────
     def _load_job_data(self, index):
-        # Update sidebar selection
         for i, btn in enumerate(self.job_buttons):
             lbl_title, lbl_cfg = btn._labels
-            is_sel = (i == index)
+            is_sel = i == index
             btn.configure(
                 fg_color=C["accent_light"] if is_sel else "transparent",
                 border_width=1 if is_sel else 0,
-                border_color=C["accent_border"] if is_sel else C["sidebar_bg"]
+                border_color=C["accent_border"] if is_sel else C["sidebar_bg"],
             )
             lbl_title.configure(text_color=C["accent_text"] if is_sel else C["text_primary"])
             lbl_cfg.configure(text_color=C["accent_sub"] if is_sel else C["text_muted"])
 
         self.selected_job_index = index
+        self._set_mode("edit")
+
         job = self.jobs[index]
 
-        # Fill form fields
         self.entry_label.delete(0, "end")
         self.entry_label.insert(0, job["label"])
         self.combo_config.set(job["config"])
@@ -427,77 +561,192 @@ class JobSettingsApp(ctk.CTk):
         else:
             self.switch_enabled.deselect()
 
-        # Footer hint
+        self.master_items = list(job.get("masters", []))
+        self._refresh_master_list_box()
+
         self.footer_hint.configure(text=f"ID: {job['id']}  ·  {job['config']}")
 
-        # Validation badge
-        if not job["enabled"]:
-            badge_text  = "  ● Dinonaktifkan"
-            badge_fg    = C["section_bg"]
-            badge_color = C["text_muted"]
-        elif job["valid"]:
-            badge_text  = "  ✓ Konfigurasi Valid"
-            badge_fg    = "#DCFCE7"
-            badge_color = "#15803D"
-        else:
-            badge_text  = "  ✕ Konfigurasi Error"
-            badge_fg    = "#FEE2E2"
-            badge_color = "#B91C1C"
+        self.config_mode_selector.set("Pilih existing")
+        self._on_config_mode_changed("Pilih existing")
 
-        self.validity_badge.configure(
-            text=badge_text,
-            fg_color=badge_fg,
-            text_color=badge_color
-        )
+        self._set_precheck_status(bool(job["valid"] and job["enabled"]))
 
-        # Master file preview
-        for child in self.preview_box.winfo_children():
+    def _refresh_master_list_box(self) -> None:
+        for child in self.master_list_content.winfo_children():
             child.destroy()
 
-        if job["masters"]:
-            for m in job["masters"]:
-                row = ctk.CTkFrame(self.preview_box, fg_color="transparent")
-                row.pack(fill="x", padx=14, pady=(8, 0))
-
-                ctk.CTkLabel(
-                    row, text="◆",
-                    font=ctk.CTkFont(size=8),
-                    text_color="#475569",
-                    fg_color="transparent"
-                ).pack(side="left", padx=(0, 6))
-
-                ctk.CTkLabel(
-                    row, text=m,
-                    font=ctk.CTkFont(family="Courier New", size=11),
-                    text_color="#CBD5E1",
-                    fg_color="transparent", anchor="w"
-                ).pack(side="left")
-        else:
+        if not self.master_items:
             ctk.CTkLabel(
-                self.preview_box,
-                text="Tidak ada file master terdaftar.",
+                self.master_list_content,
+                text="Belum ada master dipilih.",
                 font=ctk.CTkFont(size=11, slant="italic"),
-                text_color="#475569",
-                fg_color="transparent"
-            ).pack(expand=True)
+                text_color=C["text_muted"],
+                anchor="w",
+            ).pack(fill="x", padx=4, pady=3)
+            return
 
-    # ── ACTIONS ────────────────────────────────────────────────
+        for item in self.master_items:
+            row = ctk.CTkFrame(self.master_list_content, fg_color="transparent")
+            row.pack(fill="x", padx=2, pady=1)
+
+            ctk.CTkLabel(
+                row,
+                text="•",
+                width=12,
+                height=14,
+                text_color=C["text_secondary"],
+                font=ctk.CTkFont(size=11),
+            ).pack(side="left")
+
+            ctk.CTkLabel(
+                row,
+                text=item,
+                anchor="w",
+                height=14,
+                text_color=C["text_primary"],
+                font=ctk.CTkFont(size=11),
+            ).pack(side="left", fill="x", expand=True)
+
+    # ── ACTIONS (UI-ONLY STUBS) ────────────────────────────────
+    def on_import_config_click(self) -> None:
+        selected = filedialog.askopenfilename(
+            title="Pilih file config",
+            filetypes=[("YAML files", "*.yaml *.yml"), ("All files", "*.*")],
+        )
+        if not selected:
+            return
+
+        self.imported_config_path = selected
+        self.config_mode_selector.set("Import config")
+        self._on_config_mode_changed("Import config")
+
+        messagebox.showinfo(
+            "Config dipilih",
+            f"Config terpilih: {Path(selected).name}\n\nIni masih mode UI-only (belum menyalin file).",
+        )
+        self._set_precheck_status(False)
+
+    def on_import_master_click(self) -> None:
+        selected_items = filedialog.askopenfilenames(
+            title="Pilih file master",
+            filetypes=[
+                ("Master files", "*.csv *.xlsx"),
+                ("CSV", "*.csv"),
+                ("Excel", "*.xlsx"),
+                ("All files", "*.*"),
+            ],
+        )
+        if not selected_items:
+            return
+
+        added = 0
+        for selected in selected_items:
+            relative_like = f"masters/{Path(selected).name}"
+            if relative_like not in self.master_items:
+                self.master_items.append(relative_like)
+                added += 1
+
+        self._refresh_master_list_box()
+        self._set_precheck_status(False)
+
+        messagebox.showinfo(
+            "Master dipilih",
+            f"{added} file master ditambahkan ke daftar UI.\n\nIni masih mode UI-only (belum menyalin file).",
+        )
+
+    def on_run_precheck_click(self) -> None:
+        errors: list[str] = []
+
+        if not self.entry_label.get().strip():
+            errors.append("Nama job wajib diisi.")
+
+        if self.config_mode == "Pilih existing":
+            if not self.combo_config.get().strip():
+                errors.append("Config existing wajib dipilih.")
+        else:
+            if not self.imported_config_path:
+                errors.append("Config import belum dipilih.")
+
+        if not self.master_items:
+            errors.append("Minimal pilih satu file master.")
+
+        if errors:
+            self._set_precheck_status(False, "\n".join(errors))
+            return
+
+        self._set_precheck_status(True)
+
     def _on_add_job(self):
-        print("Tambah job baru...")
+        self._set_mode("create")
+
+        for i, btn in enumerate(self.job_buttons):
+            lbl_title, lbl_cfg = btn._labels
+            btn.configure(fg_color="transparent", border_width=0, border_color=C["sidebar_bg"])
+            lbl_title.configure(text_color=C["text_primary"])
+            lbl_cfg.configure(text_color=C["text_muted"])
+        self.selected_job_index = -1
+
+        self.entry_label.delete(0, "end")
+        self.switch_enabled.select()
+
+        values = self.combo_config.cget("values")
+        if values:
+            self.combo_config.set(values[0])
+
+        self.config_mode_selector.set("Pilih existing")
+        self._on_config_mode_changed("Pilih existing")
+
+        self.master_items = []
+        self._refresh_master_list_box()
+        self._set_precheck_status(False)
+
+        self.footer_hint.configure(text="Mode: Create job baru")
 
     def _on_save(self):
-        job = self.jobs[self.selected_job_index]
-        job["label"]   = self.entry_label.get()
-        job["config"]  = self.combo_config.get()
-        job["enabled"] = bool(self.switch_enabled.get())
+        label = self.entry_label.get().strip() or "Job Baru"
+        enabled = bool(self.switch_enabled.get())
 
-        # Refresh sidebar label
-        btn = self.job_buttons[self.selected_job_index]
-        lbl_title, lbl_cfg = btn._labels
-        lbl_title.configure(text=job["label"])
-        lbl_cfg.configure(text=job["config"])
+        if self.config_mode == "Import config" and self.imported_config_path:
+            config_name = Path(self.imported_config_path).name
+        else:
+            config_name = self.combo_config.get().strip() or "-"
 
-        print(f"[SAVED] {job}")
+        is_valid = self.precheck_status == "Valid"
+
+        if self.ui_mode == "create" or self.selected_job_index < 0:
+            new_job = {
+                "id": str(len(self.jobs) + 1),
+                "label": label,
+                "config": config_name,
+                "enabled": enabled,
+                "valid": is_valid,
+                "masters": list(self.master_items),
+            }
+            self.jobs.append(new_job)
+            self._create_job_item(len(self.jobs) - 1, new_job)
+            self._load_job_data(len(self.jobs) - 1)
+        else:
+            job = self.jobs[self.selected_job_index]
+            job["label"] = label
+            job["config"] = config_name
+            job["enabled"] = enabled
+            job["valid"] = is_valid
+            job["masters"] = list(self.master_items)
+
+            btn = self.job_buttons[self.selected_job_index]
+            lbl_title, lbl_cfg = btn._labels
+            lbl_title.configure(text=job["label"])
+            lbl_cfg.configure(text=job["config"])
+
+            dot_color = C["gray_dot"] if not job["enabled"] else C["green"] if job["valid"] else C["red"]
+            btn._dot.configure(fg_color=dot_color)
+
+            self.footer_hint.configure(text=f"ID: {job['id']}  ·  {job['config']}")
+
+        messagebox.showinfo(
+            "Simpan Perubahan",
+            "Perubahan UI disimpan di state sementara.\nBelum ada penulisan file runtime (UI-only).",
+        )
 
 
 if __name__ == "__main__":
