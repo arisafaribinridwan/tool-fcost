@@ -22,6 +22,17 @@ from app.utils import (
 )
 
 
+PIPELINE_STEP_ORDER = (
+    ("load_config", "Load config"),
+    ("copy_source", "Copy source"),
+    ("read_source", "Read source"),
+    ("load_master", "Load master"),
+    ("transform", "Transform"),
+    ("build_output", "Build output"),
+    ("write_output", "Write output"),
+)
+
+
 class DesktopApp(ctk.CTk):
     def __init__(self, paths: AppPaths) -> None:
         super().__init__()

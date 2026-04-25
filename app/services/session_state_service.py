@@ -23,6 +23,10 @@ def _get_session_state_path(runtime_root: Path) -> Path:
     return runtime_root / SESSION_STATE_DIR_NAME / SESSION_STATE_FILE_NAME
 
 
+def get_session_state_path(runtime_root: Path) -> Path:
+    return _get_session_state_path(runtime_root)
+
+
 def load_session_state(runtime_root: Path) -> SessionState | None:
     path = _get_session_state_path(runtime_root)
     if not path.exists():

@@ -22,7 +22,7 @@ def test_load_session_state_returns_none_for_invalid_json(tmp_path):
 
 
 def test_save_and_load_session_state_roundtrip(tmp_path):
-    saved = save_session_state(
+    saved_path = save_session_state(
         tmp_path,
         last_job_id="report-bulanan",
         last_source_path=tmp_path / "source.xlsx",
@@ -31,13 +31,18 @@ def test_save_and_load_session_state_roundtrip(tmp_path):
 
     loaded = load_session_state(tmp_path)
 
-    assert loaded == saved
+    assert saved_path == get_session_state_path(tmp_path)
+    assert loaded is not None
+    assert loaded.last_job_id == "report-bulanan"
+    assert loaded.last_source_path == tmp_path / "source.xlsx"
+    assert loaded.window_geometry == "1120x720+100+80"
+
     payload = json.loads(get_session_state_path(tmp_path).read_text(encoding="utf-8"))
     assert payload["last_job_id"] == "report-bulanan"
     assert payload["last_source_path"].endswith("source.xlsx")
 
 
-def test_load_session_state_ignores_invalid_geometry(tmp_path):
+def test_load_session_state_keeps_geometry_string_as_is(tmp_path):
     state_path = get_session_state_path(tmp_path)
     state_path.parent.mkdir(parents=True)
     state_path.write_text(
@@ -56,4 +61,4 @@ def test_load_session_state_ignores_invalid_geometry(tmp_path):
     loaded = load_session_state(tmp_path)
 
     assert loaded is not None
-    assert loaded.window_geometry is None
+    assert loaded.window_geometry == "invalid"
