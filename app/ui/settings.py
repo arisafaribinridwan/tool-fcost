@@ -260,6 +260,7 @@ class JobSettingsApp(ctk.CTk):
 
         self._section_label(self.content, "NAMA JOB", row=2)
         self.entry_label = self._entry(self.content, row=3)
+        self.entry_label.bind("<KeyRelease>", lambda _e: self._on_form_field_changed())
 
         self._section_label(self.content, "MODE CONFIG", row=4, pady=(8, 1))
         config_mode_row = ctk.CTkFrame(self.content, fg_color="transparent")
@@ -332,6 +333,7 @@ class JobSettingsApp(ctk.CTk):
             dropdown_fg_color="white",
             font=ctk.CTkFont(size=12),
             text_color=C["text_primary"],
+            command=lambda _value: self._on_form_field_changed(),
         )
         self.combo_config.grid(row=1, column=0, sticky="ew", pady=(3, 0))
 
@@ -355,6 +357,7 @@ class JobSettingsApp(ctk.CTk):
             progress_color=C["accent"],
             button_color="white",
             button_hover_color="#F0F0F0",
+            command=self._on_form_field_changed,
         )
         self.switch_enabled.pack(anchor="center", padx=10, pady=7)
 
@@ -429,6 +432,7 @@ class JobSettingsApp(ctk.CTk):
         self.btn_run_precheck.grid(row=0, column=2, sticky="e")
 
         self._build_footer()
+        self._sync_control_state()
 
     def _section_label(self, parent, text, row, pady=(8, 3)):
         ctk.CTkLabel(
@@ -487,7 +491,7 @@ class JobSettingsApp(ctk.CTk):
             command=self.quit,
         ).pack(side="left", padx=(0, 8))
 
-        ctk.CTkButton(
+        self.btn_save = ctk.CTkButton(
             btn_frame,
             text="Simpan Perubahan",
             fg_color=C["accent"],
@@ -498,7 +502,8 @@ class JobSettingsApp(ctk.CTk):
             corner_radius=8,
             font=ctk.CTkFont(size=11, weight="bold"),
             command=self._on_save,
-        ).pack(side="left")
+        )
+        self.btn_save.pack(side="left")
 
     # ── UI STATE ────────────────────────────────────────────────
     def _set_mode(self, mode: str) -> None:
@@ -523,16 +528,39 @@ class JobSettingsApp(ctk.CTk):
 
     def _sync_control_state(self) -> None:
         use_existing = self.config_mode == "Pilih existing"
-        self.combo_config.configure(state="normal" if use_existing else "disabled")
+
+        if hasattr(self, "combo_config"):
+            self.combo_config.configure(state="normal" if use_existing else "disabled")
+        if hasattr(self, "btn_import_config"):
+            self.btn_import_config.configure(state="disabled" if use_existing else "normal")
+
+        has_job_name = bool(getattr(self, "entry_label", None) and self.entry_label.get().strip())
+        has_master = bool(self.master_items)
+        has_config = bool(self.combo_config.get().strip()) if use_existing else bool(self.imported_config_path)
+        can_run_precheck = has_job_name and has_master and has_config
+        if hasattr(self, "btn_run_precheck"):
+            self.btn_run_precheck.configure(state="normal" if can_run_precheck else "disabled")
+
+        can_save = bool(getattr(self, "entry_label", None) and self.entry_label.get().strip()) and self.precheck_status == "Valid"
+        if hasattr(self, "btn_save"):
+            self.btn_save.configure(state="normal" if can_save else "disabled")
 
     def _set_precheck_status(self, is_valid: bool, detail: str | None = None) -> None:
         self.precheck_status = "Valid" if is_valid else "Non Valid"
         if is_valid:
             self.precheck_badge.configure(text="Valid", fg_color="#DCFCE7", text_color="#15803D")
+            self._sync_control_state()
             return
         self.precheck_badge.configure(text="Non Valid", fg_color="#FEE2E2", text_color="#B91C1C")
+        self._sync_control_state()
         if detail:
             messagebox.showwarning("Precheck Non Valid", detail)
+
+    def _on_form_field_changed(self) -> None:
+        if self.precheck_status == "Valid":
+            self._set_precheck_status(False)
+            return
+        self._sync_control_state()
 
     # ── DATA LOADING ───────────────────────────────────────────
     def _load_job_data(self, index):
@@ -619,6 +647,7 @@ class JobSettingsApp(ctk.CTk):
         self.imported_config_path = selected
         self.config_mode_selector.set("Import config")
         self._on_config_mode_changed("Import config")
+        self._on_form_field_changed()
 
         messagebox.showinfo(
             "Config dipilih",
@@ -648,6 +677,7 @@ class JobSettingsApp(ctk.CTk):
 
         self._refresh_master_list_box()
         self._set_precheck_status(False)
+        self._on_form_field_changed()
 
         messagebox.showinfo(
             "Master dipilih",
@@ -701,6 +731,7 @@ class JobSettingsApp(ctk.CTk):
         self._set_precheck_status(False)
 
         self.footer_hint.configure(text="Mode: Create job baru")
+        self._sync_control_state()
 
     def _on_save(self):
         label = self.entry_label.get().strip() or "Job Baru"
