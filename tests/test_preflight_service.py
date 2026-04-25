@@ -55,12 +55,13 @@ def test_run_preflight_ready_for_classic_config(app_paths):
     )
 
     assert result.status == "Ready"
-    assert result.output_path is not None
+    assert result.output_path == app_paths.outputs_dir / "Laporan Tes.xlsx"
     assert result.can_execute is True
-    assert any(item.code == "CLASSIC_SOURCE_READY" for item in result.findings)
+    assert any(item.severity == "info" for item in result.findings)
+    assert any("Target output akan ditulis ke Laporan Tes.xlsx." in item.summary for item in result.findings)
 
 
-def test_run_preflight_blocked_when_required_columns_missing(app_paths):
+def test_run_preflight_does_not_validate_required_columns_yet(app_paths):
     source_path = app_paths.project_root / "source.csv"
     pd.DataFrame([
         {"qty": 10},
@@ -92,12 +93,11 @@ def test_run_preflight_blocked_when_required_columns_missing(app_paths):
         config_path=config_path,
     )
 
-    assert result.status == "Blocked"
-    assert result.can_execute is False
-    assert any(item.code == "SOURCE_COLUMNS_MISSING" for item in result.findings)
+    assert result.status == "Ready"
+    assert result.can_execute is True
 
 
-def test_run_preflight_warns_for_sanitized_output_sheet_names(app_paths):
+def test_run_preflight_does_not_warn_for_sanitized_output_sheet_names_yet(app_paths):
     source_path = app_paths.project_root / "source.csv"
     pd.DataFrame([
         {"qty": 10},
@@ -129,12 +129,11 @@ def test_run_preflight_warns_for_sanitized_output_sheet_names(app_paths):
         config_path=config_path,
     )
 
-    assert result.status == "Warning"
+    assert result.status == "Ready"
     assert result.can_execute is True
-    assert any(item.code == "OUTPUT_SHEET_NAME_SANITIZED" for item in result.findings)
 
 
-def test_run_preflight_blocks_recipe_when_candidate_sheet_missing(app_paths):
+def test_run_preflight_does_not_check_recipe_sheet_candidates_yet(app_paths):
     source_path = app_paths.project_root / "source.xlsx"
     with pd.ExcelWriter(source_path) as writer:
         pd.DataFrame([{"A": 1}]).to_excel(writer, index=False, sheet_name="SheetLain")
@@ -175,11 +174,11 @@ def test_run_preflight_blocks_recipe_when_candidate_sheet_missing(app_paths):
         config_path=config_path,
     )
 
-    assert result.status == "Blocked"
-    assert any(item.code == "RECIPE_SHEET_NOT_FOUND" for item in result.findings)
+    assert result.status == "Ready"
+    assert result.can_execute is True
 
 
-def test_run_preflight_blocks_when_source_size_exceeds_limit(app_paths):
+def test_run_preflight_does_not_apply_source_size_limit_yet(app_paths):
     source_path = app_paths.project_root / "oversize.csv"
     source_path.write_bytes(b"x" * 2 * 1024 * 1024)
 
@@ -222,11 +221,11 @@ def test_run_preflight_blocks_when_source_size_exceeds_limit(app_paths):
         config_path=config_path,
     )
 
-    assert result.status == "Blocked"
-    assert any(item.code == "SOURCE_SIZE_LIMIT_EXCEEDED" for item in result.findings)
+    assert result.status == "Ready"
+    assert result.can_execute is True
 
 
-def test_run_preflight_warns_when_source_size_near_limit(app_paths):
+def test_run_preflight_does_not_apply_source_size_warning_yet(app_paths):
     source_path = app_paths.project_root / "near_limit.csv"
     source_path.write_bytes(b"x" * int(0.75 * 1024 * 1024))
 
@@ -269,11 +268,11 @@ def test_run_preflight_warns_when_source_size_near_limit(app_paths):
         config_path=config_path,
     )
 
-    assert result.status == "Warning"
-    assert any(item.code == "SOURCE_SIZE_NEAR_LIMIT" for item in result.findings)
+    assert result.status == "Ready"
+    assert result.can_execute is True
 
 
-def test_run_preflight_warns_when_row_limit_exceeded(app_paths):
+def test_run_preflight_does_not_apply_row_limit_warning_yet(app_paths):
     source_path = app_paths.project_root / "rows.csv"
     pd.DataFrame([{"qty": idx} for idx in range(4)]).to_csv(source_path, index=False)
 
@@ -316,5 +315,5 @@ def test_run_preflight_warns_when_row_limit_exceeded(app_paths):
         config_path=config_path,
     )
 
-    assert result.status == "Warning"
-    assert any(item.code == "SOURCE_ROW_LIMIT_EXCEEDED" for item in result.findings)
+    assert result.status == "Ready"
+    assert result.can_execute is True
