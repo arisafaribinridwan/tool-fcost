@@ -595,8 +595,8 @@ class DesktopApp(ctk.CTk):
         if done_received:
             self._worker_queue = None
             self._worker_thread = None
-            can_execute = bool(getattr(self._preflight_result, "can_execute", False))
-            self._set_execute_ready(can_execute)
+            self._preflight_result = None
+            self._set_execute_ready(False)
             return
 
         self.after(120, self._poll_worker_events)
