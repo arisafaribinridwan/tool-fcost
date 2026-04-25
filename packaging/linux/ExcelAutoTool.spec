@@ -8,8 +8,10 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 project_root = Path(SPECPATH).resolve().parents[1]
 entry_script = project_root / "run.py"
 build_info_path = project_root / "build-info.json"
+app_assets_path = project_root / "app" / "assets"
 
 datas = collect_data_files("customtkinter")
+datas += [(str(app_assets_path), "app/assets")]
 hiddenimports = collect_submodules("customtkinter")
 
 if build_info_path.exists():
