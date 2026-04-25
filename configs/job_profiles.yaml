@@ -3,3 +3,7 @@ jobs:
   label: fcost bulanan
   config_file: monthly-report-recipe.yaml
   enabled: true
+- id: fcost-bulanan-lcd-import
+  label: fcost bulanan lcd import
+  config_file: monthly-report-recipe-lcd-import.yaml
+  enabled: true
