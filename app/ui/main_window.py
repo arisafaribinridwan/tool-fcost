@@ -13,7 +13,7 @@ import customtkinter as ctk
 from PIL import Image
 
 from app import AppPaths
-from app.services import JobProfileSummary, discover_job_profiles, run_pipeline, validate_source_file
+from app.services import JobProfileSummary, discover_job_profiles, run_pipeline, run_preflight, validate_source_file
 from app.utils import (
     open_in_file_manager,
     sanitize_exception_message,
@@ -32,6 +32,7 @@ class DesktopApp(ctk.CTk):
         self.job_records: dict[str, JobProfileSummary] = {}
         self._worker_queue: Queue[tuple[str, object]] | None = None
         self._worker_thread: Thread | None = None
+        self._preflight_result: object | None = None
 
         self.title("XLS-Flow Automator v2.0")
         self.geometry("1000x700")
@@ -42,6 +43,7 @@ class DesktopApp(ctk.CTk):
 
         self._build_sidebar()
         self._build_main_content()
+        self._set_execute_ready(False)
 
         self._refresh_job_options(initial=True)
         self.add_log("Aplikasi siap digunakan.")
@@ -410,8 +412,11 @@ class DesktopApp(ctk.CTk):
         selected = self._selected_job()
         if selected is None:
             self.config_value_label.configure(text="-")
+            self._preflight_result = None
+            self._set_execute_ready(False)
             return
         self.config_value_label.configure(text=selected.config_file)
+        self._run_preflight()
 
     def open_job_menu(self) -> None:
         if not self.job_records:
@@ -423,6 +428,59 @@ class DesktopApp(ctk.CTk):
 
     def _selected_job(self) -> JobProfileSummary | None:
         return self.job_records.get(self.job_selection.get())
+
+    def _set_execute_ready(self, ready: bool) -> None:
+        if ready:
+            self.execute_btn.configure(
+                state="normal",
+                fg_color="#0f172a",
+                hover_color="#1e293b",
+                text_color="white",
+            )
+            return
+        self.execute_btn.configure(
+            state="disabled",
+            fg_color="#cbd5e1",
+            hover_color="#cbd5e1",
+            text_color="#64748b",
+        )
+
+    def _run_preflight(self) -> None:
+        job = self._selected_job()
+        if self.selected_source_path is None or job is None or job.config_path is None:
+            self._preflight_result = None
+            self._set_execute_ready(False)
+            return
+
+        self._set_execute_ready(False)
+        self.add_log("Menjalankan preflight...")
+        try:
+            result = run_preflight(
+                paths=self.paths,
+                source_path=self.selected_source_path,
+                config_path=job.config_path,
+            )
+        except Exception as exc:
+            self._preflight_result = None
+            self.add_log(f"Preflight gagal: {exc}")
+            messagebox.showerror(
+                "Preflight gagal",
+                sanitize_exception_message(str(exc), project_root=self.paths.project_root),
+            )
+            return
+
+        self._preflight_result = result
+        findings = getattr(result, "findings", ())
+        for finding in findings:
+            severity = getattr(finding, "severity", "info")
+            summary = getattr(finding, "summary", "")
+            if summary:
+                self.add_log(f"Preflight [{severity}]: {summary}")
+
+        is_ready = bool(getattr(result, "can_execute", False))
+        status = getattr(result, "status", "Unknown")
+        self.add_log(f"Preflight selesai: {status}")
+        self._set_execute_ready(is_ready)
 
     def select_source_file(self) -> None:
         selected_path = select_source_file(self.paths.project_root)
@@ -444,6 +502,7 @@ class DesktopApp(ctk.CTk):
         self.selected_source_path = source_path
         self.source_btn.configure(text=self.selected_source_path.name)
         self.add_log(f"Source dipilih: {self.selected_source_path}")
+        self._run_preflight()
 
     def open_settings_window(self) -> None:
         settings_script = Path(__file__).resolve().parent / "settings.py"
@@ -469,7 +528,7 @@ class DesktopApp(ctk.CTk):
             messagebox.showwarning("Input belum lengkap", "Pilih pekerjaan valid terlebih dahulu.")
             return
 
-        self.execute_btn.configure(state="disabled")
+        self._set_execute_ready(False)
         self.add_log("Memulai proses eksekusi...")
         self._worker_queue = Queue()
         self._worker_thread = Thread(
@@ -536,7 +595,8 @@ class DesktopApp(ctk.CTk):
         if done_received:
             self._worker_queue = None
             self._worker_thread = None
-            self.execute_btn.configure(state="normal")
+            self._preflight_result = None
+            self._set_execute_ready(False)
             return
 
         self.after(120, self._poll_worker_events)
