@@ -302,6 +302,9 @@ steps:
           - priority: 90
             parts_signature: ["IC_", "LED_BAR"]
             winner_part_name: "LED_BAR"
+          - priority: 95
+            parts_signature: ["IC", "LED_BAR"]
+            winner_part_name: "LED_BAR"
           - priority: 100
             parts_signature: ["MAIN_UNIT", "PART_KIT"]
             winner_part_name: "MAIN_UNIT"
