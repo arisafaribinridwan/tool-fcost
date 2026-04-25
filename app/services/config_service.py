@@ -276,6 +276,10 @@ def _validate_matching_config(
         matching.get("first_match_wins"), bool
     ):
         errors.append(f"{path}.first_match_wins harus berupa boolean.")
+    if "priority_column" in matching:
+        priority_column = matching.get("priority_column")
+        if not isinstance(priority_column, str) or not priority_column.strip():
+            errors.append(f"{path}.priority_column harus berupa string non-kosong.")
 
 
 def _validate_master_items(masters: object, errors: list[str]) -> None:

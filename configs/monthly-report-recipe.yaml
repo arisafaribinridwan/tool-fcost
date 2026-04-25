@@ -465,7 +465,9 @@ steps:
   - id: "sub_15_add_action"
     type: "lookup_rules"
     inputs:
+      - "job_sheet_section"
       - "part_name"
+      - "symptom_comment"
       - "repair_comment"
     target_column: "action"
     master:
@@ -475,22 +477,23 @@ steps:
     matching:
       order: "top_to_bottom"
       first_match_wins: true
+      priority_column: "priority"
       matchers:
+        - source: "job_sheet_section"
+          master: "job_sheet_section"
+          mode: "equals"
         - source: "part_name"
           master: "part_name"
           mode: "equals"
           normalize:
             trim: true
             case_sensitive: false
-            blank_as_wildcard: true
+        - source: "symptom_comment"
+          master: "symptom_comment"
+          mode: "regex"
         - source: "repair_comment"
           master: "repair_comment"
-          mode: "contains"
-          normalize:
-            trim: true
-            case_sensitive: false
-            wildcard: "*"
-            blank_as_wildcard: true
+          mode: "regex"
     on_missing_match: null
 
   - id: "sub_16_add_defect_category"

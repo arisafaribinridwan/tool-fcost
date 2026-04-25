@@ -4,6 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from math import ceil
 from pathlib import Path
+import re
 
 import pandas as pd
 
@@ -572,7 +573,50 @@ def _matcher_matches(source_value: object, master_value: object, matcher_cfg: di
         if not token:
             return True
         return token in source_normalized
+    if mode == "regex":
+        try:
+            return re.search(master_normalized, source_normalized) is not None
+        except re.error as exc:
+            raise ValueError(f"Regex matcher tidak valid: {exc}") from exc
     raise ValueError(f"Mode matcher tidak didukung: '{mode}'.")
+
+
+def _validate_and_sort_lookup_rules_master(master_df: pd.DataFrame, step_cfg: dict) -> pd.DataFrame:
+    priority_column = step_cfg.get("matching", {}).get("priority_column")
+    if not isinstance(priority_column, str) or not priority_column.strip():
+        return master_df
+
+    column_name = priority_column.strip()
+    if column_name not in master_df.columns:
+        raise ValueError(
+            f"Step '{step_cfg['id']}' gagal, kolom priority '{column_name}' tidak ditemukan pada master."
+        )
+
+    result_df = master_df.copy()
+    result_df["_row_order"] = range(len(result_df))
+
+    invalid_rows: list[str] = []
+    parsed_priorities: list[int] = []
+    for idx, value in enumerate(result_df[column_name], start=2):
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            invalid_rows.append(str(idx))
+            parsed_priorities.append(0)
+            continue
+        if parsed <= 0:
+            invalid_rows.append(str(idx))
+        parsed_priorities.append(parsed)
+
+    if invalid_rows:
+        raise ValueError(
+            f"Step '{step_cfg['id']}' gagal, priority invalid pada baris: {', '.join(invalid_rows)}. "
+            "Priority harus integer positif."
+        )
+
+    result_df[column_name] = parsed_priorities
+    result_df = result_df.sort_values([column_name, "_row_order"], kind="stable")
+    return result_df.drop(columns=["_row_order"]).reset_index(drop=True)
 
 
 def _apply_lookup_rules_step(data_df: pd.DataFrame, step_cfg: dict, context: _RecipeContext, log: LogFn) -> pd.DataFrame:
@@ -580,6 +624,7 @@ def _apply_lookup_rules_step(data_df: pd.DataFrame, step_cfg: dict, context: _Re
     master_df = context.load_master_sheet(str(master_cfg["file"]), str(master_cfg["sheet"]))
     target_column = str(step_cfg["target_column"])
     value_column = str(master_cfg["value"])
+    master_df = _validate_and_sort_lookup_rules_master(master_df, step_cfg)
     if value_column not in master_df.columns:
         raise ValueError(f"Step '{step_cfg['id']}' gagal, kolom value master tidak ditemukan.")
 
