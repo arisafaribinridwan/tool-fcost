@@ -13,7 +13,14 @@ import customtkinter as ctk
 from PIL import Image
 
 from app import AppPaths
-from app.services import JobProfileSummary, discover_job_profiles, run_pipeline, run_preflight, validate_source_file
+from app.services import (
+    JobProfileSummary,
+    clear_session_state,
+    discover_job_profiles,
+    run_pipeline,
+    run_preflight,
+    validate_source_file,
+)
 from app.utils import (
     open_in_file_manager,
     sanitize_exception_message,
@@ -260,6 +267,7 @@ class DesktopApp(ctk.CTk):
             fg_color="#eff6ff",
             text_color="#2563eb",
             hover_color="#dbeafe",
+            command=self.start_new_session,
         )
         self.start_btn.grid(row=5, column=0, padx=20, pady=(0, 12), sticky="ew")
 
@@ -514,6 +522,19 @@ class DesktopApp(ctk.CTk):
         self.source_btn.configure(text=self.selected_source_path.name)
         self.add_log(f"Source dipilih: {self.selected_source_path}")
         self._run_preflight()
+
+    def start_new_session(self) -> None:
+        if self._worker_thread is not None and self._worker_thread.is_alive():
+            self.add_log("Tidak bisa memulai sesi baru saat proses masih berjalan.")
+            return
+
+        clear_session_state(self.paths.project_root)
+        self.selected_source_path = None
+        self.source_btn.configure(text="Klik untuk Pilih Source")
+        self._preflight_result = None
+        self._set_execute_ready(False)
+        self._refresh_job_options()
+        self.textbox.delete("1.0", "end")
 
     def open_settings_window(self) -> None:
         settings_script = Path(__file__).resolve().parent / "settings.py"

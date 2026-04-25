@@ -43,12 +43,17 @@ class DummyTextBox:
     def __init__(self):
         self.lines: list[str] = []
         self.last_seen = None
+        self.deleted_calls: list[tuple[str, str]] = []
 
     def insert(self, _where: str, text: str):
         self.lines.append(text)
 
     def see(self, where: str):
         self.last_seen = where
+
+    def delete(self, start: str, end: str):
+        self.deleted_calls.append((start, end))
+        self.lines = []
 
 
 class DummyThread:
@@ -240,6 +245,49 @@ def test_add_log_event_blocks_when_worker_active():
     DesktopApp.add_log_event(app)
 
     assert logs == ["Proses masih berjalan."]
+
+
+def test_start_new_session_blocks_when_worker_active():
+    app = DesktopApp.__new__(DesktopApp)
+    app._worker_thread = DummyThread(True)
+    logs: list[str] = []
+    app.add_log = logs.append
+
+    DesktopApp.start_new_session(app)
+
+    assert logs == ["Tidak bisa memulai sesi baru saat proses masih berjalan."]
+
+
+def test_start_new_session_resets_ui_and_state(monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    app.paths = SimpleNamespace(project_root=Path("."), configs_dir=Path("configs"))
+    app._worker_thread = None
+    app.selected_source_path = Path("source.csv")
+    app.source_btn = DummyButton()
+    app.textbox = DummyTextBox()
+    app.textbox.lines = ["[10:00:00] log lama\n"]
+    app._preflight_result = object()
+    states: list[bool] = []
+    app._set_execute_ready = lambda value: states.append(value)
+    refresh_called: list[bool] = []
+    app._refresh_job_options = lambda initial=False: refresh_called.append(initial)
+    logs: list[str] = []
+    app.add_log = logs.append
+    cleared_paths: list[Path] = []
+
+    monkeypatch.setattr("app.ui.main_window.clear_session_state", lambda runtime_root: cleared_paths.append(runtime_root))
+
+    DesktopApp.start_new_session(app)
+
+    assert cleared_paths == [Path(".")]
+    assert app.selected_source_path is None
+    assert app.source_btn.last_kwargs["text"] == "Klik untuk Pilih Source"
+    assert app._preflight_result is None
+    assert states == [False]
+    assert refresh_called == [False]
+    assert logs == []
+    assert app.textbox.deleted_calls == [("1.0", "end")]
+    assert app.textbox.lines == []
 
 
 def test_add_log_event_requires_source(monkeypatch):
