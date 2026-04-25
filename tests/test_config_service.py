@@ -384,6 +384,7 @@ def test_validate_config_payload_rejects_invalid_lookup_rules_matching_schema():
                 },
                 "matching": {
                     "order": "bottom_to_top",
+                    "priority_column": "",
                     "matchers": [
                         {
                             "source": "part_name",
@@ -401,3 +402,4 @@ def test_validate_config_payload_rejects_invalid_lookup_rules_matching_schema():
     errors = validate_config_payload(payload)
     assert any(".matching.order harus salah satu" in item for item in errors)
     assert any(".normalize.trim harus berupa boolean." in item for item in errors)
+    assert any(".matching.priority_column harus berupa string non-kosong." in item for item in errors)

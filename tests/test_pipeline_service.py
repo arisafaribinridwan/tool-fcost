@@ -13,6 +13,85 @@ def _write_yaml(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def _write_action_lookup_rules_step_recipe(path: Path, *, priority_column: str | None = "priority") -> None:
+    lines = [
+        'name: "Action Lookup Rules Step Recipe"',
+        "datasets:",
+        '  working_dataset: "result"',
+        "  canonical_columns:",
+        '    - "job_sheet_section"',
+        '    - "part_name"',
+        '    - "symptom_comment"',
+        '    - "repair_comment"',
+        '    - "action"',
+        "steps:",
+        '  - id: "sub_1_extract"',
+        '    type: "extract_sheet"',
+        "    sheet_selector:",
+        '      contains: "Data"',
+        '      case_sensitive: false',
+        "    header_locator:",
+        '      type: "required_columns"',
+        "      scan_rows: [1, 1]",
+        "      required:",
+        '        - "job_sheet_section"',
+        '        - "part_name"',
+        '        - "symptom_comment"',
+        '        - "repair_comment"',
+        "    select:",
+        '      "job_sheet_section": "job_sheet_section"',
+        '      "part_name": "part_name"',
+        '      "symptom_comment": "symptom_comment"',
+        '      "repair_comment": "repair_comment"',
+        '    write_to: "result"',
+        '    mode: "replace"',
+        '  - id: "sub_2_action"',
+        '    type: "lookup_rules"',
+        "    inputs:",
+        '      - "job_sheet_section"',
+        '      - "part_name"',
+        '      - "symptom_comment"',
+        '      - "repair_comment"',
+        '    target_column: "action"',
+        "    master:",
+        '      file: "masters/master_table.xlsx"',
+        '      sheet: "action"',
+        '      value: "action"',
+        "    matching:",
+        '      order: "top_to_bottom"',
+        "      first_match_wins: true",
+        "      matchers:",
+        '        - source: "job_sheet_section"',
+        '          master: "job_sheet_section"',
+        '          mode: "equals"',
+        '        - source: "part_name"',
+        '          master: "part_name"',
+        '          mode: "equals"',
+        "          normalize:",
+        "            trim: true",
+        "            case_sensitive: false",
+        '        - source: "symptom_comment"',
+        '          master: "symptom_comment"',
+        '          mode: "regex"',
+        '        - source: "repair_comment"',
+        '          master: "repair_comment"',
+        '          mode: "regex"',
+        "    on_missing_match: null",
+        "outputs:",
+        '  - sheet_name: "result"',
+        "    columns:",
+        '      - "job_sheet_section"',
+        '      - "part_name"',
+        '      - "symptom_comment"',
+        '      - "repair_comment"',
+        '      - "action"',
+    ]
+    if priority_column is not None:
+        insert_at = lines.index("      matchers:")
+        lines.insert(insert_at, f'      priority_column: "{priority_column}"')
+    _write_yaml(path, "\n".join(lines))
+
+
 def test_run_pipeline_happy_path_csv_with_master_and_pivot(app_paths):
     source_path = app_paths.project_root / "source.csv"
     source_df = pd.DataFrame(
@@ -1164,3 +1243,198 @@ def test_run_pipeline_supports_monthly_step_recipe_end_to_end(app_paths):
     assert detail_df["defect_category"].tolist() == ["Defect", "N/A", "Software", "Defect"]
     assert detail_df["defect"].tolist() == ["Panel", "N/A", "Software", "Power"]
     assert any("duplicate group rewrite" in item.lower() for item in logs)
+
+
+def test_run_pipeline_lookup_rules_step_recipe_supports_regex_and_priority_ordering(app_paths):
+    source_path = app_paths.project_root / "source.xlsx"
+    pd.DataFrame(
+        [
+            {
+                "job_sheet_section": 1,
+                "part_name": "PANEL",
+                "symptom_comment": "vertical line",
+                "repair_comment": "replace panel unit",
+            },
+            {
+                "job_sheet_section": 1,
+                "part_name": "PANEL",
+                "symptom_comment": "vertical line",
+                "repair_comment": "repair panel board",
+            },
+            {
+                "job_sheet_section": 0,
+                "part_name": "PANEL",
+                "symptom_comment": "vertical line",
+                "repair_comment": "replace panel unit",
+            },
+            {
+                "job_sheet_section": 1,
+                "part_name": "MAIN_UNIT",
+                "symptom_comment": "boot loop",
+                "repair_comment": "replace panel unit",
+            },
+        ]
+    ).to_excel(source_path, index=False, sheet_name="Data")
+
+    master_path = app_paths.masters_dir / "master_table.xlsx"
+    with pd.ExcelWriter(master_path) as writer:
+        pd.DataFrame(
+            [
+                {
+                    "priority": 20,
+                    "job_sheet_section": 1,
+                    "part_name": "PANEL",
+                    "symptom_comment": "(?i).*vertical line.*",
+                    "repair_comment": "(?i).*replace.*",
+                    "action": "REPLACE_PANEL",
+                },
+                {
+                    "priority": 10,
+                    "job_sheet_section": 1,
+                    "part_name": "PANEL",
+                    "symptom_comment": "(?i).*vertical line.*",
+                    "repair_comment": "(?i).*replace.*",
+                    "action": "PRIORITY_WINNER",
+                },
+                {
+                    "priority": 30,
+                    "job_sheet_section": 1,
+                    "part_name": "PANEL",
+                    "symptom_comment": "(?i).*vertical line.*",
+                    "repair_comment": "(?i).*repair.*",
+                    "action": "REPAIR_PANEL",
+                },
+            ]
+        ).to_excel(writer, index=False, sheet_name="action")
+
+    config_path = app_paths.configs_dir / "action_step_recipe.yaml"
+    _write_action_lookup_rules_step_recipe(config_path)
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _: None,
+    )
+
+    detail_df = pd.read_excel(result.output_path, sheet_name="result", skiprows=3, keep_default_na=False)
+    assert detail_df["action"].tolist() == ["PRIORITY_WINNER", "REPAIR_PANEL", "", ""]
+
+
+def test_run_pipeline_lookup_rules_step_recipe_raises_for_invalid_regex(app_paths):
+    source_path = app_paths.project_root / "source.xlsx"
+    pd.DataFrame(
+        [
+            {
+                "job_sheet_section": 1,
+                "part_name": "PANEL",
+                "symptom_comment": "vertical line",
+                "repair_comment": "replace panel unit",
+            }
+        ]
+    ).to_excel(source_path, index=False, sheet_name="Data")
+
+    master_path = app_paths.masters_dir / "master_table.xlsx"
+    with pd.ExcelWriter(master_path) as writer:
+        pd.DataFrame(
+            [
+                {
+                    "priority": 1,
+                    "job_sheet_section": 1,
+                    "part_name": "PANEL",
+                    "symptom_comment": "(",
+                    "repair_comment": "(?i).*replace.*",
+                    "action": "REPLACE_PANEL",
+                }
+            ]
+        ).to_excel(writer, index=False, sheet_name="action")
+
+    config_path = app_paths.configs_dir / "action_step_recipe_invalid_regex.yaml"
+    _write_action_lookup_rules_step_recipe(config_path)
+
+    with pytest.raises(PipelineError, match="Regex matcher tidak valid"):
+        run_pipeline(
+            paths=app_paths,
+            source_path=source_path,
+            config_path=config_path,
+            log=lambda _: None,
+        )
+
+
+def test_run_pipeline_lookup_rules_step_recipe_raises_for_invalid_priority(app_paths):
+    source_path = app_paths.project_root / "source.xlsx"
+    pd.DataFrame(
+        [
+            {
+                "job_sheet_section": 1,
+                "part_name": "PANEL",
+                "symptom_comment": "vertical line",
+                "repair_comment": "replace panel unit",
+            }
+        ]
+    ).to_excel(source_path, index=False, sheet_name="Data")
+
+    master_path = app_paths.masters_dir / "master_table.xlsx"
+    with pd.ExcelWriter(master_path) as writer:
+        pd.DataFrame(
+            [
+                {
+                    "priority": 0,
+                    "job_sheet_section": 1,
+                    "part_name": "PANEL",
+                    "symptom_comment": "(?i).*",
+                    "repair_comment": "(?i).*replace.*",
+                    "action": "REPLACE_PANEL",
+                }
+            ]
+        ).to_excel(writer, index=False, sheet_name="action")
+
+    config_path = app_paths.configs_dir / "action_step_recipe_invalid_priority.yaml"
+    _write_action_lookup_rules_step_recipe(config_path)
+
+    with pytest.raises(PipelineError, match="Priority harus integer positif"):
+        run_pipeline(
+            paths=app_paths,
+            source_path=source_path,
+            config_path=config_path,
+            log=lambda _: None,
+        )
+
+
+def test_run_pipeline_lookup_rules_step_recipe_raises_when_priority_column_missing(app_paths):
+    source_path = app_paths.project_root / "source.xlsx"
+    pd.DataFrame(
+        [
+            {
+                "job_sheet_section": 1,
+                "part_name": "PANEL",
+                "symptom_comment": "vertical line",
+                "repair_comment": "replace panel unit",
+            }
+        ]
+    ).to_excel(source_path, index=False, sheet_name="Data")
+
+    master_path = app_paths.masters_dir / "master_table.xlsx"
+    with pd.ExcelWriter(master_path) as writer:
+        pd.DataFrame(
+            [
+                {
+                    "job_sheet_section": 1,
+                    "part_name": "PANEL",
+                    "symptom_comment": "(?i).*",
+                    "repair_comment": "(?i).*replace.*",
+                    "action": "REPLACE_PANEL",
+                }
+            ]
+        ).to_excel(writer, index=False, sheet_name="action")
+
+    config_path = app_paths.configs_dir / "action_step_recipe_missing_priority_col.yaml"
+    _write_action_lookup_rules_step_recipe(config_path)
+
+    with pytest.raises(PipelineError, match="kolom priority 'priority' tidak ditemukan"):
+        run_pipeline(
+            paths=app_paths,
+            source_path=source_path,
+            config_path=config_path,
+            log=lambda _: None,
+        )
