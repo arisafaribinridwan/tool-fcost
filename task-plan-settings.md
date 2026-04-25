@@ -53,14 +53,14 @@ Scope UI awal: tambah dua aksi baru (**Pilih/Import Config** dan **Pilih/Import 
   - [app/ui/main_window.py](app/ui/main_window.py)
 
 ## QC Checklist Manual (siap eksekusi)
-- [ ] Aplikasi terbuka tanpa error; sidebar & detail panel tampil normal.
-- [ ] Mode create/edit berpindah dengan benar (klik job vs tombol `+`).
-- [ ] Mode config existing/import mengubah enable state:
-  - [ ] existing: dropdown config aktif, tombol import config nonaktif.
-  - [ ] import: dropdown config nonaktif, tombol import config aktif.
-- [ ] Import config menampilkan nama file pada label config import.
-- [ ] Import master menambah list visual tanpa duplikasi item yang sama.
-- [ ] `Run Precheck` hanya aktif jika nama job + config + master terpenuhi.
+- [x] Aplikasi terbuka tanpa error; sidebar & detail panel tampil normal.
+- [x] Mode create/edit berpindah dengan benar (klik job vs tombol `+`).
+- [x] Mode config existing/import mengubah enable state:
+  - [x] existing: dropdown config aktif, tombol import config nonaktif.
+  - [x] import: dropdown config nonaktif, tombol import config aktif.
+- [x] Import config menampilkan nama file pada label config import.
+- [x] Import master menambah list visual tanpa duplikasi item yang sama.
+- [x] `Run Precheck` hanya aktif jika nama job + config + master terpenuhi.
 - [ ] Precheck gagal menampilkan detail via alert dialog saja.
 - [ ] Precheck lulus mengubah badge ke `Valid`.
 - [ ] Setelah status `Valid`, perubahan field reset badge ke `Non Valid`.

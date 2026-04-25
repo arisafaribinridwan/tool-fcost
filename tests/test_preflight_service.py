@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.services.preflight_service import run_preflight
+from app.services.preflight_service import run_preflight, run_settings_precheck
 
 
 def _write_yaml(path: Path, content: str) -> None:
@@ -317,3 +317,93 @@ def test_run_preflight_does_not_apply_row_limit_warning_yet(app_paths):
 
     assert result.status == "Ready"
     assert result.can_execute is True
+
+
+def test_run_settings_precheck_ready_when_all_masters_exist(app_paths):
+    (app_paths.masters_dir / "produk.csv").write_text("kode_produk,nama_produk\nA,Produk A\n", encoding="utf-8")
+    config_path = app_paths.configs_dir / "report.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Laporan Tes"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Laporan Tes"',
+                "masters:",
+                '  - file: "masters/produk.csv"',
+                '    key: "kode_produk"',
+                "    columns:",
+                '      - "nama_produk"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "kode_produk"',
+            ]
+        ),
+    )
+
+    result = run_settings_precheck(paths=app_paths, config_path=config_path)
+
+    assert result.status == "Ready"
+    assert result.can_execute is True
+
+
+def test_run_settings_precheck_blocked_when_master_missing(app_paths):
+    config_path = app_paths.configs_dir / "report.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Laporan Tes"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Laporan Tes"',
+                "masters:",
+                '  - file: "masters/tidak-ada.csv"',
+                '    key: "kode_produk"',
+                "    columns:",
+                '      - "nama_produk"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "kode_produk"',
+            ]
+        ),
+    )
+
+    result = run_settings_precheck(paths=app_paths, config_path=config_path)
+
+    assert result.status == "Blocked"
+    assert result.can_execute is False
+    assert any("tidak ditemukan" in item.summary for item in result.findings)
+
+
+def test_run_settings_precheck_blocks_unsafe_master_path(app_paths):
+    config_path = app_paths.configs_dir / "report.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Laporan Tes"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Laporan Tes"',
+                "masters:",
+                '  - file: "../secret.csv"',
+                '    key: "kode_produk"',
+                "    columns:",
+                '      - "nama_produk"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "kode_produk"',
+            ]
+        ),
+    )
+
+    result = run_settings_precheck(paths=app_paths, config_path=config_path)
+
+    assert result.status == "Blocked"
+    assert result.can_execute is False
+    assert any("tidak valid" in item.summary for item in result.findings)

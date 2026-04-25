@@ -17,7 +17,8 @@ from app.services.job_profile_service import (
     save_job_profile_records,
     upsert_job_profile_record,
 )
-from app.services.preflight_service import run_preflight
+from app.services.import_service import import_config_to_configs, import_master_to_masters
+from app.services.preflight_service import run_preflight, run_settings_precheck
 from app.services.pipeline_service import run_pipeline
 from app.services.pipeline_types import (
     PipelineError,
@@ -54,6 +55,8 @@ __all__ = [
     "discover_configs",
     "discover_job_profiles",
     "get_job_profiles_path",
+    "import_config_to_configs",
+    "import_master_to_masters",
     "list_config_files",
     "load_session_state",
     "load_job_profile_records",
@@ -61,6 +64,7 @@ __all__ = [
     "load_config_summary",
     "run_preflight",
     "run_pipeline",
+    "run_settings_precheck",
     "save_session_state",
     "save_job_profile_records",
     "upsert_job_profile_record",

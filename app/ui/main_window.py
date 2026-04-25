@@ -537,8 +537,7 @@ class DesktopApp(ctk.CTk):
         self.textbox.delete("1.0", "end")
 
     def open_settings_window(self) -> None:
-        settings_script = Path(__file__).resolve().parent / "settings.py"
-        subprocess.Popen([sys.executable, str(settings_script)])
+        subprocess.Popen([sys.executable, "-m", "app.ui.settings"])
         self.add_log("Membuka jendela Settings...")
 
     def add_log(self, message: str) -> None:

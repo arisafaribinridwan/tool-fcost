@@ -1,7 +1,21 @@
 from pathlib import Path
 from tkinter import filedialog, messagebox
+import sys
 
 import customtkinter as ctk
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from app import AppPaths, ensure_runtime_dirs, get_app_paths
+from app.services import (
+    discover_configs,
+    discover_job_profiles,
+    import_config_to_configs,
+    import_master_to_masters,
+    run_settings_precheck,
+    upsert_job_profile_record,
+)
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
@@ -43,39 +57,17 @@ C = {
 
 # ── Main App ───────────────────────────────────────────────────
 class JobSettingsApp(ctk.CTk):
-    def __init__(self):
+    def __init__(self, paths: AppPaths):
         super().__init__()
+        self.paths = paths
         self.title("Job Configuration")
         self.geometry("680x580")
         self.resizable(False, False)
         self.configure(fg_color=C["main_bg"])
 
-        self.jobs = [
-            {
-                "id": "1",
-                "label": "Laporan Bulanan",
-                "config": "monthly-report.yaml",
-                "enabled": True,
-                "valid": True,
-                "masters": ["masters/table_a.xlsx", "masters/ref_b.xlsx"],
-            },
-            {
-                "id": "2",
-                "label": "Sync Mingguan",
-                "config": "weekly-sync.yaml",
-                "enabled": True,
-                "valid": True,
-                "masters": ["masters/data.csv"],
-            },
-            {
-                "id": "3",
-                "label": "Validasi Error",
-                "config": "error-config.yaml",
-                "enabled": True,
-                "valid": False,
-                "masters": [],
-            },
-        ]
+        self.jobs: list[dict] = []
+        self.config_options: list[str] = []
+        self.selected_config_path: Path | None = None
 
         self.selected_job_index = 0
         self.job_buttons = []
@@ -90,9 +82,14 @@ class JobSettingsApp(ctk.CTk):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
+        self._reload_runtime_data()
+
         self._build_sidebar()
         self._build_main()
-        self._load_job_data(0)
+        if self.jobs:
+            self._load_job_data(0)
+        else:
+            self._on_add_job()
 
     # ── SIDEBAR ────────────────────────────────────────────────
     def _build_sidebar(self):
@@ -150,8 +147,7 @@ class JobSettingsApp(ctk.CTk):
         self.job_list_frame.grid(row=2, column=0, sticky="nsew", padx=6, pady=(0, 10))
         self.job_list_frame.grid_columnconfigure(0, weight=1)
 
-        for i, job in enumerate(self.jobs):
-            self._create_job_item(i, job)
+        self._render_job_list()
 
         self.job_list_frame.bind("<Configure>", self._resize_job_items)
         self.after(50, self._resize_job_items)
@@ -219,6 +215,13 @@ class JobSettingsApp(ctk.CTk):
         btn._labels = (lbl_title, lbl_cfg)
         btn._dot = dot
         self.job_buttons.append(btn)
+
+    def _render_job_list(self) -> None:
+        self.job_buttons = []
+        for child in self.job_list_frame.winfo_children():
+            child.destroy()
+        for i, job in enumerate(self.jobs):
+            self._create_job_item(i, job)
 
     def _resize_job_items(self, _=None):
         w = self.job_list_frame.winfo_width()
@@ -322,7 +325,7 @@ class JobSettingsApp(ctk.CTk):
 
         self.combo_config = ctk.CTkComboBox(
             row_cfg,
-            values=["monthly-report.yaml", "weekly-sync.yaml", "error-config.yaml", "daily.yaml"],
+            values=self.config_options or [""],
             height=32,
             corner_radius=8,
             border_width=1,
@@ -336,6 +339,8 @@ class JobSettingsApp(ctk.CTk):
             command=lambda _value: self._on_form_field_changed(),
         )
         self.combo_config.grid(row=1, column=0, sticky="ew", pady=(3, 0))
+        if self.config_options:
+            self.combo_config.set(self.config_options[0])
 
         status_card = ctk.CTkFrame(
             row_cfg,
@@ -505,6 +510,28 @@ class JobSettingsApp(ctk.CTk):
         )
         self.btn_save.pack(side="left")
 
+    # ── DATA SOURCE (RUNTIME) ───────────────────────────────────
+    def _reload_runtime_data(self) -> None:
+        self.jobs = []
+        for item in discover_job_profiles(self.paths.configs_dir):
+            self.jobs.append(
+                {
+                    "id": item.id,
+                    "label": item.label,
+                    "config": item.config_file,
+                    "enabled": item.enabled,
+                    "valid": item.is_valid,
+                    "masters": list(item.master_files),
+                }
+            )
+
+        configs = discover_configs(self.paths.configs_dir)
+        self.config_options = [
+            cfg.path.name
+            for cfg in configs
+            if cfg.path.name.casefold() != "job_profiles.yaml"
+        ]
+
     # ── UI STATE ────────────────────────────────────────────────
     def _set_mode(self, mode: str) -> None:
         self.ui_mode = mode
@@ -534,9 +561,15 @@ class JobSettingsApp(ctk.CTk):
         if hasattr(self, "btn_import_config"):
             self.btn_import_config.configure(state="disabled" if use_existing else "normal")
 
+        if use_existing:
+            selected_name = self.combo_config.get().strip() if hasattr(self, "combo_config") else ""
+            self.selected_config_path = self.paths.configs_dir / selected_name if selected_name else None
+        else:
+            self.selected_config_path = Path(self.imported_config_path) if self.imported_config_path else None
+
         has_job_name = bool(getattr(self, "entry_label", None) and self.entry_label.get().strip())
         has_master = bool(self.master_items)
-        has_config = bool(self.combo_config.get().strip()) if use_existing else bool(self.imported_config_path)
+        has_config = self.selected_config_path is not None
         can_run_precheck = has_job_name and has_master and has_config
         if hasattr(self, "btn_run_precheck"):
             self.btn_run_precheck.configure(state="normal" if can_run_precheck else "disabled")
@@ -582,7 +615,14 @@ class JobSettingsApp(ctk.CTk):
 
         self.entry_label.delete(0, "end")
         self.entry_label.insert(0, job["label"])
-        self.combo_config.set(job["config"])
+
+        combo_values = tuple(self.combo_config.cget("values"))
+        if job["config"] in combo_values:
+            self.combo_config.set(job["config"])
+        elif combo_values:
+            self.combo_config.set(combo_values[0])
+        else:
+            self.combo_config.set("")
 
         if job["enabled"]:
             self.switch_enabled.select()
@@ -594,6 +634,7 @@ class JobSettingsApp(ctk.CTk):
 
         self.footer_hint.configure(text=f"ID: {job['id']}  ·  {job['config']}")
 
+        self.imported_config_path = None
         self.config_mode_selector.set("Pilih existing")
         self._on_config_mode_changed("Pilih existing")
 
@@ -635,7 +676,7 @@ class JobSettingsApp(ctk.CTk):
                 font=ctk.CTkFont(size=11),
             ).pack(side="left", fill="x", expand=True)
 
-    # ── ACTIONS (UI-ONLY STUBS) ────────────────────────────────
+    # ── ACTIONS ────────────────────────────────────────────────
     def on_import_config_click(self) -> None:
         selected = filedialog.askopenfilename(
             title="Pilih file config",
@@ -644,16 +685,21 @@ class JobSettingsApp(ctk.CTk):
         if not selected:
             return
 
-        self.imported_config_path = selected
+        try:
+            imported = import_config_to_configs(Path(selected), self.paths.configs_dir)
+        except ValueError as exc:
+            messagebox.showerror("Import config gagal", str(exc))
+            return
+
+        self.imported_config_path = str(imported)
+        self._reload_runtime_data()
+        self.combo_config.configure(values=self.config_options or [""])
         self.config_mode_selector.set("Import config")
         self._on_config_mode_changed("Import config")
-        self._on_form_field_changed()
-
-        messagebox.showinfo(
-            "Config dipilih",
-            f"Config terpilih: {Path(selected).name}\n\nIni masih mode UI-only (belum menyalin file).",
-        )
         self._set_precheck_status(False)
+        self._sync_control_state()
+
+        messagebox.showinfo("Config diimport", f"Config terimport: {imported.name}")
 
     def on_import_master_click(self) -> None:
         selected_items = filedialog.askopenfilenames(
@@ -670,19 +716,22 @@ class JobSettingsApp(ctk.CTk):
 
         added = 0
         for selected in selected_items:
-            relative_like = f"masters/{Path(selected).name}"
+            try:
+                imported = import_master_to_masters(Path(selected), self.paths.masters_dir)
+            except ValueError as exc:
+                messagebox.showerror("Import master gagal", str(exc))
+                continue
+
+            relative_like = f"masters/{imported.name}"
             if relative_like not in self.master_items:
                 self.master_items.append(relative_like)
                 added += 1
 
         self._refresh_master_list_box()
         self._set_precheck_status(False)
-        self._on_form_field_changed()
+        self._sync_control_state()
 
-        messagebox.showinfo(
-            "Master dipilih",
-            f"{added} file master ditambahkan ke daftar UI.\n\nIni masih mode UI-only (belum menyalin file).",
-        )
+        messagebox.showinfo("Master diimport", f"{added} file master ditambahkan.")
 
     def on_run_precheck_click(self) -> None:
         errors: list[str] = []
@@ -690,12 +739,10 @@ class JobSettingsApp(ctk.CTk):
         if not self.entry_label.get().strip():
             errors.append("Nama job wajib diisi.")
 
-        if self.config_mode == "Pilih existing":
-            if not self.combo_config.get().strip():
-                errors.append("Config existing wajib dipilih.")
-        else:
-            if not self.imported_config_path:
-                errors.append("Config import belum dipilih.")
+        if self.config_mode == "Pilih existing" and not self.combo_config.get().strip():
+            errors.append("Config existing wajib dipilih.")
+        if self.config_mode == "Import config" and not self.imported_config_path:
+            errors.append("Config import belum dipilih.")
 
         if not self.master_items:
             errors.append("Minimal pilih satu file master.")
@@ -704,7 +751,23 @@ class JobSettingsApp(ctk.CTk):
             self._set_precheck_status(False, "\n".join(errors))
             return
 
-        self._set_precheck_status(True)
+        config_path = self.selected_config_path
+        if config_path is None:
+            self._set_precheck_status(False, "Config belum dipilih.")
+            return
+
+        try:
+            result = run_settings_precheck(paths=self.paths, config_path=config_path)
+        except Exception as exc:
+            self._set_precheck_status(False, str(exc))
+            return
+
+        if result.can_execute:
+            self._set_precheck_status(True)
+            return
+
+        detail = "\n".join(item.summary for item in result.findings if item.severity == "error")
+        self._set_precheck_status(False, detail or "Precheck gagal.")
 
     def _on_add_job(self):
         self._set_mode("create")
@@ -723,6 +786,7 @@ class JobSettingsApp(ctk.CTk):
         if values:
             self.combo_config.set(values[0])
 
+        self.imported_config_path = None
         self.config_mode_selector.set("Pilih existing")
         self._on_config_mode_changed("Pilih existing")
 
@@ -734,52 +798,51 @@ class JobSettingsApp(ctk.CTk):
         self._sync_control_state()
 
     def _on_save(self):
-        label = self.entry_label.get().strip() or "Job Baru"
+        if self.precheck_status != "Valid":
+            messagebox.showwarning("Simpan Perubahan", "Jalankan precheck valid terlebih dahulu.")
+            return
+
+        label = self.entry_label.get().strip()
         enabled = bool(self.switch_enabled.get())
+        config_path = self.selected_config_path
+        config_name = config_path.name if config_path is not None else ""
 
-        if self.config_mode == "Import config" and self.imported_config_path:
-            config_name = Path(self.imported_config_path).name
+        if not label:
+            messagebox.showwarning("Simpan Perubahan", "Nama job wajib diisi.")
+            return
+        if not config_name:
+            messagebox.showwarning("Simpan Perubahan", "Config wajib dipilih.")
+            return
+
+        record_id = None
+        if self.ui_mode == "edit" and self.selected_job_index >= 0 and self.selected_job_index < len(self.jobs):
+            record_id = self.jobs[self.selected_job_index]["id"]
+
+        try:
+            saved = upsert_job_profile_record(
+                self.paths.configs_dir,
+                label=label,
+                config_file=config_name,
+                enabled=enabled,
+                record_id=record_id,
+            )
+        except ValueError as exc:
+            messagebox.showerror("Simpan Perubahan gagal", str(exc))
+            return
+
+        self._reload_runtime_data()
+        self._render_job_list()
+        self.combo_config.configure(values=self.config_options or [""])
+
+        selected_index = next((i for i, job in enumerate(self.jobs) if job["id"] == saved.id), -1)
+        if selected_index >= 0:
+            self._load_job_data(selected_index)
         else:
-            config_name = self.combo_config.get().strip() or "-"
+            self._on_add_job()
 
-        is_valid = self.precheck_status == "Valid"
-
-        if self.ui_mode == "create" or self.selected_job_index < 0:
-            new_job = {
-                "id": str(len(self.jobs) + 1),
-                "label": label,
-                "config": config_name,
-                "enabled": enabled,
-                "valid": is_valid,
-                "masters": list(self.master_items),
-            }
-            self.jobs.append(new_job)
-            self._create_job_item(len(self.jobs) - 1, new_job)
-            self._load_job_data(len(self.jobs) - 1)
-        else:
-            job = self.jobs[self.selected_job_index]
-            job["label"] = label
-            job["config"] = config_name
-            job["enabled"] = enabled
-            job["valid"] = is_valid
-            job["masters"] = list(self.master_items)
-
-            btn = self.job_buttons[self.selected_job_index]
-            lbl_title, lbl_cfg = btn._labels
-            lbl_title.configure(text=job["label"])
-            lbl_cfg.configure(text=job["config"])
-
-            dot_color = C["gray_dot"] if not job["enabled"] else C["green"] if job["valid"] else C["red"]
-            btn._dot.configure(fg_color=dot_color)
-
-            self.footer_hint.configure(text=f"ID: {job['id']}  ·  {job['config']}")
-
-        messagebox.showinfo(
-            "Simpan Perubahan",
-            "Perubahan UI disimpan di state sementara.\nBelum ada penulisan file runtime (UI-only).",
-        )
+        messagebox.showinfo("Simpan Perubahan", "Perubahan berhasil disimpan ke job_profiles.yaml.")
 
 
 if __name__ == "__main__":
-    app = JobSettingsApp()
+    app = JobSettingsApp(ensure_runtime_dirs(get_app_paths()))
     app.mainloop()
