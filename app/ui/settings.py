@@ -71,6 +71,8 @@ class JobSettingsApp(ctk.CTk):
 
         self.selected_job_index = 0
         self.job_buttons = []
+        self.search_query = ""
+        self.filtered_job_indices: list[int] = []
 
         self.ui_mode = "edit"
         self.config_mode = "Pilih existing"
@@ -86,6 +88,7 @@ class JobSettingsApp(ctk.CTk):
 
         self._build_sidebar()
         self._build_main()
+        self._apply_job_filter()
         if self.jobs:
             self._load_job_data(0)
         else:
@@ -142,6 +145,7 @@ class JobSettingsApp(ctk.CTk):
             placeholder_text_color=C["text_muted"],
         )
         self.search_entry.grid(row=1, column=0, sticky="ew", padx=12, pady=(0, 6))
+        self.search_entry.bind("<KeyRelease>", self._on_search_changed)
 
         self.job_list_frame = ctk.CTkScrollableFrame(self.sidebar, fg_color="transparent", label_text="")
         self.job_list_frame.grid(row=2, column=0, sticky="nsew", padx=6, pady=(0, 10))
@@ -154,8 +158,8 @@ class JobSettingsApp(ctk.CTk):
 
         ctk.CTkFrame(self.sidebar, height=1, fg_color=C["border"]).grid(row=3, column=0, sticky="ew", padx=0)
 
-    def _create_job_item(self, index, job):
-        is_sel = index == self.selected_job_index
+    def _create_job_item(self, index, job, job_index):
+        is_sel = job_index == self.selected_job_index
 
         btn = ctk.CTkFrame(
             self.job_list_frame,
@@ -197,15 +201,17 @@ class JobSettingsApp(ctk.CTk):
         dot.place(relx=1.0, x=-12, y=13, anchor="ne")
 
         def on_enter(_e, i=index):
-            if self.selected_job_index != i:
-                self.job_buttons[i].configure(fg_color="#F1F5F9")
+            target_btn = self.job_buttons[i]
+            if self.selected_job_index != target_btn._job_index:
+                target_btn.configure(fg_color="#F1F5F9")
 
         def on_leave(_e, i=index):
-            if self.selected_job_index != i:
-                self.job_buttons[i].configure(fg_color="transparent")
+            target_btn = self.job_buttons[i]
+            if self.selected_job_index != target_btn._job_index:
+                target_btn.configure(fg_color="transparent")
 
         def on_click(_e, i=index):
-            self._load_job_data(i)
+            self._load_job_data(self.job_buttons[i]._job_index)
 
         for w in (btn, lbl_title, lbl_cfg, dot):
             w.bind("<Enter>", on_enter)
@@ -214,14 +220,26 @@ class JobSettingsApp(ctk.CTk):
 
         btn._labels = (lbl_title, lbl_cfg)
         btn._dot = dot
+        btn._job_index = job_index
         self.job_buttons.append(btn)
 
     def _render_job_list(self) -> None:
         self.job_buttons = []
         for child in self.job_list_frame.winfo_children():
             child.destroy()
-        for i, job in enumerate(self.jobs):
-            self._create_job_item(i, job)
+
+        if not self.filtered_job_indices:
+            ctk.CTkLabel(
+                self.job_list_frame,
+                text="Tidak ada job yang cocok.",
+                font=ctk.CTkFont(size=11, slant="italic"),
+                text_color=C["text_muted"],
+                anchor="w",
+            ).grid(row=0, column=0, sticky="ew", padx=8, pady=8)
+            return
+
+        for visible_i, job_i in enumerate(self.filtered_job_indices):
+            self._create_job_item(visible_i, self.jobs[job_i], job_i)
 
     def _resize_job_items(self, _=None):
         w = self.job_list_frame.winfo_width()
@@ -229,6 +247,21 @@ class JobSettingsApp(ctk.CTk):
             return
         for btn in self.job_buttons:
             btn.configure(width=max(1, w - 4))
+
+    def _on_search_changed(self, _event=None) -> None:
+        self.search_query = self.search_entry.get().strip().casefold()
+        self._apply_job_filter()
+
+    def _apply_job_filter(self) -> None:
+        if not self.search_query:
+            self.filtered_job_indices = list(range(len(self.jobs)))
+        else:
+            self.filtered_job_indices = [
+                i
+                for i, job in enumerate(self.jobs)
+                if self.search_query in job["label"].casefold()
+            ]
+        self._render_job_list()
 
     # ── MAIN CONTENT ───────────────────────────────────────────
     def _build_main(self):
@@ -597,9 +630,9 @@ class JobSettingsApp(ctk.CTk):
 
     # ── DATA LOADING ───────────────────────────────────────────
     def _load_job_data(self, index):
-        for i, btn in enumerate(self.job_buttons):
+        for btn in self.job_buttons:
             lbl_title, lbl_cfg = btn._labels
-            is_sel = i == index
+            is_sel = btn._job_index == index
             btn.configure(
                 fg_color=C["accent_light"] if is_sel else "transparent",
                 border_width=1 if is_sel else 0,
@@ -693,6 +726,7 @@ class JobSettingsApp(ctk.CTk):
 
         self.imported_config_path = str(imported)
         self._reload_runtime_data()
+        self._apply_job_filter()
         self.combo_config.configure(values=self.config_options or [""])
         self.config_mode_selector.set("Import config")
         self._on_config_mode_changed("Import config")
@@ -831,7 +865,7 @@ class JobSettingsApp(ctk.CTk):
             return
 
         self._reload_runtime_data()
-        self._render_job_list()
+        self._apply_job_filter()
         self.combo_config.configure(values=self.config_options or [""])
 
         selected_index = next((i for i, job in enumerate(self.jobs) if job["id"] == saved.id), -1)
