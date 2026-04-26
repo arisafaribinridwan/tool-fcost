@@ -1,0 +1,48 @@
+﻿priority,part_name,match_type,pattern,symptom,notes
+10,POWER_UNIT,regex,.*,TOTAL_OFF,migrated from wildcard fallback; source=*
+20,PANEL,regex,garis|line,LINE,migrated from regex-like pattern; source=garis | line
+30,LVDS_WIRE,regex,garis|line,LINE,migrated from regex-like pattern; source=garis | line
+40,PANEL,contains,TIDAK ADA SIARAN,BLANK,migrated from plain contains; source=TIDAK ADA SIARAN
+50,PANEL,contains,BLANK,BLANK,migrated from plain contains; source=BLANK
+60,PANEL,regex,X ADA GAMBAR|TIDAK ADA GAMBAR|TDK ADA GAMBAR|TIDAK AD AGAMBAR|TIDAK AD GAMBAR,BLANK,migrated from plain contains; source=X ADA GAMBAR
+70,LVDS_WIRE,regex,X ADA GAMBAR|TIDAK ADA GAMBAR|TDK ADA GAMBAR|TIDAK AD AGAMBAR|TIDAK AD GAMBAR,BLANK,migrated from plain contains; source=X ADA GAMBAR
+80,PANEL,regex,NO DISPLAY|STANDBY|GAMBAR GELAP|GAMBAR TDK KELUAR,BLANK,migrated from plain contains; source=NO DISPLAY
+90,PANEL,contains,MATI,BLANK,migrated from plain contains; source=MATI
+100,PANEL,regex,HANYA SUARA,BLANK,migrated from plain contains; source=HANYA SUARA SAJA
+110,PANEL,regex,GOYANG|GAMBAR BEMASALAH|GAMBAR BERGELOMBANG|GAMBAR DELAY|BERMASALAH|LAYAR BERMASALAH,DISPLAY NG,migrated from wildcard contains; source=*GOYANG*
+120,PANEL,regex,DOMINAN|MERAH|PUTIH|LAYAR BLUE|DAN WARNA|KERUSAKAN KUALITAS GAMBAR|SLOW MOTION,DISPLAY NG,migrated from plain contains; source=DOMINAN
+130,PANEL,contains,BAYANG,BLUR,migrated from wildcard contains; source=*BAYANG*
+140,PANEL,contains,BLUR,BLUR,migrated from plain contains; source=BLUR
+150,PANEL,contains,DOT,DOT,migrated from wildcard contains; source=*DOT*
+160,PANEL,contains,PIXEL,DOT,migrated from wildcard contains; source=*PIXEL*
+170,PANEL,contains,TIDAK BISA HIDUP,TOTAL_OFF,migrated from wildcard contains; source=*TIDAK BISA HIDUP*
+180,PANEL,contains,BERGERAK,DISPLAY NG,migrated from wildcard contains; source=*BERGERAK*
+190,PANEL,regex,SETENGAH|SEBELAH,HALF,migrated from wildcard contains; source=*SETENGAH*
+200,PANEL,regex,RUSAK PANEL|PECAH,BROKEN,migrated from wildcard contains; source=*RUSAK PANEL*
+210,PANEL,contains,BURAM,MURA,migrated from wildcard contains; source=*BURAM*
+220,MAIN_UNIT,regex,STANDBY|STANDY BY|STANBY|STAND BY|stanbay|STBY,STANDBY,migrated from wildcard contains; source=*STANDBY*
+230,MAIN_UNIT,regex,MATI|MATOT|MATOL|ATI TOTAL|TIDAK BISA HIDUP|TIDAK BISA NYALA|TIDAK BS HIDUP,TOTAL_OFF,migrated from wildcard contains; source=*MATI*
+240,MAIN_UNIT,regex,KENA PETIR|LISTRIK TURUN|TIDAK NYALA ,TOTAL_OFF,migrated from wildcard contains; source=*MATOT*
+250,MAIN_UNIT,regex,GAMBAR BERGANTI SENDIRI|GAMBAR BLUR|GAMBAR KLISE|IW-GAMBAR TIDAK BAIK,PICTURE_NG,migrated from plain contains; source=LAYAR BLANK
+260,MAIN_UNIT,regex,LOGO|BOOTING|GOOGLE,LOGO_FREEZE,migrated from plain contains; source=LOGO
+270,MAIN_UNIT,contains,HDMI,HDMI_NG,migrated from plain contains; source=HDMI
+280,MAIN_UNIT,regex,SIARAN|SINYAL|SIGNAL|CHANNEL|CHANEL,NO_CHANNEL,migrated from plain contains; source=SIARAN
+290,MAIN_UNIT,regex,TDK ADA GAMBAR|TIDAK ADA GAMBAR|LAYAR BLANK|TIDAK ADA GAMBAR|TIDAK AA GAMBAR|BLANK,NO_PICTURE,migrated from wildcard contains; source=*TDK ADA GAMBAR*
+300,MAIN_UNIT,contains,NETFLIX,ERROR,migrated from wildcard contains; source=*NETFLIX*
+310,MAIN_UNIT,regex,EROR|ERROR,ERROR,migrated from plain contains; source=EROR
+320,MAIN_UNIT,contains,INDIKATOR,PROTECT,migrated from plain contains; source=INDIKATOR
+330,MAIN_UNIT,regex,REMOT|REMOTE|SENSOR,SENSOR_NG,migrated from plain contains; source=REMOT
+340,MAIN_UNIT,contains,TIDAK ADA SUARA|SPEAKER SEMBER,SOUND_NG,migrated from plain contains; source=TIDAK ADA SUARA
+350,MAIN_UNIT,contains,TOMBOL,BUTTON_NG,migrated from plain contains; source=TOMBOL
+360,REMOTE_CONTROL,regex,REMOTE|REMOT|SENSOR,RC_NG,migrated from plain contains; source=REMOTE
+370,PANEL,regex,"(T[DIK]{1,3}\s+AD[A]?\s+?G?AM?AB?AR|X\s+ADA\s+GAMBAR)",BLANK,"migrated from regex-like pattern; source=(T[DIK]{1,3}\s+AD[A]?\s+?G?AM?AB?AR|X\s+ADA\s+GAMBAR)"
+380,SPEAKER,contains,SUARA,SOUND_NG,
+390,LED_BAR,regex,STANDBY|STANDY BY|STANBY|STAND BY,STANDBY,migrated from wildcard contains; source=*STANDBY*
+400,LED_BAR,regex,MATI|MATOT|MATOL|ATI TOTAL|TIDAK BISA HIDUP|TIDAK BISA NYALA|TIDAK BS HIDUP,TOTAL_OFF,migrated from wildcard contains; source=*MATI*
+410,MAIN_UNIT,regex,LAYAR MERAH,PICTURE_NG,
+420,LVDS_WIRE,regex,BLANK|MATI ,NO_PICTURE,
+430,LVDS_WIRE,contains,LAYAR BERKEDIP,BLINKING,
+440,LED_BAR,regex,X ADA GAMBAR|TIDAK ADA GAMBAR|TDK ADA GAMBAR|TIDAK AD AGAMBAR|TIDAK AD GAMBAR,BLANK,migrated from plain contains; source=X ADA GAMBAR
+450,LED_BAR,contains,KEDIP,BLINKING,
+460,TAPE,regex,garis|line,LINE,migrated from regex-like pattern; source=garis | line
+470,TAPE,regex,X ADA GAMBAR|TIDAK ADA GAMBAR|TDK ADA GAMBAR|TIDAK AD AGAMBAR|TIDAK AD GAMBAR,NO_PICTURE,

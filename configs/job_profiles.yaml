@@ -1,9 +1,0 @@
-jobs:
-- id: fcost-bulanan-lcd-import
-  label: Monthly FCOST LCD IMPORT
-  config_file: monthly-report-recipe-lcd-import.yaml
-  enabled: true
-- id: fcost-bulanan
-  label: Monthly FCOST LCD SEID
-  config_file: monthly-report-recipe.yaml
-  enabled: true
