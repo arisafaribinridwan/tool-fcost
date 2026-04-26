@@ -510,6 +510,30 @@ def _apply_update_columns_step(data_df: pd.DataFrame, step_cfg: dict, log: LogFn
     return result_df
 
 
+def _replace_exact_keys_in_text(source_text: str, lookup_map: dict[str, object], matching_cfg: dict) -> str:
+    if not source_text or not lookup_map:
+        return source_text
+
+    ordered_keys = [key for key in sorted(lookup_map.keys(), key=len, reverse=True) if key]
+    if not ordered_keys:
+        return source_text
+
+    flags = 0 if bool(matching_cfg.get("case_sensitive", True)) else re.IGNORECASE
+    alternation = "|".join(re.escape(key) for key in ordered_keys)
+    pattern = re.compile(rf"(?<![0-9A-Za-z])({alternation})(?![0-9A-Za-z])", flags)
+
+    def _replacement(match: re.Match) -> str:
+        normalized_match = _normalize_exact_key(match.group(1), matching_cfg)
+        canonical = lookup_map.get(normalized_match)
+        if canonical is None:
+            return match.group(0)
+        if pd.isna(canonical):
+            return ""
+        return str(canonical)
+
+    return pattern.sub(_replacement, source_text)
+
+
 def _apply_lookup_exact_step(data_df: pd.DataFrame, step_cfg: dict, context: _RecipeContext, log: LogFn) -> pd.DataFrame:
     source_column = str(step_cfg["source_column"])
     target_column = str(step_cfg["target_column"])
@@ -518,6 +542,18 @@ def _apply_lookup_exact_step(data_df: pd.DataFrame, step_cfg: dict, context: _Re
 
     master_cfg = step_cfg["master"]
     matching_cfg = step_cfg.get("matching", {})
+    alias_separator = matching_cfg.get("alias_separator")
+    if alias_separator is not None and (not isinstance(alias_separator, str) or not alias_separator):
+        raise ValueError(
+            f"Step '{step_cfg['id']}' gagal, matching.alias_separator harus berupa string non-kosong."
+        )
+
+    match_mode = str(matching_cfg.get("match_mode", "exact"))
+    if match_mode not in {"exact", "contains"}:
+        raise ValueError(
+            f"Step '{step_cfg['id']}' gagal, matching.match_mode harus salah satu dari: contains, exact."
+        )
+
     master_df = context.load_master_sheet(str(master_cfg["file"]), str(master_cfg["sheet"]))
     key_column = str(master_cfg["key"])
     value_column = str(master_cfg["value"])
@@ -530,7 +566,17 @@ def _apply_lookup_exact_step(data_df: pd.DataFrame, step_cfg: dict, context: _Re
     }
     lookup_map: dict[str, object] = {}
     for _, row in master_df.iterrows():
-        lookup_map[_normalize_exact_key(row[key_column], matching_cfg)] = row[value_column]
+        raw_key = row[key_column]
+        if isinstance(alias_separator, str):
+            split_keys = str(raw_key).split(alias_separator) if not pd.isna(raw_key) else [""]
+            for split_key in split_keys:
+                normalized_split_key = _normalize_exact_key(split_key, matching_cfg)
+                if normalized_split_key:
+                    lookup_map[normalized_split_key] = row[value_column]
+        else:
+            normalized_key = _normalize_exact_key(raw_key, matching_cfg)
+            if normalized_key:
+                lookup_map[normalized_key] = row[value_column]
 
     result_df = data_df.copy()
     values: list[object] = []
@@ -545,6 +591,14 @@ def _apply_lookup_exact_step(data_df: pd.DataFrame, step_cfg: dict, context: _Re
         if normalized_key in lookup_map:
             values.append(lookup_map[normalized_key])
             continue
+
+        if match_mode == "contains":
+            source_text = "" if pd.isna(source_value) else str(source_value)
+            replaced_text = _replace_exact_keys_in_text(source_text, lookup_map, matching_cfg)
+            if replaced_text != source_text:
+                values.append(replaced_text)
+                continue
+
         if on_missing == "keep_original":
             values.append(source_value)
         else:
