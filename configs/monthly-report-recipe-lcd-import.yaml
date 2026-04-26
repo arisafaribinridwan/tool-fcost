@@ -378,6 +378,30 @@ steps:
           - priority: 220
             parts_signature: ["LED_BAR", "MAIN_UNIT", "PANEL"]
             winner_part_name: "PANEL"
+          - priority: 230
+            parts_signature: ["MAIN_UNIT", "PANEL", "TCON_UNIT"]
+            winner_part_name: "PANEL"
+          - priority: 240
+            parts_signature: ["PANEL", "TCON_UNIT", "TCON_WIRE"]
+            winner_part_name: "PANEL"
+          - priority: 250
+            parts_signature: ["PANEL", "TAPE", "TCON_UNIT"]
+            winner_part_name: "PANEL"
+          - priority: 260
+            parts_signature: ["MAIN_UNIT", "PANEL", "TAPE", "TCON_UNIT"]
+            winner_part_name: "PANEL"
+          - priority: 270
+            parts_signature: ["PANEL", "POWER_UNIT", "TCON_UNIT"]
+            winner_part_name: "PANEL"
+          - priority: 280
+            parts_signature: ["N/A", "PANEL", "TAPE"]
+            winner_part_name: "PANEL"
+          - priority: 290
+            parts_signature: ["MAIN_UNIT"]
+            winner_part_name: "MAIN_UNIT"
+          - priority: 300
+            parts_signature: ["LED_BAR", "TAPE"]
+            winner_part_name: "LED_BAR"
         winner_updates:
           "job_sheet_section":
             set: 1
