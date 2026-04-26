@@ -180,6 +180,115 @@ def test_run_pipeline_happy_path_csv_with_master_and_pivot(app_paths):
     assert summary_df.loc[summary_df["kategori"] == "Cat 2", "qty"].iloc[0] == 5
 
 
+def test_run_pipeline_skips_copy_when_source_already_in_uploads_subfolder(app_paths):
+    upload_subdir = app_paths.uploads_dir / "nested"
+    upload_subdir.mkdir(parents=True, exist_ok=True)
+    source_path = upload_subdir / "source.csv"
+    pd.DataFrame([{"qty": 1}]).to_csv(source_path, index=False)
+
+    config_path = app_paths.configs_dir / "skip_copy_uploads.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Skip Copy Uploads"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Skip Copy Uploads"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "qty"',
+            ]
+        ),
+    )
+
+    logs: list[str] = []
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=logs.append,
+    )
+
+    assert result.output_path.exists()
+    assert result.source_copy_path == source_path.resolve()
+    assert len(list(app_paths.uploads_dir.rglob("*.csv"))) == 1
+    assert any("copy source dilewati" in item for item in logs)
+
+
+def test_run_pipeline_skips_copy_when_source_already_in_uploads_root(app_paths):
+    source_path = app_paths.uploads_dir / "source_root.csv"
+    pd.DataFrame([{"qty": 2}]).to_csv(source_path, index=False)
+
+    config_path = app_paths.configs_dir / "skip_copy_uploads_root.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Skip Copy Uploads Root"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Skip Copy Uploads Root"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "qty"',
+            ]
+        ),
+    )
+
+    logs: list[str] = []
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=logs.append,
+    )
+
+    assert result.output_path.exists()
+    assert result.source_copy_path == source_path.resolve()
+    assert len(list(app_paths.uploads_dir.glob("*.csv"))) == 1
+    assert any("copy source dilewati" in item for item in logs)
+
+
+def test_run_pipeline_skips_copy_when_source_already_in_upload_dir(app_paths):
+    upload_dir = app_paths.project_root / "upload"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    source_path = upload_dir / "source_upload_dir.csv"
+    pd.DataFrame([{"qty": 3}]).to_csv(source_path, index=False)
+
+    config_path = app_paths.configs_dir / "skip_copy_upload_dir.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Skip Copy Upload Dir"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Skip Copy Upload Dir"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "qty"',
+            ]
+        ),
+    )
+
+    logs: list[str] = []
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=logs.append,
+    )
+
+    assert result.output_path.exists()
+    assert result.source_copy_path == source_path.resolve()
+    assert len(list(app_paths.uploads_dir.glob("*.csv"))) == 0
+    assert any("copy source dilewati" in item for item in logs)
+
+
 def test_run_pipeline_blocks_when_source_size_exceeds_limit(app_paths):
     source_path = app_paths.project_root / "source.csv"
     source_path.write_bytes(b"x" * 2 * 1024 * 1024)

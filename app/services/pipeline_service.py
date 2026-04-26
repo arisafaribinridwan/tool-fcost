@@ -71,11 +71,22 @@ def run_pipeline(
     emit_progress("load_config", "Load config", "done", config_path.name)
 
     emit_progress("copy_source", "Copy source", "running", source_path.name)
-    log("Salin source ke folder uploads/")
-    try:
-        source_copy = copy_source_to_uploads(source_path, paths.uploads_dir)
-    except OSError as exc:
-        raise PipelineError(f"Gagal menyalin source ke uploads/: {exc}") from exc
+    source_resolved = source_path.resolve()
+    uploads_resolved = paths.uploads_dir.resolve()
+    upload_resolved = (paths.project_root / "upload").resolve()
+
+    in_uploads_dir = source_resolved.is_relative_to(uploads_resolved)
+    in_upload_dir = source_resolved.is_relative_to(upload_resolved)
+
+    if in_uploads_dir or in_upload_dir:
+        source_copy = source_resolved
+        log("Source sudah berada di folder upload(s), copy source dilewati.")
+    else:
+        log("Salin source ke folder uploads/")
+        try:
+            source_copy = copy_source_to_uploads(source_path, paths.uploads_dir)
+        except OSError as exc:
+            raise PipelineError(f"Gagal menyalin source ke uploads/: {exc}") from exc
     emit_progress("copy_source", "Copy source", "done", source_copy.name)
 
     if is_step_recipe_payload(config):
