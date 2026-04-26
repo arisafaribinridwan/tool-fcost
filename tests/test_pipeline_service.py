@@ -853,6 +853,136 @@ def test_run_pipeline_supports_lookup_rules_master_for_action(app_paths):
     ]
 
 
+def test_run_pipeline_lookup_exact_replace_supports_alias_separator_or(app_paths):
+    source_path = app_paths.project_root / "source.xlsx"
+    pd.DataFrame(
+        [
+            {"symptom_comment": "EXS", "repair_comment": "RESOLDERING"},
+            {"symptom_comment": "EXTRNAL", "repair_comment": "RESOLDRING"},
+            {"symptom_comment": "EXTERNAL", "repair_comment": "RESOLDER"},
+            {"symptom_comment": "UNKNOWN", "repair_comment": "OTHER"},
+            {"symptom_comment": "", "repair_comment": "RESOLDERING"},
+            {"symptom_comment": "EXS", "repair_comment": ""},
+            {"symptom_comment": "LCD-PW-A01 MT", "repair_comment": "CHECK RESOLDER UNIT"},
+        ]
+    ).to_excel(source_path, index=False, sheet_name="Data")
+
+    master_path = app_paths.masters_dir / "master_table.xlsx"
+    with pd.ExcelWriter(master_path) as writer:
+        pd.DataFrame(
+            [
+                {
+                    "symptom_alias": "EXS|EXTRNAL|EXTERNAL",
+                    "symptom_canonical": "EXTERNAL",
+                    "repair_alias": "RESOLDERING|RESOLDRING|RESOLDER",
+                    "repair_canonical": "RESOLDER",
+                },
+                {
+                    "symptom_alias": "MT",
+                    "symptom_canonical": "MATI",
+                    "repair_alias": "",
+                    "repair_canonical": "",
+                },
+            ]
+        ).to_excel(writer, index=False, sheet_name="comment_synonyms")
+
+    config_path = app_paths.configs_dir / "comment_synonym_or_step_recipe.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Comment Synonym OR Step Recipe"',
+                "datasets:",
+                '  working_dataset: "result"',
+                "  canonical_columns:",
+                '    - "symptom_comment"',
+                '    - "repair_comment"',
+                "steps:",
+                '  - id: "sub_1_extract"',
+                '    type: "extract_sheet"',
+                "    sheet_selector:",
+                '      contains: "Data"',
+                '      case_sensitive: false',
+                "    header_locator:",
+                '      type: "required_columns"',
+                "      scan_rows: [1, 1]",
+                "      required:",
+                '        - "symptom_comment"',
+                '        - "repair_comment"',
+                "    select:",
+                '      "symptom_comment": "symptom_comment"',
+                '      "repair_comment": "repair_comment"',
+                '    write_to: "result"',
+                '    mode: "replace"',
+                '  - id: "sub_2_normalize_symptom"',
+                '    type: "lookup_exact_replace"',
+                '    source_column: "symptom_comment"',
+                '    target_column: "symptom_comment"',
+                "    master:",
+                '      file: "masters/master_table.xlsx"',
+                '      sheet: "comment_synonyms"',
+                '      key: "symptom_alias"',
+                '      value: "symptom_canonical"',
+                "    matching:",
+                "      trim: true",
+                "      case_sensitive: false",
+                '      alias_separator: "|"',
+                '      match_mode: "contains"',
+                '    on_blank_source: ""',
+                '    on_missing_match: "keep_original"',
+                '  - id: "sub_3_normalize_repair"',
+                '    type: "lookup_exact_replace"',
+                '    source_column: "repair_comment"',
+                '    target_column: "repair_comment"',
+                "    master:",
+                '      file: "masters/master_table.xlsx"',
+                '      sheet: "comment_synonyms"',
+                '      key: "repair_alias"',
+                '      value: "repair_canonical"',
+                "    matching:",
+                "      trim: true",
+                "      case_sensitive: false",
+                '      alias_separator: "|"',
+                '      match_mode: "contains"',
+                '    on_blank_source: ""',
+                '    on_missing_match: "keep_original"',
+                "outputs:",
+                '  - sheet_name: "result"',
+                "    columns:",
+                '      - "symptom_comment"',
+                '      - "repair_comment"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _: None,
+    )
+
+    detail_df = pd.read_excel(result.output_path, sheet_name="result", skiprows=3, keep_default_na=False)
+    assert detail_df["symptom_comment"].tolist() == [
+        "EXTERNAL",
+        "EXTERNAL",
+        "EXTERNAL",
+        "UNKNOWN",
+        "",
+        "EXTERNAL",
+        "LCD-PW-A01 MATI",
+    ]
+    assert detail_df["repair_comment"].tolist() == [
+        "RESOLDER",
+        "RESOLDER",
+        "RESOLDER",
+        "OTHER",
+        "RESOLDER",
+        "",
+        "CHECK RESOLDER UNIT",
+    ]
+
+
 def test_run_pipeline_supports_lookup_for_defect_category_from_action(app_paths):
     source_path = app_paths.project_root / "source.csv"
     pd.DataFrame(

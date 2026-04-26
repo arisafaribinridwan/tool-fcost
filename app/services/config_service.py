@@ -591,8 +591,22 @@ def _validate_step_recipe_payload(payload: dict, errors: list[str]) -> None:
                 else:
                     errors.append(f"{path}.master harus berupa object.")
                 matching = step.get("matching")
-                if matching is not None and not isinstance(matching, dict):
-                    errors.append(f"{path}.matching harus berupa object jika diisi.")
+                if matching is not None:
+                    if not isinstance(matching, dict):
+                        errors.append(f"{path}.matching harus berupa object jika diisi.")
+                    else:
+                        if "alias_separator" in matching:
+                            alias_separator = matching.get("alias_separator")
+                            if not isinstance(alias_separator, str) or not alias_separator:
+                                errors.append(
+                                    f"{path}.matching.alias_separator harus berupa string non-kosong."
+                                )
+                        if "match_mode" in matching:
+                            match_mode = matching.get("match_mode")
+                            if not isinstance(match_mode, str) or match_mode not in {"exact", "contains"}:
+                                errors.append(
+                                    f"{path}.matching.match_mode harus salah satu dari: contains, exact."
+                                )
                 continue
 
             if step_type == "lookup_rules":

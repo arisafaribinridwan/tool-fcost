@@ -161,6 +161,40 @@ steps:
     write_to: "result"
     mode: "append"
 
+  - id: "sub_2a_normalize_symptom_comment"
+    type: "lookup_exact_replace"
+    source_column: "symptom_comment"
+    target_column: "symptom_comment"
+    master:
+      file: "masters/master_table.xlsx"
+      sheet: "comment_synonyms"
+      key: "symptom_alias"
+      value: "symptom_canonical"
+    matching:
+      trim: true
+      case_sensitive: false
+      alias_separator: "|"
+      match_mode: "contains"
+    on_blank_source: ""
+    on_missing_match: "keep_original"
+
+  - id: "sub_2b_normalize_repair_comment"
+    type: "lookup_exact_replace"
+    source_column: "repair_comment"
+    target_column: "repair_comment"
+    master:
+      file: "masters/master_table.xlsx"
+      sheet: "comment_synonyms"
+      key: "repair_alias"
+      value: "repair_canonical"
+    matching:
+      trim: true
+      case_sensitive: false
+      alias_separator: "|"
+      match_mode: "contains"
+    on_blank_source: ""
+    on_missing_match: "keep_original"
+
   - id: "sub_3_add_section"
     type: "derive_column"
     target: "section"

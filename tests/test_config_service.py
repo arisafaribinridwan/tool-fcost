@@ -403,3 +403,138 @@ def test_validate_config_payload_rejects_invalid_lookup_rules_matching_schema():
     assert any(".matching.order harus salah satu" in item for item in errors)
     assert any(".normalize.trim harus berupa boolean." in item for item in errors)
     assert any(".matching.priority_column harus berupa string non-kosong." in item for item in errors)
+
+
+def test_validate_config_payload_accepts_lookup_exact_replace_alias_separator():
+    payload = {
+        "name": "Monthly Report Final Recipe",
+        "datasets": {
+            "working_dataset": "result",
+            "canonical_columns": ["symptom_comment"],
+        },
+        "steps": [
+            {
+                "id": "sub_2a_normalize_symptom_comment",
+                "type": "lookup_exact_replace",
+                "source_column": "symptom_comment",
+                "target_column": "symptom_comment",
+                "master": {
+                    "file": "masters/master_table.xlsx",
+                    "sheet": "comment_synonyms",
+                    "key": "symptom_alias",
+                    "value": "symptom_canonical",
+                },
+                "matching": {
+                    "trim": True,
+                    "case_sensitive": False,
+                    "alias_separator": "|",
+                },
+                "on_missing_match": "keep_original",
+            }
+        ],
+        "outputs": [{"sheet_name": "result", "columns": ["symptom_comment"]}],
+    }
+
+    assert validate_config_payload(payload) == ()
+
+
+def test_validate_config_payload_rejects_lookup_exact_replace_alias_separator_non_string():
+    payload = {
+        "name": "Monthly Report Final Recipe",
+        "datasets": {
+            "working_dataset": "result",
+            "canonical_columns": ["symptom_comment"],
+        },
+        "steps": [
+            {
+                "id": "sub_2a_normalize_symptom_comment",
+                "type": "lookup_exact_replace",
+                "source_column": "symptom_comment",
+                "target_column": "symptom_comment",
+                "master": {
+                    "file": "masters/master_table.xlsx",
+                    "sheet": "comment_synonyms",
+                    "key": "symptom_alias",
+                    "value": "symptom_canonical",
+                },
+                "matching": {
+                    "trim": True,
+                    "case_sensitive": False,
+                    "alias_separator": 1,
+                },
+                "on_missing_match": "keep_original",
+            }
+        ],
+        "outputs": [{"sheet_name": "result", "columns": ["symptom_comment"]}],
+    }
+
+    errors = validate_config_payload(payload)
+    assert any(".matching.alias_separator harus berupa string non-kosong." in item for item in errors)
+
+
+def test_validate_config_payload_accepts_lookup_exact_replace_match_mode_contains():
+    payload = {
+        "name": "Monthly Report Final Recipe",
+        "datasets": {
+            "working_dataset": "result",
+            "canonical_columns": ["symptom_comment"],
+        },
+        "steps": [
+            {
+                "id": "sub_2a_normalize_symptom_comment",
+                "type": "lookup_exact_replace",
+                "source_column": "symptom_comment",
+                "target_column": "symptom_comment",
+                "master": {
+                    "file": "masters/master_table.xlsx",
+                    "sheet": "comment_synonyms",
+                    "key": "symptom_alias",
+                    "value": "symptom_canonical",
+                },
+                "matching": {
+                    "trim": True,
+                    "case_sensitive": False,
+                    "alias_separator": "|",
+                    "match_mode": "contains",
+                },
+                "on_missing_match": "keep_original",
+            }
+        ],
+        "outputs": [{"sheet_name": "result", "columns": ["symptom_comment"]}],
+    }
+
+    assert validate_config_payload(payload) == ()
+
+
+def test_validate_config_payload_rejects_lookup_exact_replace_match_mode_invalid():
+    payload = {
+        "name": "Monthly Report Final Recipe",
+        "datasets": {
+            "working_dataset": "result",
+            "canonical_columns": ["symptom_comment"],
+        },
+        "steps": [
+            {
+                "id": "sub_2a_normalize_symptom_comment",
+                "type": "lookup_exact_replace",
+                "source_column": "symptom_comment",
+                "target_column": "symptom_comment",
+                "master": {
+                    "file": "masters/master_table.xlsx",
+                    "sheet": "comment_synonyms",
+                    "key": "symptom_alias",
+                    "value": "symptom_canonical",
+                },
+                "matching": {
+                    "trim": True,
+                    "case_sensitive": False,
+                    "match_mode": "substring",
+                },
+                "on_missing_match": "keep_original",
+            }
+        ],
+        "outputs": [{"sheet_name": "result", "columns": ["symptom_comment"]}],
+    }
+
+    errors = validate_config_payload(payload)
+    assert any(".matching.match_mode harus salah satu dari: contains, exact." in item for item in errors)
