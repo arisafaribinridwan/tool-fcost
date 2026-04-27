@@ -62,7 +62,7 @@ Ini menunjukkan bahwa master `defect_category.csv` belum lengkap untuk semua act
 
 ## Analisis per lapisan engine
 
-### A. Lapisan normalisasi comment (`comment_synonyms`)
+### A. Lapisan normalisasi comment (`comment_synonyms`) - DONE
 
 Tahap ini adalah titik ungkit terbesar karena memperbaiki dua engine sekaligus: symptom dan action. Saat ini isinya sudah menangkap banyak typo dan variasi lapangan seperti `STANBY`, `RESOLDRING`, `SOFTWERE`, `UPGARDE`, dan sebagainya. Ini sudah bagus.
 
@@ -70,7 +70,7 @@ Tetapi masih ada kelemahan struktural. Master saat ini mencampur typo correction
 
 Untuk LCD SEID, kualitas tahap ini sangat menentukan karena banyak symptom comment masih membawa prefix kode, format separator campuran, dan frasa tambahan yang tidak esensial. Semakin bersih comment pada tahap ini, semakin sederhana rule symptom dan action yang dibutuhkan.
 
-### B. Lapisan lookup part (`partlist`)
+### B. Lapisan lookup part (`partlist`) - DONE
 
 `partlist.csv` berisi 1833 row dan secara volume cukup besar. Namun hasil audit memperlihatkan hampir 40 persen output LCD SEID masih tidak mendapatkan `part_name`. Itu berarti masalahnya bukan semata jumlah isi master, melainkan ada mismatch antara kode `part_used` di source dan key yang ada di master.
 
@@ -100,7 +100,7 @@ Master ini belum sepenuhnya mengikuti semua action yang sudah dihasilkan engine.
 
 ## Daftar improvement yang direkomendasikan
 
-### Prioritas 1: Tingkatkan kualitas `comment_synonyms`
+### Prioritas 1: Tingkatkan kualitas `comment_synonyms`  - DONE
 
 Perluasan dan pembersihan master ini memberi dampak terbesar dan tercepat. Fokusnya adalah menambah normalisasi untuk pattern komentar LCD SEID yang sering muncul, terutama kode symptom berprefix seperti `LCD-PIC-C01`, `LCD-PW-A01`, `LCD-PNL-L04A`, `LCD-BRD-J02`, `LCD-CNCT-F21`, dan `LCD-OTHR-Z99`. Tujuannya bukan menghapus informasi penting, tetapi mengurangi variasi penulisan yang sebetulnya mengarah ke konsep yang sama.
 
@@ -108,7 +108,7 @@ Prioritas tambahan adalah merapikan separator campuran seperti slash, hyphen, da
 
 Yang juga penting adalah meninjau alias yang terlalu ambigu. Alias yang terlalu pendek atau terlalu luas sebaiknya dipakai hati-hati agar tidak mengubah makna komentar secara berlebihan.
 
-### Prioritas 2: Audit dan tingkatkan coverage `partlist`
+### Prioritas 2: Audit dan tingkatkan coverage `partlist` - DONE
 
 Fokus utama di sini adalah menurunkan 898 row `part_name` kosong. Langkah praktisnya adalah mengambil daftar `part_used` yang gagal lookup dari output LCD SEID, lalu mengelompokkan penyebabnya. Dari pengalaman pola seperti ini biasanya terbagi menjadi beberapa jenis: part code valid tetapi belum ada di master, part code gabungan dalam satu sel, part field berisi teks bebas, dan format part yang perlu trimming atau splitting.
 
