@@ -534,6 +534,37 @@ def _replace_exact_keys_in_text(source_text: str, lookup_map: dict[str, object],
     return pattern.sub(_replacement, source_text)
 
 
+def _filter_lookup_exact_master(master_df: pd.DataFrame, master_cfg: dict, step_id: str) -> pd.DataFrame:
+    filter_cfg = master_cfg.get("filter")
+    if filter_cfg is None:
+        return master_df
+    if not isinstance(filter_cfg, dict):
+        raise ValueError(
+            f"Step '{step_id}' gagal, master.filter harus berupa object."
+        )
+
+    scope_in = filter_cfg.get("scope_in")
+    if scope_in is None:
+        return master_df
+    if not isinstance(scope_in, list) or len(scope_in) == 0 or not all(
+        isinstance(item, str) and item.strip() for item in scope_in
+    ):
+        raise ValueError(
+            f"Step '{step_id}' gagal, master.filter.scope_in harus berupa list string non-kosong."
+        )
+
+    scope_column = "scope"
+    if scope_column not in master_df.columns:
+        raise ValueError(
+            f"Step '{step_id}' gagal, kolom master '{scope_column}' tidak ditemukan untuk filter scope_in."
+        )
+
+    allowed_scopes = {_normalize_text(item, case_sensitive=False) for item in scope_in}
+    return master_df[
+        master_df[scope_column].map(lambda value: _normalize_text(value, case_sensitive=False)).isin(allowed_scopes)
+    ].reset_index(drop=True)
+
+
 def _apply_lookup_exact_step(data_df: pd.DataFrame, step_cfg: dict, context: _RecipeContext, log: LogFn) -> pd.DataFrame:
     source_column = str(step_cfg["source_column"])
     target_column = str(step_cfg["target_column"])
@@ -555,6 +586,7 @@ def _apply_lookup_exact_step(data_df: pd.DataFrame, step_cfg: dict, context: _Re
         )
 
     master_df = context.load_master_sheet(str(master_cfg["file"]), str(master_cfg["sheet"]))
+    master_df = _filter_lookup_exact_master(master_df, master_cfg, str(step_cfg["id"]))
     key_column = str(master_cfg["key"])
     value_column = str(master_cfg["value"])
     if key_column not in master_df.columns or value_column not in master_df.columns:

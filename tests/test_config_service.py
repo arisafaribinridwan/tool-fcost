@@ -421,8 +421,8 @@ def test_validate_config_payload_accepts_lookup_exact_replace_alias_separator():
                 "master": {
                     "file": "masters/master_table.xlsx",
                     "sheet": "comment_synonyms",
-                    "key": "symptom_alias",
-                    "value": "symptom_canonical",
+                    "key": "alias",
+                    "value": "canonical",
                 },
                 "matching": {
                     "trim": True,
@@ -454,8 +454,8 @@ def test_validate_config_payload_rejects_lookup_exact_replace_alias_separator_no
                 "master": {
                     "file": "masters/master_table.xlsx",
                     "sheet": "comment_synonyms",
-                    "key": "symptom_alias",
-                    "value": "symptom_canonical",
+                    "key": "alias",
+                    "value": "canonical",
                 },
                 "matching": {
                     "trim": True,
@@ -488,8 +488,8 @@ def test_validate_config_payload_accepts_lookup_exact_replace_match_mode_contain
                 "master": {
                     "file": "masters/master_table.xlsx",
                     "sheet": "comment_synonyms",
-                    "key": "symptom_alias",
-                    "value": "symptom_canonical",
+                    "key": "alias",
+                    "value": "canonical",
                 },
                 "matching": {
                     "trim": True,
@@ -522,8 +522,8 @@ def test_validate_config_payload_rejects_lookup_exact_replace_match_mode_invalid
                 "master": {
                     "file": "masters/master_table.xlsx",
                     "sheet": "comment_synonyms",
-                    "key": "symptom_alias",
-                    "value": "symptom_canonical",
+                    "key": "alias",
+                    "value": "canonical",
                 },
                 "matching": {
                     "trim": True,
@@ -538,3 +538,78 @@ def test_validate_config_payload_rejects_lookup_exact_replace_match_mode_invalid
 
     errors = validate_config_payload(payload)
     assert any(".matching.match_mode harus salah satu dari: contains, exact." in item for item in errors)
+
+
+def test_validate_config_payload_accepts_lookup_exact_replace_master_filter_scope_in():
+    payload = {
+        "name": "Monthly Report Final Recipe",
+        "datasets": {
+            "working_dataset": "result",
+            "canonical_columns": ["symptom_comment"],
+        },
+        "steps": [
+            {
+                "id": "sub_2a_normalize_symptom_comment",
+                "type": "lookup_exact_replace",
+                "source_column": "symptom_comment",
+                "target_column": "symptom_comment",
+                "master": {
+                    "file": "masters/master_table.xlsx",
+                    "sheet": "comment_synonyms",
+                    "key": "alias",
+                    "value": "canonical",
+                    "filter": {
+                        "scope_in": ["symptom", "both"],
+                    },
+                },
+                "matching": {
+                    "trim": True,
+                    "case_sensitive": False,
+                    "alias_separator": "|",
+                    "match_mode": "contains",
+                },
+                "on_missing_match": "keep_original",
+            }
+        ],
+        "outputs": [{"sheet_name": "result", "columns": ["symptom_comment"]}],
+    }
+
+    assert validate_config_payload(payload) == ()
+
+
+def test_validate_config_payload_rejects_lookup_exact_replace_master_filter_scope_in_invalid():
+    payload = {
+        "name": "Monthly Report Final Recipe",
+        "datasets": {
+            "working_dataset": "result",
+            "canonical_columns": ["symptom_comment"],
+        },
+        "steps": [
+            {
+                "id": "sub_2a_normalize_symptom_comment",
+                "type": "lookup_exact_replace",
+                "source_column": "symptom_comment",
+                "target_column": "symptom_comment",
+                "master": {
+                    "file": "masters/master_table.xlsx",
+                    "sheet": "comment_synonyms",
+                    "key": "alias",
+                    "value": "canonical",
+                    "filter": {
+                        "scope_in": "symptom",
+                    },
+                },
+                "matching": {
+                    "trim": True,
+                    "case_sensitive": False,
+                    "alias_separator": "|",
+                    "match_mode": "contains",
+                },
+                "on_missing_match": "keep_original",
+            }
+        ],
+        "outputs": [{"sheet_name": "result", "columns": ["symptom_comment"]}],
+    }
+
+    errors = validate_config_payload(payload)
+    assert any(".master.filter.scope_in harus berupa list string non-kosong." in item for item in errors)

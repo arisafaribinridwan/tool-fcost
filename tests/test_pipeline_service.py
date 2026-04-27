@@ -864,6 +864,8 @@ def test_run_pipeline_lookup_exact_replace_supports_alias_separator_or(app_paths
             {"symptom_comment": "", "repair_comment": "RESOLDERING"},
             {"symptom_comment": "EXS", "repair_comment": ""},
             {"symptom_comment": "LCD-PW-A01 MT", "repair_comment": "CHECK RESOLDER UNIT"},
+            {"symptom_comment": "RESOLDERING", "repair_comment": "EXS"},
+            {"symptom_comment": "MT", "repair_comment": "MT"},
         ]
     ).to_excel(source_path, index=False, sheet_name="Data")
 
@@ -872,16 +874,19 @@ def test_run_pipeline_lookup_exact_replace_supports_alias_separator_or(app_paths
         pd.DataFrame(
             [
                 {
-                    "symptom_alias": "EXS|EXTRNAL|EXTERNAL",
-                    "symptom_canonical": "EXTERNAL",
-                    "repair_alias": "RESOLDERING|RESOLDRING|RESOLDER",
-                    "repair_canonical": "RESOLDER",
+                    "alias": "EXS|EXTRNAL|EXTERNAL",
+                    "canonical": "EXTERNAL",
+                    "scope": "symptom",
                 },
                 {
-                    "symptom_alias": "MT",
-                    "symptom_canonical": "MATI",
-                    "repair_alias": "",
-                    "repair_canonical": "",
+                    "alias": "RESOLDERING|RESOLDRING|RESOLDER",
+                    "canonical": "RESOLDER",
+                    "scope": "repair",
+                },
+                {
+                    "alias": "MT",
+                    "canonical": "MATI",
+                    "scope": "both",
                 },
             ]
         ).to_excel(writer, index=False, sheet_name="comment_synonyms")
@@ -921,8 +926,10 @@ def test_run_pipeline_lookup_exact_replace_supports_alias_separator_or(app_paths
                 "    master:",
                 '      file: "masters/master_table.xlsx"',
                 '      sheet: "comment_synonyms"',
-                '      key: "symptom_alias"',
-                '      value: "symptom_canonical"',
+                '      key: "alias"',
+                '      value: "canonical"',
+                "      filter:",
+                '        scope_in: ["symptom", "both"]',
                 "    matching:",
                 "      trim: true",
                 "      case_sensitive: false",
@@ -937,8 +944,10 @@ def test_run_pipeline_lookup_exact_replace_supports_alias_separator_or(app_paths
                 "    master:",
                 '      file: "masters/master_table.xlsx"',
                 '      sheet: "comment_synonyms"',
-                '      key: "repair_alias"',
-                '      value: "repair_canonical"',
+                '      key: "alias"',
+                '      value: "canonical"',
+                "      filter:",
+                '        scope_in: ["repair", "both"]',
                 "    matching:",
                 "      trim: true",
                 "      case_sensitive: false",
@@ -971,6 +980,8 @@ def test_run_pipeline_lookup_exact_replace_supports_alias_separator_or(app_paths
         "",
         "EXTERNAL",
         "LCD-PW-A01 MATI",
+        "RESOLDERING",
+        "MATI",
     ]
     assert detail_df["repair_comment"].tolist() == [
         "RESOLDER",
@@ -980,6 +991,8 @@ def test_run_pipeline_lookup_exact_replace_supports_alias_separator_or(app_paths
         "RESOLDER",
         "",
         "CHECK RESOLDER UNIT",
+        "EXS",
+        "MATI",
     ]
 
 
@@ -1364,6 +1377,15 @@ def test_run_pipeline_supports_monthly_step_recipe_end_to_end(app_paths):
         pd.DataFrame(
             [
                 {
+                    "alias": "EXTERNAL",
+                    "canonical": "EXTERNAL",
+                    "scope": "both",
+                }
+            ]
+        ).to_excel(writer, index=False, sheet_name="comment_synonyms")
+        pd.DataFrame(
+            [
+                {
                     "priority": 20,
                     "part_name": "PANEL",
                     "match_type": "contains",
@@ -1402,10 +1424,38 @@ def test_run_pipeline_supports_monthly_step_recipe_end_to_end(app_paths):
         )
         pd.DataFrame(
             [
-                {"part_name": "PANEL", "repair_comment": "*", "action": "replace_panel"},
-                {"part_name": "TAPE", "repair_comment": "*", "action": "cancel"},
-                {"part_name": "", "repair_comment": "*factor", "action": "factory_reset"},
-                {"part_name": "POWER_UNIT", "repair_comment": "*", "action": "replace_power_unit"},
+                {
+                    "priority": 10,
+                    "job_sheet_section": 1,
+                    "part_name": "PANEL",
+                    "symptom_comment": ".*",
+                    "repair_comment": ".*",
+                    "action": "replace_panel",
+                },
+                {
+                    "priority": 20,
+                    "job_sheet_section": 0,
+                    "part_name": "TAPE",
+                    "symptom_comment": ".*",
+                    "repair_comment": ".*",
+                    "action": "cancel",
+                },
+                {
+                    "priority": 30,
+                    "job_sheet_section": 1,
+                    "part_name": "MAIN_UNIT",
+                    "symptom_comment": ".*",
+                    "repair_comment": ".*factor.*",
+                    "action": "factory_reset",
+                },
+                {
+                    "priority": 40,
+                    "job_sheet_section": 0,
+                    "part_name": "POWER_UNIT",
+                    "symptom_comment": ".*",
+                    "repair_comment": ".*",
+                    "action": "replace_power_unit",
+                },
             ]
         ).to_excel(writer, index=False, sheet_name="action")
         pd.DataFrame(
@@ -1434,9 +1484,9 @@ def test_run_pipeline_supports_monthly_step_recipe_end_to_end(app_paths):
         ).to_excel(writer, index=False, sheet_name="defect_category")
 
     recipe_path = app_paths.configs_dir / "monthly-report-recipe.yaml"
-    recipe_content = Path("docs/done/monthly-report-recipe.yaml").read_text(encoding="utf-8")
-    recipe_content = recipe_content.replace('master: "symptom_comment"', 'master: "pattern"')
-    recipe_content = recipe_content.replace('mode: "contains"', 'mode: "regex"', 1)
+    recipe_content = Path("configs/monthly-report-recipe.yaml").read_text(encoding="utf-8")
+    recipe_content = recipe_content.replace('master: "symptom_comment"', 'master: "pattern"', 1)
+    recipe_content = recipe_content.replace('          mode: "contains"', '          mode: "regex"', 1)
     recipe_path.write_text(recipe_content, encoding="utf-8")
 
     logs: list[str] = []

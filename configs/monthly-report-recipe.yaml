@@ -168,8 +168,10 @@ steps:
     master:
       file: "masters/master_table.xlsx"
       sheet: "comment_synonyms"
-      key: "symptom_alias"
-      value: "symptom_canonical"
+      key: "alias"
+      value: "canonical"
+      filter:
+        scope_in: ["symptom", "both"]
     matching:
       trim: true
       case_sensitive: false
@@ -185,8 +187,10 @@ steps:
     master:
       file: "masters/master_table.xlsx"
       sheet: "comment_synonyms"
-      key: "repair_alias"
-      value: "repair_canonical"
+      key: "alias"
+      value: "canonical"
+      filter:
+        scope_in: ["repair", "both"]
     matching:
       trim: true
       case_sensitive: false
