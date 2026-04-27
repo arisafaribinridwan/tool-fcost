@@ -588,6 +588,24 @@ def _validate_step_recipe_payload(payload: dict, errors: list[str]) -> None:
                             path=f"{path}.master.file",
                             errors=errors,
                         )
+                    if "filter" in master_cfg:
+                        filter_cfg = master_cfg.get("filter")
+                        if not isinstance(filter_cfg, dict):
+                            errors.append(f"{path}.master.filter harus berupa object.")
+                        else:
+                            unknown_filter_keys = sorted(set(filter_cfg) - {"scope_in"})
+                            if unknown_filter_keys:
+                                errors.append(
+                                    f"{path}.master.filter memiliki field tidak didukung: {', '.join(unknown_filter_keys)}."
+                                )
+                            if "scope_in" in filter_cfg:
+                                scope_in = filter_cfg.get("scope_in")
+                                if not isinstance(scope_in, list) or len(scope_in) == 0 or not all(
+                                    isinstance(item, str) and item.strip() for item in scope_in
+                                ):
+                                    errors.append(
+                                        f"{path}.master.filter.scope_in harus berupa list string non-kosong."
+                                    )
                 else:
                     errors.append(f"{path}.master harus berupa object.")
                 matching = step.get("matching")

@@ -1,0 +1,9 @@
+jobs:
+- id: fcost-lcd-import
+  label: FCOST LCD IMPORT
+  config_file: monthly-report-recipe-lcd-import.yaml
+  enabled: true
+- id: fcost-lcd-seid
+  label: FCOST LCD SEID
+  config_file: monthly-report-recipe.yaml
+  enabled: true
