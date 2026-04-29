@@ -2,6 +2,10 @@ name: "Monthly Report Final Recipe"
 version: 1
 status: "canonical_draft_for_recipe_engine"
 
+ui:
+  period_prompt:
+    enabled: true
+
 source_documents:
   - "docs/batch1-finalization.md"
   - "docs/batch2-finalization.md"

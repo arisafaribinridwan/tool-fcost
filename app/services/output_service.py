@@ -122,6 +122,7 @@ def write_output_workbook(
     header_cfg: dict,
     styling_cfg: dict,
     source_df: pd.DataFrame,
+    period_text_override: str | None = None,
 ) -> None:
     try:
         output_relative = output_path.resolve().relative_to(outputs_dir.resolve())
@@ -140,7 +141,7 @@ def write_output_workbook(
         raise ValueError(f"Path output tidak valid: {exc}") from exc
 
     safe_output_path.parent.mkdir(parents=True, exist_ok=True)
-    period_text = _build_period_text(source_df, header_cfg)
+    period_text = period_text_override or _build_period_text(source_df, header_cfg)
     used_sheet_names: set[str] = set()
 
     with pd.ExcelWriter(safe_output_path, engine="openpyxl") as writer:

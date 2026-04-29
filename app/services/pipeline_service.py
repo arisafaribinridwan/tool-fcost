@@ -43,6 +43,7 @@ def run_pipeline(
     config_path: Path,
     log: LogFn,
     progress: ProgressFn | None = None,
+    period_text_override: str | None = None,
 ) -> PipelineResult:
     started_at = perf_counter()
 
@@ -182,6 +183,7 @@ def run_pipeline(
             header_cfg=config.get("header", {}),
             styling_cfg=config.get("styling", {}),
             source_df=source_df,
+            period_text_override=period_text_override,
         )
     except Exception as exc:
         raise PipelineError(f"Gagal menulis file output: {exc}") from exc
