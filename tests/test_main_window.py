@@ -4,6 +4,8 @@ from pathlib import Path
 from queue import Queue
 from types import SimpleNamespace
 
+import pytest
+
 from app.services import PreflightFinding, PreflightResult
 from app.ui.main_window import PIPELINE_STEP_ORDER, DesktopApp
 
@@ -66,6 +68,45 @@ class DummyThread:
 
 def _make_job(config_path: Path | None = None):
     return SimpleNamespace(config_path=config_path, config_file="config.yaml", is_valid=True)
+
+
+def test_parse_period_text_override_accepts_yyyymm():
+    assert DesktopApp._parse_period_text_override("202603") == "Periode: March 2026"
+
+
+def test_parse_period_text_override_treats_blank_as_automatic():
+    assert DesktopApp._parse_period_text_override("") is None
+    assert DesktopApp._parse_period_text_override(None) is None
+
+
+@pytest.mark.parametrize("raw_value", ["202613", "202600", "03/2026", "2026-03"])
+def test_parse_period_text_override_rejects_invalid_format(raw_value):
+    with pytest.raises(ValueError):
+        DesktopApp._parse_period_text_override(raw_value)
+
+
+def test_should_prompt_period_reads_enabled_flag(monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    monkeypatch.setattr(
+        "app.ui.main_window.load_config_payload",
+        lambda _path: {"ui": {"period_prompt": {"enabled": True}}},
+    )
+
+    assert DesktopApp._should_prompt_period(app, Path("renamed.yaml")) is True
+
+
+def test_should_prompt_period_ignores_missing_or_non_true_flag(monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    monkeypatch.setattr(
+        "app.ui.main_window.load_config_payload",
+        lambda _path: {"ui": {"period_prompt": {"enabled": "true"}}},
+    )
+
+    assert DesktopApp._should_prompt_period(app, Path("config.yaml")) is False
+
+    monkeypatch.setattr("app.ui.main_window.load_config_payload", lambda _path: {})
+
+    assert DesktopApp._should_prompt_period(app, Path("config.yaml")) is False
 
 
 def test_selected_job_returns_selected_record():
@@ -172,7 +213,10 @@ def test_run_preflight_handles_error(monkeypatch):
     shown: list[tuple[str, str]] = []
 
     monkeypatch.setattr("app.ui.main_window.run_preflight", lambda **kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
-    monkeypatch.setattr("app.ui.main_window.messagebox.showerror", lambda title, message: shown.append((title, message)))
+    monkeypatch.setattr(
+        "app.ui.main_window.messagebox.showerror",
+        lambda title, message: shown.append((title, message)),
+    )
 
     DesktopApp._run_preflight(app)
 
@@ -318,6 +362,60 @@ def test_add_log_event_requires_valid_job(monkeypatch):
     assert shown == [("Input belum lengkap", "Pilih pekerjaan valid terlebih dahulu.")]
 
 
+def test_add_log_event_does_not_prompt_period_without_enabled_flag(monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    app._worker_thread = None
+    app.selected_source_path = Path("source.csv")
+    app.paths = SimpleNamespace(project_root=Path("."))
+    app._selected_job = lambda: _make_job(Path("cfg.yaml"))
+    app._set_execute_ready = lambda _value: None
+    app.add_log = lambda _message: None
+    app.after = lambda _delay, _callback: None
+    app._should_prompt_period = lambda _path: False
+    app._prompt_period_text_override = lambda: (_ for _ in ()).throw(AssertionError("unexpected prompt"))
+    thread_args: list[tuple[object, ...]] = []
+
+    class DummyWorkerThread:
+        def __init__(self, target, args, daemon):
+            thread_args.append(args)
+
+        def start(self):
+            pass
+
+    monkeypatch.setattr("app.ui.main_window.Thread", DummyWorkerThread)
+
+    DesktopApp.add_log_event(app)
+
+    assert thread_args[0][-1] is None
+
+
+def test_add_log_event_passes_manual_period_when_enabled(monkeypatch):
+    app = DesktopApp.__new__(DesktopApp)
+    app._worker_thread = None
+    app.selected_source_path = Path("source.csv")
+    app.paths = SimpleNamespace(project_root=Path("."))
+    app._selected_job = lambda: _make_job(Path("cfg.yaml"))
+    app._set_execute_ready = lambda _value: None
+    app.add_log = lambda _message: None
+    app.after = lambda _delay, _callback: None
+    app._should_prompt_period = lambda _path: True
+    app._prompt_period_text_override = lambda: "Periode: March 2026"
+    thread_args: list[tuple[object, ...]] = []
+
+    class DummyWorkerThread:
+        def __init__(self, target, args, daemon):
+            thread_args.append(args)
+
+        def start(self):
+            pass
+
+    monkeypatch.setattr("app.ui.main_window.Thread", DummyWorkerThread)
+
+    DesktopApp.add_log_event(app)
+
+    assert thread_args[0][-1] == "Periode: March 2026"
+
+
 def test_poll_worker_events_handles_success_and_done():
     app = DesktopApp.__new__(DesktopApp)
     app.paths = SimpleNamespace(project_root=Path("."))
@@ -354,7 +452,10 @@ def test_poll_worker_events_handles_error_and_done(monkeypatch):
     app._set_execute_ready = lambda _value: None
     shown: list[tuple[str, str]] = []
 
-    monkeypatch.setattr("app.ui.main_window.messagebox.showerror", lambda title, message: shown.append((title, message)))
+    monkeypatch.setattr(
+        "app.ui.main_window.messagebox.showerror",
+        lambda title, message: shown.append((title, message)),
+    )
 
     DesktopApp._poll_worker_events(app)
 

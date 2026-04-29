@@ -17,6 +17,7 @@ from app.services import (
     JobProfileSummary,
     clear_session_state,
     discover_job_profiles,
+    load_config_payload,
     run_pipeline,
     run_preflight,
     validate_source_file,
@@ -37,6 +38,21 @@ PIPELINE_STEP_ORDER = (
     ("transform", "Transform"),
     ("build_output", "Build output"),
     ("write_output", "Write output"),
+)
+
+MONTH_NAMES = (
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
 )
 
 
@@ -546,6 +562,44 @@ class DesktopApp(ctk.CTk):
         self.textbox.insert("end", f"[{timestamp}] {sanitized}\n")
         self.textbox.see("end")
 
+    def _should_prompt_period(self, config_path: Path) -> bool:
+        config = load_config_payload(config_path)
+        ui_cfg = config.get("ui")
+        if not isinstance(ui_cfg, dict):
+            return False
+        period_prompt_cfg = ui_cfg.get("period_prompt")
+        return isinstance(period_prompt_cfg, dict) and period_prompt_cfg.get("enabled") is True
+
+    @staticmethod
+    def _parse_period_text_override(raw_value: str | None) -> str | None:
+        value = (raw_value or "").strip()
+        if not value:
+            return None
+        if len(value) != 6 or not value.isdigit():
+            raise ValueError("Format periode wajib YYYYMM, contoh 202603.")
+
+        month = int(value[4:6])
+        if month < 1 or month > 12:
+            raise ValueError("Bulan periode wajib 01 sampai 12.")
+
+        return f"Periode: {MONTH_NAMES[month - 1]} {value[:4]}"
+
+    def _prompt_period_text_override(self) -> str | None:
+        while True:
+            dialog = ctk.CTkInputDialog(
+                title="Input Periode",
+                text=(
+                    "Masukkan periode laporan dengan format YYYYMM. "
+                    "Contoh: 202603 untuk March 2026. "
+                    "Kosongkan untuk otomatis dari source."
+                ),
+            )
+            raw_value = dialog.get_input()
+            try:
+                return self._parse_period_text_override(raw_value)
+            except ValueError as exc:
+                messagebox.showwarning("Periode tidak valid", str(exc))
+
     def add_log_event(self) -> None:
         if self._worker_thread is not None and self._worker_thread.is_alive():
             self.add_log("Proses masih berjalan.")
@@ -559,12 +613,28 @@ class DesktopApp(ctk.CTk):
             messagebox.showwarning("Input belum lengkap", "Pilih pekerjaan valid terlebih dahulu.")
             return
 
+        period_text_override = None
+        try:
+            if self._should_prompt_period(job.config_path):
+                period_text_override = self._prompt_period_text_override()
+        except ValueError as exc:
+            messagebox.showerror(
+                "Config tidak valid",
+                sanitize_exception_message(str(exc), project_root=self.paths.project_root),
+            )
+            return
+
         self._set_execute_ready(False)
         self.add_log("Memulai proses eksekusi...")
         self._worker_queue = Queue()
         self._worker_thread = Thread(
             target=self._run_pipeline_worker,
-            args=(self.selected_source_path, job.config_path, self._worker_queue),
+            args=(
+                self.selected_source_path,
+                job.config_path,
+                self._worker_queue,
+                period_text_override,
+            ),
             daemon=True,
         )
         self._worker_thread.start()
@@ -575,6 +645,7 @@ class DesktopApp(ctk.CTk):
         source_path: Path,
         config_path: Path,
         event_queue: Queue[tuple[str, object]],
+        period_text_override: str | None = None,
     ) -> None:
         def worker_log(message: str) -> None:
             event_queue.put(("log", message))
@@ -585,6 +656,7 @@ class DesktopApp(ctk.CTk):
                 source_path=source_path,
                 config_path=config_path,
                 log=worker_log,
+                period_text_override=period_text_override,
             )
             event_queue.put(("success", result))
         except Exception as exc:

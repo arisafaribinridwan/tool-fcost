@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from openpyxl import load_workbook
 import pandas as pd
 import pytest
 
@@ -178,6 +179,71 @@ def test_run_pipeline_happy_path_csv_with_master_and_pivot(app_paths):
     assert len(detail_df) == 3
     assert summary_df.loc[summary_df["kategori"] == "Cat 1", "qty"].iloc[0] == 13
     assert summary_df.loc[summary_df["kategori"] == "Cat 2", "qty"].iloc[0] == 5
+
+
+def test_run_pipeline_writes_manual_period_override(app_paths):
+    source_path = app_paths.project_root / "source.csv"
+    pd.DataFrame([{"qty": 1}]).to_csv(source_path, index=False)
+
+    config_path = app_paths.configs_dir / "manual_period.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Manual Period"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Manual Period"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "qty"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _message: None,
+        period_text_override="Periode: March 2026",
+    )
+
+    workbook = load_workbook(result.output_path, read_only=True)
+    assert workbook["Detail"]["A2"].value == "Periode: March 2026"
+
+
+def test_run_pipeline_without_period_override_keeps_fallback(app_paths):
+    source_path = app_paths.project_root / "source.csv"
+    pd.DataFrame([{"qty": 1}]).to_csv(source_path, index=False)
+
+    config_path = app_paths.configs_dir / "fallback_period.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Fallback Period"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Fallback Period"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "qty"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _message: None,
+    )
+
+    workbook = load_workbook(result.output_path, read_only=True)
+    assert workbook["Detail"]["A2"].value == "Periode: -"
 
 
 def test_run_pipeline_skips_copy_when_source_already_in_uploads_subfolder(app_paths):
