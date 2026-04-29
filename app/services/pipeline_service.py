@@ -44,6 +44,7 @@ def run_pipeline(
     log: LogFn,
     progress: ProgressFn | None = None,
     period_text_override: str | None = None,
+    period_keydate_override: str | None = None,
 ) -> PipelineResult:
     started_at = perf_counter()
 
@@ -100,6 +101,7 @@ def run_pipeline(
                 project_root=paths.project_root,
                 masters_dir=paths.masters_dir,
                 log=log,
+                runtime_values={"period_keydate": period_keydate_override},
             )
         except ValueError as exc:
             raise PipelineError(str(exc)) from exc

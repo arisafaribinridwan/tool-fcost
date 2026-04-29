@@ -79,10 +79,25 @@ def test_parse_period_text_override_treats_blank_as_automatic():
     assert DesktopApp._parse_period_text_override(None) is None
 
 
+def test_parse_period_keydate_override_accepts_yyyymm():
+    assert DesktopApp._parse_period_keydate_override("202603") == "202603"
+
+
+def test_parse_period_keydate_override_treats_blank_as_automatic():
+    assert DesktopApp._parse_period_keydate_override("") is None
+    assert DesktopApp._parse_period_keydate_override(None) is None
+
+
 @pytest.mark.parametrize("raw_value", ["202613", "202600", "03/2026", "2026-03"])
 def test_parse_period_text_override_rejects_invalid_format(raw_value):
     with pytest.raises(ValueError):
         DesktopApp._parse_period_text_override(raw_value)
+
+
+@pytest.mark.parametrize("raw_value", ["202613", "202600", "03/2026", "2026-03"])
+def test_parse_period_keydate_override_rejects_invalid_format(raw_value):
+    with pytest.raises(ValueError):
+        DesktopApp._parse_period_keydate_override(raw_value)
 
 
 def test_should_prompt_period_reads_enabled_flag(monkeypatch):
@@ -372,7 +387,7 @@ def test_add_log_event_does_not_prompt_period_without_enabled_flag(monkeypatch):
     app.add_log = lambda _message: None
     app.after = lambda _delay, _callback: None
     app._should_prompt_period = lambda _path: False
-    app._prompt_period_text_override = lambda: (_ for _ in ()).throw(AssertionError("unexpected prompt"))
+    app._prompt_period_override = lambda: (_ for _ in ()).throw(AssertionError("unexpected prompt"))
     thread_args: list[tuple[object, ...]] = []
 
     class DummyWorkerThread:
@@ -386,6 +401,7 @@ def test_add_log_event_does_not_prompt_period_without_enabled_flag(monkeypatch):
 
     DesktopApp.add_log_event(app)
 
+    assert thread_args[0][-2] is None
     assert thread_args[0][-1] is None
 
 
@@ -399,7 +415,7 @@ def test_add_log_event_passes_manual_period_when_enabled(monkeypatch):
     app.add_log = lambda _message: None
     app.after = lambda _delay, _callback: None
     app._should_prompt_period = lambda _path: True
-    app._prompt_period_text_override = lambda: "Periode: March 2026"
+    app._prompt_period_override = lambda: ("Periode: March 2026", "202603")
     thread_args: list[tuple[object, ...]] = []
 
     class DummyWorkerThread:
@@ -413,7 +429,8 @@ def test_add_log_event_passes_manual_period_when_enabled(monkeypatch):
 
     DesktopApp.add_log_event(app)
 
-    assert thread_args[0][-1] == "Periode: March 2026"
+    assert thread_args[0][-2] == "Periode: March 2026"
+    assert thread_args[0][-1] == "202603"
 
 
 def test_poll_worker_events_handles_success_and_done():

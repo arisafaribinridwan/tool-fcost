@@ -1561,6 +1561,7 @@ def test_run_pipeline_supports_monthly_step_recipe_end_to_end(app_paths):
         source_path=source_path,
         config_path=recipe_path,
         log=logs.append,
+        period_keydate_override="202603",
     )
 
     detail_df = pd.read_excel(
@@ -1597,6 +1598,7 @@ def test_run_pipeline_supports_monthly_step_recipe_end_to_end(app_paths):
     ]
     assert detail_df["defect_category"].tolist() == ["Defect", "N/A", "Software", "Defect"]
     assert detail_df["defect"].tolist() == ["Panel", "N/A", "Software", "Power"]
+    assert detail_df["keydate"].astype(str).tolist() == ["202603", "202603", "202603", "202603"]
     assert any("duplicate group rewrite" in item.lower() for item in logs)
 
 

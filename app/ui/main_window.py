@@ -584,7 +584,15 @@ class DesktopApp(ctk.CTk):
 
         return f"Periode: {MONTH_NAMES[month - 1]} {value[:4]}"
 
-    def _prompt_period_text_override(self) -> str | None:
+    @staticmethod
+    def _parse_period_keydate_override(raw_value: str | None) -> str | None:
+        value = (raw_value or "").strip()
+        if not value:
+            return None
+        DesktopApp._parse_period_text_override(value)
+        return value
+
+    def _prompt_period_override(self) -> tuple[str | None, str | None]:
         while True:
             dialog = ctk.CTkInputDialog(
                 title="Input Periode",
@@ -596,7 +604,10 @@ class DesktopApp(ctk.CTk):
             )
             raw_value = dialog.get_input()
             try:
-                return self._parse_period_text_override(raw_value)
+                return (
+                    self._parse_period_text_override(raw_value),
+                    self._parse_period_keydate_override(raw_value),
+                )
             except ValueError as exc:
                 messagebox.showwarning("Periode tidak valid", str(exc))
 
@@ -614,9 +625,10 @@ class DesktopApp(ctk.CTk):
             return
 
         period_text_override = None
+        period_keydate_override = None
         try:
             if self._should_prompt_period(job.config_path):
-                period_text_override = self._prompt_period_text_override()
+                period_text_override, period_keydate_override = self._prompt_period_override()
         except ValueError as exc:
             messagebox.showerror(
                 "Config tidak valid",
@@ -634,6 +646,7 @@ class DesktopApp(ctk.CTk):
                 job.config_path,
                 self._worker_queue,
                 period_text_override,
+                period_keydate_override,
             ),
             daemon=True,
         )
@@ -646,6 +659,7 @@ class DesktopApp(ctk.CTk):
         config_path: Path,
         event_queue: Queue[tuple[str, object]],
         period_text_override: str | None = None,
+        period_keydate_override: str | None = None,
     ) -> None:
         def worker_log(message: str) -> None:
             event_queue.put(("log", message))
@@ -657,6 +671,7 @@ class DesktopApp(ctk.CTk):
                 config_path=config_path,
                 log=worker_log,
                 period_text_override=period_text_override,
+                period_keydate_override=period_keydate_override,
             )
             event_queue.put(("success", result))
         except Exception as exc:

@@ -216,7 +216,12 @@ def _literal_or_series(value: object, index: pd.Index) -> pd.Series:
     return pd.Series(value, index=index, dtype="object")
 
 
-def _evaluate_expression(data_df: pd.DataFrame, expression_cfg: object, context: str) -> pd.Series:
+def _evaluate_expression(
+    data_df: pd.DataFrame,
+    expression_cfg: object,
+    context: str,
+    runtime_values: dict[str, object] | None = None,
+) -> pd.Series:
     if not isinstance(expression_cfg, dict):
         return _literal_or_series(expression_cfg, data_df.index)
 
@@ -224,6 +229,13 @@ def _evaluate_expression(data_df: pd.DataFrame, expression_cfg: object, context:
         raise ValueError(f"{context} harus memiliki tepat satu operator expression.")
 
     operator, payload = next(iter(expression_cfg.items()))
+
+    if operator == "runtime_value":
+        key = str(payload)
+        values = runtime_values or {}
+        if key not in values:
+            raise ValueError(f"{context} gagal, runtime value '{key}' tidak tersedia.")
+        return _literal_or_series(values[key], data_df.index)
 
     if operator == "substring":
         column = str(payload["column"])
@@ -254,8 +266,18 @@ def _evaluate_expression(data_df: pd.DataFrame, expression_cfg: object, context:
         return result
 
     if operator == "divide":
-        left = _evaluate_expression(data_df, payload["left"], f"{context} divide.left")
-        right = _evaluate_expression(data_df, payload["right"], f"{context} divide.right")
+        left = _evaluate_expression(
+            data_df,
+            payload["left"],
+            f"{context} divide.left",
+            runtime_values,
+        )
+        right = _evaluate_expression(
+            data_df,
+            payload["right"],
+            f"{context} divide.right",
+            runtime_values,
+        )
         left_numeric = pd.to_numeric(left, errors="coerce")
         right_numeric = pd.to_numeric(right, errors="coerce")
         zero_mask = right_numeric.eq(0)
@@ -264,7 +286,12 @@ def _evaluate_expression(data_df: pd.DataFrame, expression_cfg: object, context:
         return left_numeric / right_numeric
 
     if operator == "ceil":
-        value = _evaluate_expression(data_df, payload["value"], f"{context} ceil.value")
+        value = _evaluate_expression(
+            data_df,
+            payload["value"],
+            f"{context} ceil.value",
+            runtime_values,
+        )
         numeric = pd.to_numeric(value, errors="coerce")
         return numeric.map(lambda item: ceil(item) if pd.notna(item) else None)
 
@@ -286,6 +313,7 @@ def _evaluate_expression(data_df: pd.DataFrame, expression_cfg: object, context:
                     data_df,
                     item["else"],
                     f"{context} case[{idx}].else",
+                    runtime_values,
                 )
                 result.loc[remaining_mask] = else_series.loc[remaining_mask]
                 remaining_mask = pd.Series(False, index=data_df.index)
@@ -299,6 +327,7 @@ def _evaluate_expression(data_df: pd.DataFrame, expression_cfg: object, context:
                 data_df,
                 item["then"],
                 f"{context} case[{idx}].then",
+                runtime_values,
             )
             applied_mask = remaining_mask & condition_mask
             result.loc[applied_mask] = then_series.loc[applied_mask]
@@ -477,10 +506,20 @@ class _RecipeContext:
         return self._master_cache[cache_key].copy()
 
 
-def _apply_derive_column_step(data_df: pd.DataFrame, step_cfg: dict, log: LogFn) -> pd.DataFrame:
+def _apply_derive_column_step(
+    data_df: pd.DataFrame,
+    step_cfg: dict,
+    log: LogFn,
+    runtime_values: dict[str, object] | None = None,
+) -> pd.DataFrame:
     target = str(step_cfg["target"])
     result_df = data_df.copy()
-    result_series = _evaluate_expression(result_df, step_cfg["expression"], f"Step '{step_cfg['id']}'")
+    result_series = _evaluate_expression(
+        result_df,
+        step_cfg["expression"],
+        f"Step '{step_cfg['id']}'",
+        runtime_values,
+    )
     result_df[target] = result_series
     log(f"Step '{step_cfg['id']}' selesai: kolom '{target}' ditambahkan.")
     return result_df
@@ -938,6 +977,7 @@ def execute_step_recipe(
     project_root: Path,
     masters_dir: Path,
     log: LogFn,
+    runtime_values: dict[str, object] | None = None,
 ) -> RecipeExecutionResult:
     canonical_columns = [str(column) for column in recipe_cfg.get("datasets", {}).get("canonical_columns", [])]
     working_dataset = str(recipe_cfg.get("datasets", {}).get("working_dataset", "result"))
@@ -955,7 +995,12 @@ def execute_step_recipe(
 
         current_df = datasets[working_dataset]
         if step_type == "derive_column":
-            datasets[working_dataset] = _apply_derive_column_step(current_df, step_cfg, log)
+            datasets[working_dataset] = _apply_derive_column_step(
+                current_df,
+                step_cfg,
+                log,
+                runtime_values,
+            )
         elif step_type == "update_columns":
             datasets[working_dataset] = _apply_update_columns_step(current_df, step_cfg, log)
         elif step_type in {"lookup_exact", "lookup_exact_replace"}:

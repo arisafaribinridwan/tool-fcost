@@ -61,6 +61,7 @@ datasets:
     - "action"
     - "defect_category"
     - "defect"
+    - "keydate"
 
 masters:
   - file: "masters/master_table.xlsx"
@@ -596,6 +597,12 @@ steps:
         "replace_remote_control": "Replace Remote"
     on_missing_match: null
 
+  - id: "sub_18_add_keydate"
+    type: "derive_column"
+    target: "keydate"
+    expression:
+      runtime_value: "period_keydate"
+
 outputs:
   - sheet_name: "result"
     columns:
@@ -633,3 +640,4 @@ outputs:
       - "action"
       - "defect_category"
       - "defect"
+      - "keydate"
