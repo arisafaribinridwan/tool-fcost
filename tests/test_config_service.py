@@ -613,3 +613,108 @@ def test_validate_config_payload_rejects_lookup_exact_replace_master_filter_scop
 
     errors = validate_config_payload(payload)
     assert any(".master.filter.scope_in harus berupa list string non-kosong." in item for item in errors)
+
+
+def test_validate_config_payload_accepts_step_recipe_summary_output():
+    payload = {
+        "name": "Summary Recipe",
+        "datasets": {
+            "working_dataset": "result",
+            "canonical_columns": ["notification"],
+        },
+        "steps": [
+            {
+                "id": "extract",
+                "type": "extract_sheet",
+                "sheet_selector": {"contains": "Data"},
+                "header_locator": {
+                    "scan_rows": [1, 3],
+                    "required": ["Notification"],
+                },
+                "select": {"Notification": "notification"},
+                "write_to": "result",
+            }
+        ],
+        "outputs": [
+            {
+                "sheet_name": "data1",
+                "summary": {
+                    "type": "recipe_summary_v1",
+                    "layout_mode": "plain",
+                    "options": {},
+                },
+            }
+        ],
+    }
+
+    assert validate_config_payload(payload) == ()
+
+
+def test_validate_config_payload_rejects_output_with_multiple_rules():
+    payload = {
+        "name": "Invalid Summary Rule",
+        "datasets": {
+            "working_dataset": "result",
+            "canonical_columns": ["notification"],
+        },
+        "steps": [
+            {
+                "id": "extract",
+                "type": "extract_sheet",
+                "sheet_selector": {"contains": "Data"},
+                "header_locator": {
+                    "scan_rows": [1, 3],
+                    "required": ["Notification"],
+                },
+                "select": {"Notification": "notification"},
+                "write_to": "result",
+            }
+        ],
+        "outputs": [
+            {
+                "sheet_name": "data1",
+                "columns": ["notification"],
+                "summary": {
+                    "type": "recipe_summary_v1",
+                },
+            }
+        ],
+    }
+
+    errors = validate_config_payload(payload)
+    assert any("tidak boleh memakai 'summary' bersamaan dengan rule output lain" in item for item in errors)
+
+
+def test_validate_config_payload_rejects_summary_output_invalid_layout_mode():
+    payload = {
+        "name": "Invalid Summary Layout",
+        "datasets": {
+            "working_dataset": "result",
+            "canonical_columns": ["notification"],
+        },
+        "steps": [
+            {
+                "id": "extract",
+                "type": "extract_sheet",
+                "sheet_selector": {"contains": "Data"},
+                "header_locator": {
+                    "scan_rows": [1, 3],
+                    "required": ["Notification"],
+                },
+                "select": {"Notification": "notification"},
+                "write_to": "result",
+            }
+        ],
+        "outputs": [
+            {
+                "sheet_name": "data1",
+                "summary": {
+                    "type": "recipe_summary_v1",
+                    "layout_mode": "minimal",
+                },
+            }
+        ],
+    }
+
+    errors = validate_config_payload(payload)
+    assert any("summary.layout_mode harus salah satu dari: standard, plain" in item for item in errors)

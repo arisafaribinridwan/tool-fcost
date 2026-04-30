@@ -91,6 +91,8 @@ def run_pipeline(
             raise PipelineError(f"Gagal menyalin source ke uploads/: {exc}") from exc
     emit_progress("copy_source", "Copy source", "done", source_copy.name)
 
+    sheet_layouts: dict[str, str] | None = None
+
     if is_step_recipe_payload(config):
         emit_progress("read_source", "Read source", "running", source_path.name)
         log(f"Read source workbook: {source_path.name}")
@@ -107,6 +109,7 @@ def run_pipeline(
             raise PipelineError(str(exc)) from exc
         source_df = recipe_result.source_df_for_header
         output_sheets = recipe_result.output_sheets
+        sheet_layouts = recipe_result.sheet_layouts
         emit_progress("read_source", "Read source", "done", f"{len(source_df)} baris")
     else:
         source_sheet = config["source_sheet"]
@@ -186,6 +189,7 @@ def run_pipeline(
             styling_cfg=config.get("styling", {}),
             source_df=source_df,
             period_text_override=period_text_override,
+            sheet_layouts=sheet_layouts,
         )
     except Exception as exc:
         raise PipelineError(f"Gagal menulis file output: {exc}") from exc

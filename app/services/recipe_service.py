@@ -23,6 +23,7 @@ class RecipeExecutionResult:
     final_df: pd.DataFrame
     output_sheets: dict[str, pd.DataFrame]
     source_df_for_header: pd.DataFrame
+    sheet_layouts: dict[str, str]
 
 
 def _normalize_text(value: object, *, case_sensitive: bool = False) -> str:
@@ -346,7 +347,18 @@ def _resolve_sheet_names(source_path: Path, selector_cfg: dict) -> list[str]:
         raise ValueError("Recipe step 'extract_sheet' hanya mendukung source .xlsx.")
 
     workbook = pd.ExcelFile(source_path)
-    contains = str(selector_cfg["contains"])
+    selector_mode = selector_cfg.get("mode")
+    if selector_mode is not None and str(selector_mode) == "single_sheet_workbook":
+        if len(workbook.sheet_names) != 1:
+            raise ValueError(
+                "Mode sheet_selector.single_sheet_workbook membutuhkan tepat 1 sheet pada source workbook."
+            )
+        return [workbook.sheet_names[0]]
+
+    contains = selector_cfg.get("contains")
+    if not isinstance(contains, str) or not contains.strip():
+        raise ValueError("sheet_selector.contains wajib berupa string non-kosong.")
+
     case_sensitive = bool(selector_cfg.get("case_sensitive", False))
     candidates: list[str] = []
     for sheet_name in workbook.sheet_names:
@@ -957,17 +969,175 @@ def _apply_duplicate_group_rewrite_step(data_df: pd.DataFrame, step_cfg: dict, l
     return result_df
 
 
-def _build_output_sheets(data_df: pd.DataFrame, outputs_cfg: list[dict], log: LogFn) -> dict[str, pd.DataFrame]:
+def _build_static_part_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
+    cfg = options or {}
+    section_column = str(cfg.get("section_column", "section"))
+    part_column = str(cfg.get("part_column", "part_name"))
+    static_parts = [str(item) for item in cfg.get("static_parts", ["PANEL", "MAIN_UNIT", "POWER_UNIT"])]
+
+    cost_columns = {
+        "Sum of labor_cost": str(cfg.get("labor_cost_column", "labor_cost")),
+        "Sum of transportation_cost": str(cfg.get("transportation_cost_column", "transportation_cost")),
+        "Sum of parts_cost": str(cfg.get("parts_cost_column", "parts_cost")),
+        "Sum of total_cost": str(cfg.get("total_cost_column", "total_cost")),
+    }
+
+    required_columns = [section_column, part_column, *cost_columns.values()]
+    missing = [column for column in required_columns if column not in data_df.columns]
+    if missing:
+        raise ValueError(
+            "Static part summary gagal, kolom tidak ditemukan: " + ", ".join(missing)
+        )
+
+    working_df = data_df.copy()
+    part_series = working_df[part_column].fillna("").astype(str).str.strip()
+    working_df = working_df.loc[part_series.ne("")].copy()
+    part_series = working_df[part_column].fillna("").astype(str).str.strip()
+    working_df[part_column] = part_series
+
+    for target_col, source_col in cost_columns.items():
+        working_df[target_col] = pd.to_numeric(working_df[source_col], errors="coerce").fillna(0)
+
+    grouped_part = part_series.where(part_series.isin(static_parts), "OTHER")
+    working_df["_grouped_part"] = grouped_part
+
+    grouped = (
+        working_df.groupby([section_column, "_grouped_part"], dropna=False, sort=False)
+        .agg(
+            {
+                "Sum of labor_cost": "sum",
+                "Sum of transportation_cost": "sum",
+                "Sum of parts_cost": "sum",
+                "Sum of total_cost": "sum",
+                part_column: "count",
+            }
+        )
+        .reset_index()
+        .rename(columns={"_grouped_part": "part_name", part_column: "Count of part_name"})
+    )
+
+    output_columns = [
+        "section",
+        "part_name",
+        "Sum of labor_cost",
+        "Sum of transportation_cost",
+        "Sum of parts_cost",
+        "Sum of total_cost",
+        "Count of part_name",
+    ]
+
+    section_order = working_df[section_column].drop_duplicates().tolist()
+    part_order = [*static_parts, "OTHER"]
+    rows: list[dict[str, object]] = []
+
+    for section_value in section_order:
+        section_rows = grouped[grouped[section_column].eq(section_value)].copy()
+        section_total = {
+            "Sum of labor_cost": 0.0,
+            "Sum of transportation_cost": 0.0,
+            "Sum of parts_cost": 0.0,
+            "Sum of total_cost": 0.0,
+            "Count of part_name": 0.0,
+        }
+
+        for part_name in part_order:
+            match = section_rows[section_rows["part_name"].eq(part_name)]
+            if match.empty:
+                continue
+            row = match.iloc[0]
+            data_row = {
+                "section": section_value,
+                "part_name": part_name,
+                "Sum of labor_cost": float(row["Sum of labor_cost"]),
+                "Sum of transportation_cost": float(row["Sum of transportation_cost"]),
+                "Sum of parts_cost": float(row["Sum of parts_cost"]),
+                "Sum of total_cost": float(row["Sum of total_cost"]),
+                "Count of part_name": float(row["Count of part_name"]),
+            }
+            rows.append(data_row)
+            for key in section_total:
+                section_total[key] += float(data_row[key])
+
+        rows.append(
+            {
+                "section": f"{section_value} Total",
+                "part_name": "",
+                **section_total,
+            }
+        )
+
+    summary_df = pd.DataFrame(rows, columns=output_columns)
+    if summary_df.empty:
+        summary_df = pd.DataFrame(columns=output_columns)
+
+    if not summary_df.empty:
+        total_row = {
+            "section": "Grand Total",
+            "part_name": "",
+            "Sum of labor_cost": float(summary_df["Sum of labor_cost"].sum()),
+            "Sum of transportation_cost": float(summary_df["Sum of transportation_cost"].sum()),
+            "Sum of parts_cost": float(summary_df["Sum of parts_cost"].sum()),
+            "Sum of total_cost": float(summary_df["Sum of total_cost"].sum()),
+            "Count of part_name": float(summary_df["Count of part_name"].sum()),
+        }
+        subtotal_mask = summary_df["section"].astype(str).str.endswith(" Total")
+        for col in [
+            "Sum of labor_cost",
+            "Sum of transportation_cost",
+            "Sum of parts_cost",
+            "Sum of total_cost",
+            "Count of part_name",
+        ]:
+            total_row[col] = float(summary_df.loc[~subtotal_mask, col].sum())
+        summary_df = pd.concat([summary_df, pd.DataFrame([total_row])], ignore_index=True)
+
+    return summary_df
+
+
+def _build_summary_output_sheet(data_df: pd.DataFrame, item: dict) -> tuple[pd.DataFrame, str]:
+    summary_cfg = item["summary"]
+    summary_type = str(summary_cfg["type"]).strip()
+    layout_mode = str(summary_cfg.get("layout_mode", "standard"))
+    options = summary_cfg.get("options")
+
+    if summary_type == "static_part_summary":
+        return _build_static_part_summary(data_df, options if isinstance(options, dict) else None), layout_mode
+
+    summary_row: dict[str, object] = {
+        "summary_type": summary_type,
+        "source_rows": len(data_df),
+    }
+    if isinstance(options, dict) and options:
+        summary_row["options"] = str(options)
+
+    return pd.DataFrame([summary_row]), layout_mode
+
+
+def _build_output_sheets(
+    data_df: pd.DataFrame,
+    outputs_cfg: list[dict],
+    log: LogFn,
+) -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
     output_sheets: dict[str, pd.DataFrame] = {}
+    sheet_layouts: dict[str, str] = {}
     for item in outputs_cfg:
         sheet_name = str(item["sheet_name"])
+
+        if "summary" in item:
+            summary_df, layout_mode = _build_summary_output_sheet(data_df, item)
+            output_sheets[sheet_name] = summary_df
+            sheet_layouts[sheet_name] = layout_mode
+            log(f"Output recipe summary '{sheet_name}' siap ({len(summary_df)} baris).")
+            continue
+
         columns = [str(column) for column in item.get("columns", [])]
         missing = [column for column in columns if column not in data_df.columns]
         if missing:
             raise ValueError(f"Output '{sheet_name}' gagal, kolom tidak ditemukan: {', '.join(missing)}")
         output_sheets[sheet_name] = data_df.loc[:, columns].copy()
+        sheet_layouts[sheet_name] = "standard"
         log(f"Output recipe '{sheet_name}' siap ({len(output_sheets[sheet_name])} baris).")
-    return output_sheets
+    return output_sheets, sheet_layouts
 
 
 def execute_step_recipe(
@@ -1018,9 +1188,10 @@ def execute_step_recipe(
     if final_df is None:
         raise ValueError(f"Dataset kerja '{working_dataset}' tidak terbentuk.")
 
-    output_sheets = _build_output_sheets(final_df, recipe_cfg["outputs"], log)
+    output_sheets, sheet_layouts = _build_output_sheets(final_df, recipe_cfg["outputs"], log)
     return RecipeExecutionResult(
         final_df=final_df,
         output_sheets=output_sheets,
         source_df_for_header=final_df,
+        sheet_layouts=sheet_layouts,
     )

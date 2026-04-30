@@ -1795,3 +1795,237 @@ def test_run_pipeline_lookup_rules_step_recipe_raises_when_priority_column_missi
             config_path=config_path,
             log=lambda _: None,
         )
+
+
+def test_run_pipeline_step_recipe_single_sheet_mode_extracts_without_sheet_name(app_paths):
+    source_path = app_paths.project_root / "single_sheet_source.xlsx"
+    pd.DataFrame(
+        [
+            {"Notification": "A-001"},
+            {"Notification": "A-002"},
+        ]
+    ).to_excel(source_path, index=False, sheet_name="Random Name")
+
+    config_path = app_paths.configs_dir / "single_sheet_mode.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Single Sheet Mode"',
+                "datasets:",
+                '  working_dataset: "result"',
+                "  canonical_columns:",
+                '    - "notification"',
+                "steps:",
+                '  - id: "extract"',
+                '    type: "extract_sheet"',
+                "    sheet_selector:",
+                '      mode: "single_sheet_workbook"',
+                "    header_locator:",
+                "      scan_rows: [1, 1]",
+                "      required:",
+                '        - "Notification"',
+                "    select:",
+                '      "Notification": "notification"',
+                '    write_to: "result"',
+                "outputs:",
+                '  - sheet_name: "result"',
+                "    columns:",
+                '      - "notification"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _: None,
+    )
+
+    detail_df = pd.read_excel(result.output_path, sheet_name="result", skiprows=3, keep_default_na=False)
+    assert detail_df["notification"].tolist() == ["A-001", "A-002"]
+
+
+def test_run_pipeline_step_recipe_single_sheet_mode_rejects_multisheet_workbook(app_paths):
+    source_path = app_paths.project_root / "multi_sheet_source.xlsx"
+    with pd.ExcelWriter(source_path) as writer:
+        pd.DataFrame([{"Notification": "A-001"}]).to_excel(writer, index=False, sheet_name="Sheet1")
+        pd.DataFrame([{"Notification": "A-002"}]).to_excel(writer, index=False, sheet_name="Sheet2")
+
+    config_path = app_paths.configs_dir / "single_sheet_mode_invalid.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Single Sheet Mode Invalid"',
+                "datasets:",
+                '  working_dataset: "result"',
+                "  canonical_columns:",
+                '    - "notification"',
+                "steps:",
+                '  - id: "extract"',
+                '    type: "extract_sheet"',
+                "    sheet_selector:",
+                '      mode: "single_sheet_workbook"',
+                "    header_locator:",
+                "      scan_rows: [1, 1]",
+                "      required:",
+                '        - "Notification"',
+                "    select:",
+                '      "Notification": "notification"',
+                '    write_to: "result"',
+                "outputs:",
+                '  - sheet_name: "result"',
+                "    columns:",
+                '      - "notification"',
+            ]
+        ),
+    )
+
+    with pytest.raises(PipelineError, match="membutuhkan tepat 1 sheet"):
+        run_pipeline(
+            paths=app_paths,
+            source_path=source_path,
+            config_path=config_path,
+            log=lambda _: None,
+        )
+
+
+def test_run_pipeline_step_recipe_summary_plain_layout_writes_without_report_header(app_paths):
+    source_path = app_paths.project_root / "summary_plain_source.xlsx"
+    pd.DataFrame([{"Notification": "A-001"}]).to_excel(source_path, index=False, sheet_name="OnlySheet")
+
+    config_path = app_paths.configs_dir / "summary_plain_layout.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Summary Plain Layout"',
+                "datasets:",
+                '  working_dataset: "result"',
+                "  canonical_columns:",
+                '    - "notification"',
+                "steps:",
+                '  - id: "extract"',
+                '    type: "extract_sheet"',
+                "    sheet_selector:",
+                '      mode: "single_sheet_workbook"',
+                "    header_locator:",
+                "      scan_rows: [1, 1]",
+                "      required:",
+                '        - "Notification"',
+                "    select:",
+                '      "Notification": "notification"',
+                '    write_to: "result"',
+                "outputs:",
+                '  - sheet_name: "result"',
+                "    columns:",
+                '      - "notification"',
+                '  - sheet_name: "data1"',
+                "    summary:",
+                '      type: "recipe_summary_v1"',
+                '      layout_mode: "plain"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _: None,
+    )
+
+    workbook = load_workbook(result.output_path, read_only=True)
+    assert workbook["result"]["A1"].value == "Summary Plain Layout"
+    assert workbook["data1"]["A1"].value == "summary_type"
+    assert workbook["data1"]["A2"].value == "recipe_summary_v1"
+
+
+def test_run_pipeline_step_recipe_static_part_summary_builds_data1_totals(app_paths):
+    source_path = app_paths.project_root / "data1_source.xlsx"
+    pd.DataFrame(
+        [
+            {"section": "GQS", "part_name": "PANEL", "labor_cost": 10, "transportation_cost": 1, "parts_cost": 100, "total_cost": 111},
+            {"section": "GQS", "part_name": "MAIN_UNIT", "labor_cost": 5, "transportation_cost": 1, "parts_cost": 50, "total_cost": 56},
+            {"section": "GQS", "part_name": "LED_BAR", "labor_cost": 3, "transportation_cost": 0, "parts_cost": 30, "total_cost": 33},
+            {"section": "GQS", "part_name": "", "labor_cost": 1, "transportation_cost": 0, "parts_cost": 1, "total_cost": 2},
+            {"section": "SASS", "part_name": "PANEL", "labor_cost": 7, "transportation_cost": 1, "parts_cost": 70, "total_cost": 78},
+            {"section": "SASS", "part_name": "POWER_UNIT", "labor_cost": 2, "transportation_cost": 1, "parts_cost": 20, "total_cost": 23},
+            {"section": "SASS", "part_name": "REMOTE_CONTROL", "labor_cost": 1, "transportation_cost": 0, "parts_cost": 10, "total_cost": 11},
+            {"section": "NEWSEC", "part_name": "MAIN_UNIT", "labor_cost": 4, "transportation_cost": 1, "parts_cost": 40, "total_cost": 45},
+        ]
+    ).to_excel(source_path, index=False, sheet_name="OnlySheet")
+
+    config_path = app_paths.configs_dir / "static_part_summary_data1.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Data1 Static Part Summary"',
+                "datasets:",
+                '  working_dataset: "result"',
+                "  canonical_columns:",
+                '    - "section"',
+                '    - "part_name"',
+                '    - "labor_cost"',
+                '    - "transportation_cost"',
+                '    - "parts_cost"',
+                '    - "total_cost"',
+                "steps:",
+                '  - id: "extract"',
+                '    type: "extract_sheet"',
+                "    sheet_selector:",
+                '      mode: "single_sheet_workbook"',
+                "    header_locator:",
+                "      scan_rows: [1, 1]",
+                "      required:",
+                '        - "section"',
+                '        - "part_name"',
+                '        - "labor_cost"',
+                '        - "transportation_cost"',
+                '        - "parts_cost"',
+                '        - "total_cost"',
+                "    select:",
+                '      "section": "section"',
+                '      "part_name": "part_name"',
+                '      "labor_cost": "labor_cost"',
+                '      "transportation_cost": "transportation_cost"',
+                '      "parts_cost": "parts_cost"',
+                '      "total_cost": "total_cost"',
+                '    write_to: "result"',
+                "outputs:",
+                '  - sheet_name: "data1"',
+                "    summary:",
+                '      type: "static_part_summary"',
+                '      layout_mode: "plain"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _: None,
+    )
+
+    data1_df = pd.read_excel(result.output_path, sheet_name="data1", keep_default_na=False)
+
+    gqs_total = data1_df[data1_df["section"] == "GQS Total"].iloc[0]
+    sass_total = data1_df[data1_df["section"] == "SASS Total"].iloc[0]
+    grand_total = data1_df[data1_df["section"] == "Grand Total"].iloc[0]
+
+    assert gqs_total["Sum of total_cost"] == 200
+    assert gqs_total["Count of part_name"] == 3
+    assert sass_total["Sum of total_cost"] == 112
+    assert sass_total["Count of part_name"] == 3
+    assert grand_total["Sum of total_cost"] == 357
+    assert grand_total["Count of part_name"] == 7
+
+    gqs_other = data1_df[(data1_df["section"] == "GQS") & (data1_df["part_name"] == "OTHER")].iloc[0]
+    assert gqs_other["Sum of total_cost"] == 33
+
+    new_section_total = data1_df[data1_df["section"] == "NEWSEC Total"].iloc[0]
+    assert new_section_total["Sum of total_cost"] == 45
