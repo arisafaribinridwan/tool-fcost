@@ -163,9 +163,11 @@ def _validate_output_items(outputs: object, errors: list[str]) -> None:
         has_columns = "columns" in item
         has_pivot = "pivot" in item
         has_group_by = "group_by" in item
-        if not has_columns and not has_pivot and not has_group_by:
+        has_summary = "summary" in item
+
+        if not has_columns and not has_pivot and not has_group_by and not has_summary:
             errors.append(
-                f"outputs[{idx}] wajib memiliki minimal salah satu: 'columns', 'pivot', atau 'group_by'."
+                f"outputs[{idx}] wajib memiliki minimal salah satu: 'columns', 'pivot', 'group_by', atau 'summary'."
             )
 
         if has_pivot and has_columns:
@@ -176,12 +178,19 @@ def _validate_output_items(outputs: object, errors: list[str]) -> None:
             errors.append(
                 f"outputs[{idx}] tidak boleh memakai 'pivot' bersamaan dengan 'group_by'."
             )
+        if has_summary and (has_columns or has_pivot or has_group_by):
+            errors.append(
+                f"outputs[{idx}] tidak boleh memakai 'summary' bersamaan dengan rule output lain."
+            )
+
         if has_columns and not isinstance(item.get("columns"), list):
             errors.append(f"outputs[{idx}].columns harus berupa list.")
         if has_pivot and not isinstance(item.get("pivot"), dict):
             errors.append(f"outputs[{idx}].pivot harus berupa object.")
         if has_group_by and not isinstance(item.get("group_by"), dict):
             errors.append(f"outputs[{idx}].group_by harus berupa object.")
+        if has_summary and not isinstance(item.get("summary"), dict):
+            errors.append(f"outputs[{idx}].summary harus berupa object.")
 
         if has_group_by and isinstance(item.get("group_by"), dict):
             group_by = item["group_by"]
@@ -205,6 +214,25 @@ def _validate_output_items(outputs: object, errors: list[str]) -> None:
                 errors.append(
                     f"outputs[{idx}].group_by.aggregations hanya mendukung fungsi: {', '.join(sorted(SUPPORTED_GROUPBY_AGGFUNCS))}."
                 )
+
+        if has_summary and isinstance(item.get("summary"), dict):
+            summary_cfg = item["summary"]
+            summary_type = summary_cfg.get("type")
+            if not isinstance(summary_type, str) or not summary_type.strip():
+                errors.append(f"outputs[{idx}].summary.type wajib berupa string non-kosong.")
+
+            layout_mode = summary_cfg.get("layout_mode")
+            if layout_mode is not None and (
+                not isinstance(layout_mode, str)
+                or layout_mode not in {"standard", "plain"}
+            ):
+                errors.append(
+                    f"outputs[{idx}].summary.layout_mode harus salah satu dari: standard, plain."
+                )
+
+            options = summary_cfg.get("options")
+            if options is not None and not isinstance(options, dict):
+                errors.append(f"outputs[{idx}].summary.options harus berupa object jika diisi.")
 
 
 def _validate_matching_config(

@@ -2,6 +2,13 @@
 
 ## Ringkasan tugas
 
+## Status implementasi (update 2026-04-30)
+
+- ✅ Tahap 0 — persiapan teknis dan guardrail: **sudah diimplementasikan**.
+- ✅ Tahap 1 — implementasi `data1`: **sudah diimplementasikan** (`summary.type = static_part_summary`, termasuk subtotal per section + grand total, dan test regresi lulus).
+- ▶️ **Next Tahap Implementasi: Tahap 2 — `data2`** (pivot semua `part_name` per `section`, sorting `Sum of total_cost` descending, subtotal per section, grand total).
+
+
 Tujuan job baru adalah membaca satu workbook source yang berisi satu sheet berformat sama dengan sheet `result` pada `outputs/result_learning_source.xlsx`, lalu men-generate sheet `result` dan summary `data1`, `data2`, `data3a`, `data3b`, `data3c`, `data4`, `data5a`, `data5b`, dan `data6`.
 
 Batasan kerja yang wajib dipertahankan:
@@ -9,7 +16,7 @@ Batasan kerja yang wajib dipertahankan:
 1. `outputs/result_learning_source.xlsx` sheet `result` menjadi sumber referensi untuk studi aturan output; source runtime adalah workbook input satu sheet dengan format tabel yang sama.
 2. Tidak melakukan perubahan kode sebelum ada konfirmasi final untuk setiap tahap summary.
 3. Implementasi final harus dibuat bertahap dan tervalidasi per sheet final.
-4. File ini adalah rencana implementasi; belum ada perubahan kode/config engine yang dilakukan.
+4. File ini adalah rencana implementasi; **status terbaru: Tahap 0 dan Tahap 1 sudah diimplementasikan**, sisanya masih bertahap.
 5. Jangan ubah perilaku engine yang sudah berjalan; implementasi hanya boleh menambahkan kemampuan baru secara additive agar job/config existing tetap aman.
 
 Keputusan terkonfirmasi:
@@ -26,7 +33,6 @@ Keputusan terkonfirmasi:
 - Untuk `data2`, sorting `part_name` dalam tiap section memakai `Sum of total_cost` descending.
 - Untuk `data3`, tiga blok summary dipisah menjadi sheet `data3a`, `data3b`, dan `data3c`.
 - Untuk `data4`, `panel_usage` kosong atau kategori baru diabaikan.
-- `data5c` tidak dibuat karena isinya sama dengan `data4`.
 - Untuk `data5`, summary dipisah menjadi sheet `data5a` dan `data5b`.
 - Untuk `data5a`, inch utama memakai Top 5 dinamis berdasarkan `Sum of total_cost`; inch lain digabung sebagai `other`.
 - Untuk `data5b`, filter inch memakai Top 1 inch dari hasil `data5a`; Top 5 model pada inch tersebut memakai sorting `Sum of total_cost` descending, dan model lain digabung sebagai `other`.
@@ -386,11 +392,10 @@ Total:
 
 Catatan:
 
-- `data5c` tidak dibuat karena summary panel usage sudah tersedia sebagai `data4`.
 
 Status kemampuan engine saat ini:
 
-- Keputusan final memecah output data5 menjadi `data5a` dan `data5b`; `data5c` tidak dibuat karena sama dengan `data4`, sehingga tidak perlu dukungan sheet multi-block vertikal untuk tahap ini.
+- Keputusan final memecah output data5 menjadi `data5a` dan `data5b`, sehingga tidak perlu dukungan sheet multi-block vertikal untuk tahap ini.
 - Engine tetap perlu mendukung Top-N + `other`, subtotal, grand total, dan layout summary tanpa header report standar.
 
 ### data6 — panel symptom by inch matrix
@@ -550,7 +555,7 @@ Setelah semua stabil, tipe-tipe ini bisa digeneralisasi bila diperlukan.
 
 ## Rencana implementasi bertahap
 
-### Tahap 0 — persiapan teknis dan guardrail
+### Tahap 0 — persiapan teknis dan guardrail ✅ (Implemented)
 
 Tujuan:
 
@@ -580,7 +585,7 @@ Keputusan final sebelum coding:
 - Semua kemampuan baru bersifat additive/opt-in dan tidak boleh mengubah perilaku job/config existing.
 - Cukup angka dan struktur tabel sama; tidak perlu pixel-perfect.
 
-### Tahap 1 — implementasi data1
+### Tahap 1 — implementasi data1 ✅ (Implemented)
 
 Tujuan:
 
@@ -607,7 +612,7 @@ Keputusan final sebelum coding:
 - `OTHER` adalah seluruh `part_name` non-kosong selain `PANEL`, `MAIN_UNIT`, dan `POWER_UNIT`.
 - Section selain `GQS`/`SASS` ditampilkan dinamis jika muncul di data masa depan.
 
-### Tahap 2 — implementasi data2
+### Tahap 2 — implementasi data2 ▶️ (Next)
 
 Tujuan:
 
@@ -705,7 +710,6 @@ Aturan `data5b`:
 
 Catatan:
 
-- `data5c` tidak dibuat karena sama dengan `data4`.
 
 Validasi:
 
@@ -716,7 +720,6 @@ Keputusan final sebelum coding:
 
 - `data5a` memakai Top 5 inch dinamis berdasarkan `Sum of total_cost`; inch lain menjadi `other`.
 - `data5b` memakai Top 5 model dari Top 1 inch hasil `data5a` berdasarkan `Sum of total_cost` descending; model lain menjadi `other`.
-- `data5c` tidak dibuat karena sama dengan `data4`.
 
 ### Tahap 6 — implementasi data6
 
@@ -812,7 +815,7 @@ Validasi layout:
 6. Untuk `data2`, sorting memakai `Sum of total_cost` descending.
 7. Untuk `data3`, tiga blok dipisah menjadi `data3a`, `data3b`, dan `data3c`.
 8. Untuk `data4`, `panel_usage` kosong atau kategori baru diabaikan.
-9. Untuk `data5`, hanya dibuat `data5a` dan `data5b`; `data5c` tidak dibuat karena sama dengan `data4`.
+9. Untuk `data5`, hanya dibuat `data5a` dan `data5b`.
 10. Untuk `data5a`, daftar inch utama dinamis Top 5 berdasarkan `Sum of total_cost`; inch lain menjadi `other`.
 11. Untuk `data5b`, filter inch memakai Top 1 inch dari hasil `data5a`; Top 5 model pada inch tersebut berdasarkan `Sum of total_cost` descending, dan model lain menjadi `other`.
 12. Untuk `data6`, kolom inch diurutkan numeric ascending lalu `Grand Total`.

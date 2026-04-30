@@ -49,6 +49,7 @@ def _apply_worksheet_style(
     frame: pd.DataFrame,
     startrow: int,
     styling_cfg: dict,
+    freeze_pane_default: str,
 ) -> None:
     header_row = startrow + 1
     data_first_row = header_row + 1
@@ -90,7 +91,7 @@ def _apply_worksheet_style(
             )
 
     if len(frame) == 0:
-        worksheet.freeze_panes = styling_cfg.get("freeze_pane", "A5")
+        worksheet.freeze_panes = styling_cfg.get("freeze_pane", freeze_pane_default)
         return
 
     date_format = str(styling_cfg.get("date_format", "DD/MM/YYYY"))
@@ -111,7 +112,7 @@ def _apply_worksheet_style(
             for row_idx in range(data_first_row, data_last_row + 1):
                 worksheet.cell(row=row_idx, column=col_idx).number_format = number_format
 
-    worksheet.freeze_panes = styling_cfg.get("freeze_pane", "A5")
+    worksheet.freeze_panes = styling_cfg.get("freeze_pane", freeze_pane_default)
 
 
 def write_output_workbook(
@@ -123,6 +124,7 @@ def write_output_workbook(
     styling_cfg: dict,
     source_df: pd.DataFrame,
     period_text_override: str | None = None,
+    sheet_layouts: dict[str, str] | None = None,
 ) -> None:
     try:
         output_relative = output_path.resolve().relative_to(outputs_dir.resolve())
@@ -147,24 +149,35 @@ def write_output_workbook(
     with pd.ExcelWriter(safe_output_path, engine="openpyxl") as writer:
         for raw_sheet_name, frame in output_sheets.items():
             sheet_name = sanitize_sheet_name(raw_sheet_name, used_sheet_names)
-            startrow = 3
+            layout_mode = (sheet_layouts or {}).get(raw_sheet_name, "standard")
+            if layout_mode == "standard":
+                startrow = 3
+                freeze_pane_default = "A5"
+            elif layout_mode == "plain":
+                startrow = 0
+                freeze_pane_default = "A2"
+            else:
+                raise ValueError(f"Mode layout sheet tidak didukung: '{layout_mode}'.")
+
             frame.to_excel(writer, sheet_name=sheet_name, index=False, startrow=startrow)
             worksheet = writer.sheets[sheet_name]
 
-            worksheet["A1"] = report_title
-            worksheet["A2"] = period_text
-            worksheet["A3"] = f"Dibuat: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
-            worksheet["A1"].font = Font(
-                name=str(styling_cfg.get("font", "Calibri")),
-                bold=True,
-                size=14,
-            )
-            worksheet["A2"].font = Font(name=str(styling_cfg.get("font", "Calibri")))
-            worksheet["A3"].font = Font(name=str(styling_cfg.get("font", "Calibri")))
+            if layout_mode == "standard":
+                worksheet["A1"] = report_title
+                worksheet["A2"] = period_text
+                worksheet["A3"] = f"Dibuat: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+                worksheet["A1"].font = Font(
+                    name=str(styling_cfg.get("font", "Calibri")),
+                    bold=True,
+                    size=14,
+                )
+                worksheet["A2"].font = Font(name=str(styling_cfg.get("font", "Calibri")))
+                worksheet["A3"].font = Font(name=str(styling_cfg.get("font", "Calibri")))
 
             _apply_worksheet_style(
                 worksheet=worksheet,
                 frame=frame,
                 startrow=startrow,
                 styling_cfg=styling_cfg,
+                freeze_pane_default=freeze_pane_default,
             )
