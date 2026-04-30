@@ -22,6 +22,7 @@ Batasan kerja yang wajib dipertahankan:
 Keputusan terkonfirmasi:
 
 - Target output adalah angka dan struktur tabel yang sama; tidak perlu pixel-perfect mengikuti workbook referensi.
+- Untuk summary `data1`–`data6`, hasil akhir ditulis sebagai **formula Excel** dengan pendekatan **cell-only** (tanpa objek PivotTable); jadi bukan hardcoded value statis.
 - Job baru membaca satu workbook source yang berisi satu sheet, lalu menghasilkan gabungan sheet `result` dan summary dari dataset tersebut dalam satu pipeline.
 - Sheet final yang dihasilkan: `result`, `data1`, `data2`, `data3a`, `data3b`, `data3c`, `data4`, `data5a`, `data5b`, dan `data6`.
 - Source runtime tidak bergantung pada nama sheet karena workbook input hanya berisi satu sheet.
@@ -611,7 +612,6 @@ Keputusan final sebelum coding:
 
 - `OTHER` adalah seluruh `part_name` non-kosong selain `PANEL`, `MAIN_UNIT`, dan `POWER_UNIT`.
 - Section selain `GQS`/`SASS` ditampilkan dinamis jika muncul di data masa depan.
-
 ### Tahap 2 — implementasi data2 ▶️ (Next)
 
 Tujuan:
@@ -822,6 +822,7 @@ Validasi layout:
 13. Untuk kategori/kunci baru selain aturan khusus di atas, default-nya ditampilkan dinamis.
 14. Nama job baru: `Job Summary Result`.
 15. Nama config YAML: `job_summary_result.yaml`.
+16. Untuk summary `data1`–`data6`, output akhir menggunakan formula Excel mode **cell-only** (tanpa PivotTable object), bukan hardcoded value.
 
 ## Rekomendasi final
 
