@@ -2029,3 +2029,449 @@ def test_run_pipeline_step_recipe_static_part_summary_builds_data1_totals(app_pa
 
     new_section_total = data1_df[data1_df["section"] == "NEWSEC Total"].iloc[0]
     assert new_section_total["Sum of total_cost"] == 45
+
+
+def test_run_pipeline_step_recipe_part_pivot_summary_builds_data2_sorted_with_totals(app_paths):
+    source_path = app_paths.project_root / "data2_source.xlsx"
+    pd.DataFrame(
+        [
+            {"section": "GQS", "part_name": "PANEL", "labor_cost": 10, "transportation_cost": 1, "parts_cost": 89, "total_cost": 100},
+            {"section": "GQS", "part_name": "PANEL", "labor_cost": 2, "transportation_cost": 0, "parts_cost": 18, "total_cost": 20},
+            {"section": "GQS", "part_name": "MAIN_UNIT", "labor_cost": 20, "transportation_cost": 2, "parts_cost": 238, "total_cost": 260},
+            {"section": "GQS", "part_name": "LED_BAR", "labor_cost": 5, "transportation_cost": 1, "parts_cost": 44, "total_cost": 50},
+            {"section": "GQS", "part_name": "", "labor_cost": 1, "transportation_cost": 0, "parts_cost": 1, "total_cost": 2},
+            {"section": "SASS", "part_name": "POWER_UNIT", "labor_cost": 8, "transportation_cost": 1, "parts_cost": 71, "total_cost": 80},
+            {"section": "SASS", "part_name": "PANEL", "labor_cost": 7, "transportation_cost": 1, "parts_cost": 62, "total_cost": 70},
+            {"section": "SASS", "part_name": "REMOTE_CONTROL", "labor_cost": 1, "transportation_cost": 0, "parts_cost": 9, "total_cost": 10},
+            {"section": "NEWSEC", "part_name": "MAIN_UNIT", "labor_cost": 3, "transportation_cost": 0, "parts_cost": 30, "total_cost": 33},
+        ]
+    ).to_excel(source_path, index=False, sheet_name="OnlySheet")
+
+    config_path = app_paths.configs_dir / "part_pivot_summary_data2.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Data2 Part Pivot Summary"',
+                "datasets:",
+                '  working_dataset: "result"',
+                "  canonical_columns:",
+                '    - "section"',
+                '    - "part_name"',
+                '    - "labor_cost"',
+                '    - "transportation_cost"',
+                '    - "parts_cost"',
+                '    - "total_cost"',
+                "steps:",
+                '  - id: "extract"',
+                '    type: "extract_sheet"',
+                "    sheet_selector:",
+                '      mode: "single_sheet_workbook"',
+                "    header_locator:",
+                "      scan_rows: [1, 1]",
+                "      required:",
+                '        - "section"',
+                '        - "part_name"',
+                '        - "labor_cost"',
+                '        - "transportation_cost"',
+                '        - "parts_cost"',
+                '        - "total_cost"',
+                "    select:",
+                '      "section": "section"',
+                '      "part_name": "part_name"',
+                '      "labor_cost": "labor_cost"',
+                '      "transportation_cost": "transportation_cost"',
+                '      "parts_cost": "parts_cost"',
+                '      "total_cost": "total_cost"',
+                '    write_to: "result"',
+                "outputs:",
+                '  - sheet_name: "data2"',
+                "    summary:",
+                '      type: "part_pivot_summary"',
+                '      layout_mode: "plain"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _: None,
+    )
+
+    data2_df = pd.read_excel(result.output_path, sheet_name="data2", keep_default_na=False)
+
+    gqs_part_rows = data2_df[data2_df["section"] == "GQS"]["part_name"].tolist()
+    assert gqs_part_rows == ["MAIN_UNIT", "PANEL", "LED_BAR"]
+
+    gqs_total = data2_df[data2_df["section"] == "GQS Total"].iloc[0]
+    sass_total = data2_df[data2_df["section"] == "SASS Total"].iloc[0]
+    grand_total = data2_df[data2_df["section"] == "Grand Total"].iloc[0]
+
+    assert gqs_total["Sum of total_cost"] == 430
+    assert gqs_total["Count of part_name"] == 4
+    assert sass_total["Sum of total_cost"] == 160
+    assert sass_total["Count of part_name"] == 3
+    assert grand_total["Sum of total_cost"] == 623
+    assert grand_total["Count of part_name"] == 8
+
+    panel_gqs = data2_df[(data2_df["section"] == "GQS") & (data2_df["part_name"] == "PANEL")].iloc[0]
+    assert panel_gqs["Sum of total_cost"] == 120
+    assert panel_gqs["Count of part_name"] == 2
+
+
+def test_run_pipeline_step_recipe_panel_summaries_data3a_data3b_data3c(app_paths):
+    source_path = app_paths.project_root / "data3_source.xlsx"
+    pd.DataFrame(
+        [
+            {"part_name": "PANEL", "inch": "32", "model_name": "M1", "total_cost": 100, "symptom": "LINE", "branch": "JKT", "panel_usage": "< 1 Year"},
+            {"part_name": "PANEL", "inch": "32", "model_name": "M2", "total_cost": 50, "symptom": "LINE", "branch": "BDG", "panel_usage": "1 - 2 Years"},
+            {"part_name": "PANEL", "inch": "32", "model_name": "M1", "total_cost": 25, "symptom": "NO DISPLAY", "branch": "JKT", "panel_usage": "2 - 3 Years"},
+            {"part_name": "PANEL", "inch": "55", "model_name": "M3", "total_cost": 200, "symptom": "NO DISPLAY", "branch": "SBY", "panel_usage": "> 3 Years"},
+            {"part_name": "PANEL", "inch": "55", "model_name": "M4", "total_cost": 100, "symptom": "DEAD", "branch": "JKT", "panel_usage": ""},
+            {"part_name": "PANEL", "inch": "65", "model_name": "M5", "total_cost": 80, "symptom": "DEAD", "branch": "MDN", "panel_usage": "INVALID"},
+            {"part_name": "MAIN_UNIT", "inch": "55", "model_name": "X1", "total_cost": 999, "symptom": "X", "branch": "XXX", "panel_usage": "< 1 Year"},
+        ]
+    ).to_excel(source_path, index=False, sheet_name="OnlySheet")
+
+    config_path = app_paths.configs_dir / "panel_summaries_data3.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Panel Summaries Data3"',
+                "datasets:",
+                '  working_dataset: "result"',
+                "  canonical_columns:",
+                '    - "part_name"',
+                '    - "inch"',
+                '    - "model_name"',
+                '    - "total_cost"',
+                '    - "symptom"',
+                '    - "branch"',
+                '    - "panel_usage"',
+                "steps:",
+                '  - id: "extract"',
+                '    type: "extract_sheet"',
+                "    sheet_selector:",
+                '      mode: "single_sheet_workbook"',
+                "    header_locator:",
+                "      scan_rows: [1, 1]",
+                "      required:",
+                '        - "part_name"',
+                '        - "inch"',
+                '        - "model_name"',
+                '        - "total_cost"',
+                '        - "symptom"',
+                '        - "branch"',
+                '        - "panel_usage"',
+                "    select:",
+                '      "part_name": "part_name"',
+                '      "inch": "inch"',
+                '      "model_name": "model_name"',
+                '      "total_cost": "total_cost"',
+                '      "symptom": "symptom"',
+                '      "branch": "branch"',
+                '      "panel_usage": "panel_usage"',
+                '    write_to: "result"',
+                "outputs:",
+                '  - sheet_name: "data3a"',
+                "    summary:",
+                '      type: "panel_model_summary"',
+                '      layout_mode: "plain"',
+                '  - sheet_name: "data3b"',
+                "    summary:",
+                '      type: "panel_symptom_summary"',
+                '      layout_mode: "plain"',
+                '  - sheet_name: "data3c"',
+                "    summary:",
+                '      type: "panel_area_summary"',
+                '      layout_mode: "plain"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _: None,
+    )
+
+    data3a_df = pd.read_excel(result.output_path, sheet_name="data3a", keep_default_na=False)
+    data3b_df = pd.read_excel(result.output_path, sheet_name="data3b", keep_default_na=False)
+    data3c_df = pd.read_excel(result.output_path, sheet_name="data3c", keep_default_na=False)
+
+    inch32_models = data3a_df[(data3a_df["part_name"] == "PANEL") & (data3a_df["inch"] == "32")]["model_name"].tolist()
+    assert inch32_models == ["M1", "M2"]
+
+    inch32_total = data3a_df[data3a_df["inch"] == "32 Total"].iloc[0]
+    panel_total_a = data3a_df[data3a_df["part_name"] == "PANEL Total"].iloc[0]
+    grand_total_a = data3a_df[data3a_df["part_name"] == "Grand Total"].iloc[0]
+    assert inch32_total["Total"] == 175
+    assert panel_total_a["Total"] == 555
+    assert grand_total_a["Total"] == 555
+
+    symptom_rows = data3b_df[data3b_df["part_name"] == "PANEL"]["symptom"].tolist()
+    assert symptom_rows == ["DEAD", "LINE", "NO DISPLAY"]
+    panel_total_b = data3b_df[data3b_df["part_name"] == "PANEL Total"].iloc[0]
+    grand_total_b = data3b_df[data3b_df["part_name"] == "Grand Total"].iloc[0]
+    assert panel_total_b["Total"] == 6
+    assert grand_total_b["Total"] == 6
+
+    branch_rows = data3c_df[data3c_df["part_name"] == "PANEL"]["branch"].tolist()
+    assert branch_rows == ["JKT", "BDG", "MDN", "SBY"]
+    panel_total_c = data3c_df[data3c_df["part_name"] == "PANEL Total"].iloc[0]
+    grand_total_c = data3c_df[data3c_df["part_name"] == "Grand Total"].iloc[0]
+    assert panel_total_c["Total"] == 6
+    assert grand_total_c["Total"] == 6
+
+
+def test_run_pipeline_step_recipe_panel_usage_summary_data4_with_fixed_order(app_paths):
+    source_path = app_paths.project_root / "data4_source.xlsx"
+    pd.DataFrame(
+        [
+            {"part_name": "PANEL", "panel_usage": "2 - 3 Years"},
+            {"part_name": "PANEL", "panel_usage": "< 1 Year"},
+            {"part_name": "PANEL", "panel_usage": "1 - 2 Years"},
+            {"part_name": "PANEL", "panel_usage": "1 - 2 Years"},
+            {"part_name": "PANEL", "panel_usage": "> 3 Years"},
+            {"part_name": "PANEL", "panel_usage": "INVALID"},
+            {"part_name": "PANEL", "panel_usage": ""},
+            {"part_name": "MAIN_UNIT", "panel_usage": "< 1 Year"},
+        ]
+    ).to_excel(source_path, index=False, sheet_name="OnlySheet")
+
+    config_path = app_paths.configs_dir / "panel_usage_summary_data4.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Panel Usage Summary Data4"',
+                "datasets:",
+                '  working_dataset: "result"',
+                "  canonical_columns:",
+                '    - "part_name"',
+                '    - "panel_usage"',
+                "steps:",
+                '  - id: "extract"',
+                '    type: "extract_sheet"',
+                "    sheet_selector:",
+                '      mode: "single_sheet_workbook"',
+                "    header_locator:",
+                "      scan_rows: [1, 1]",
+                "      required:",
+                '        - "part_name"',
+                '        - "panel_usage"',
+                "    select:",
+                '      "part_name": "part_name"',
+                '      "panel_usage": "panel_usage"',
+                '    write_to: "result"',
+                "outputs:",
+                '  - sheet_name: "data4"',
+                "    summary:",
+                '      type: "panel_usage_summary"',
+                '      layout_mode: "plain"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _: None,
+    )
+
+    data4_df = pd.read_excel(result.output_path, sheet_name="data4", keep_default_na=False)
+
+    usage_rows = data4_df[data4_df["part_name"] == "PANEL"]["panel_usage"].tolist()
+    assert usage_rows == ["< 1 Year", "1 - 2 Years", "2 - 3 Years", "> 3 Years"]
+
+    usage_counts = data4_df[data4_df["part_name"] == "PANEL"]["Total"].tolist()
+    assert usage_counts == [1, 2, 1, 1]
+
+    panel_total = data4_df[data4_df["part_name"] == "PANEL Total"].iloc[0]
+    grand_total = data4_df[data4_df["part_name"] == "Grand Total"].iloc[0]
+    assert panel_total["Total"] == 5
+    assert grand_total["Total"] == 5
+
+
+def test_run_pipeline_step_recipe_panel_fcost_data5a_and_top1_model_data5b(app_paths):
+    source_path = app_paths.project_root / "data5_source.xlsx"
+    pd.DataFrame(
+        [
+            {"part_name": "PANEL", "inch": "55", "model_name": "M1", "labor_cost": 10, "transportation_cost": 2, "parts_cost": 288, "total_cost": 300},
+            {"part_name": "PANEL", "inch": "55", "model_name": "M2", "labor_cost": 5, "transportation_cost": 1, "parts_cost": 114, "total_cost": 120},
+            {"part_name": "PANEL", "inch": "55", "model_name": "M3", "labor_cost": 2, "transportation_cost": 1, "parts_cost": 47, "total_cost": 50},
+            {"part_name": "PANEL", "inch": "55", "model_name": "M4", "labor_cost": 1, "transportation_cost": 0, "parts_cost": 19, "total_cost": 20},
+            {"part_name": "PANEL", "inch": "55", "model_name": "M5", "labor_cost": 1, "transportation_cost": 0, "parts_cost": 6, "total_cost": 7},
+            {"part_name": "PANEL", "inch": "55", "model_name": "M6", "labor_cost": 0, "transportation_cost": 0, "parts_cost": 3, "total_cost": 3},
+            {"part_name": "PANEL", "inch": "32", "model_name": "A", "labor_cost": 3, "transportation_cost": 1, "parts_cost": 296, "total_cost": 300},
+            {"part_name": "PANEL", "inch": "65", "model_name": "B", "labor_cost": 2, "transportation_cost": 1, "parts_cost": 197, "total_cost": 200},
+            {"part_name": "PANEL", "inch": "24", "model_name": "C", "labor_cost": 1, "transportation_cost": 1, "parts_cost": 98, "total_cost": 100},
+            {"part_name": "PANEL", "inch": "75", "model_name": "D", "labor_cost": 1, "transportation_cost": 0, "parts_cost": 79, "total_cost": 80},
+            {"part_name": "PANEL", "inch": "42", "model_name": "E", "labor_cost": 1, "transportation_cost": 0, "parts_cost": 59, "total_cost": 60},
+            {"part_name": "MAIN_UNIT", "inch": "55", "model_name": "X", "labor_cost": 99, "transportation_cost": 0, "parts_cost": 0, "total_cost": 99},
+        ]
+    ).to_excel(source_path, index=False, sheet_name="OnlySheet")
+
+    config_path = app_paths.configs_dir / "panel_fcost_data5.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Panel FCost Data5"',
+                "datasets:",
+                '  working_dataset: "result"',
+                "  canonical_columns:",
+                '    - "part_name"',
+                '    - "inch"',
+                '    - "model_name"',
+                '    - "labor_cost"',
+                '    - "transportation_cost"',
+                '    - "parts_cost"',
+                '    - "total_cost"',
+                "steps:",
+                '  - id: "extract"',
+                '    type: "extract_sheet"',
+                "    sheet_selector:",
+                '      mode: "single_sheet_workbook"',
+                "    header_locator:",
+                "      scan_rows: [1, 1]",
+                "      required:",
+                '        - "part_name"',
+                '        - "inch"',
+                '        - "model_name"',
+                '        - "labor_cost"',
+                '        - "transportation_cost"',
+                '        - "parts_cost"',
+                '        - "total_cost"',
+                "    select:",
+                '      "part_name": "part_name"',
+                '      "inch": "inch"',
+                '      "model_name": "model_name"',
+                '      "labor_cost": "labor_cost"',
+                '      "transportation_cost": "transportation_cost"',
+                '      "parts_cost": "parts_cost"',
+                '      "total_cost": "total_cost"',
+                '    write_to: "result"',
+                "outputs:",
+                '  - sheet_name: "data5a"',
+                "    summary:",
+                '      type: "panel_fcost_inch_summary"',
+                '      layout_mode: "plain"',
+                '  - sheet_name: "data5b"',
+                "    summary:",
+                '      type: "panel_top1_inch_model_summary"',
+                '      layout_mode: "plain"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _: None,
+    )
+
+    data5a_df = pd.read_excel(result.output_path, sheet_name="data5a", keep_default_na=False)
+    data5b_df = pd.read_excel(result.output_path, sheet_name="data5b", keep_default_na=False)
+
+    inch_rows = data5a_df[data5a_df["part_name"] == "PANEL"]["inch"].map(str).tolist()
+    assert inch_rows == ["55", "32", "65", "24", "75", "other"]
+
+    panel_total_a = data5a_df[data5a_df["part_name"] == "PANEL Total"].iloc[0]
+    grand_total_a = data5a_df[data5a_df["part_name"] == "Grand Total"].iloc[0]
+    assert panel_total_a["Sum of total_cost"] == 1240
+    assert grand_total_a["Sum of total_cost"] == 1240
+
+    model_rows = data5b_df[data5b_df["part_name"] == "PANEL"]["model_name"].tolist()
+    assert model_rows == ["M1", "M2", "M3", "M4", "M5", "other"]
+    inch_value_rows = data5b_df[data5b_df["part_name"] == "PANEL"]["inch"].map(str).unique().tolist()
+    assert inch_value_rows == ["55"]
+
+    panel_total_b = data5b_df[data5b_df["part_name"] == "PANEL Total"].iloc[0]
+    grand_total_b = data5b_df[data5b_df["part_name"] == "Grand Total"].iloc[0]
+    assert panel_total_b["Sum of total_cost"] == 500
+    assert grand_total_b["Sum of total_cost"] == 500
+
+
+def test_run_pipeline_step_recipe_panel_symptom_inch_matrix_data6(app_paths):
+    source_path = app_paths.project_root / "data6_source.xlsx"
+    pd.DataFrame(
+        [
+            {"part_name": "PANEL", "inch": "24", "symptom": "A"},
+            {"part_name": "PANEL", "inch": "24", "symptom": "A"},
+            {"part_name": "PANEL", "inch": "32", "symptom": "A"},
+            {"part_name": "PANEL", "inch": "32", "symptom": "B"},
+            {"part_name": "PANEL", "inch": "32", "symptom": "B"},
+            {"part_name": "PANEL", "inch": "55", "symptom": "C"},
+            {"part_name": "MAIN_UNIT", "inch": "24", "symptom": "Z"},
+        ]
+    ).to_excel(source_path, index=False, sheet_name="OnlySheet")
+
+    config_path = app_paths.configs_dir / "panel_symptom_matrix_data6.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Panel Symptom Matrix Data6"',
+                "datasets:",
+                '  working_dataset: "result"',
+                "  canonical_columns:",
+                '    - "part_name"',
+                '    - "inch"',
+                '    - "symptom"',
+                "steps:",
+                '  - id: "extract"',
+                '    type: "extract_sheet"',
+                "    sheet_selector:",
+                '      mode: "single_sheet_workbook"',
+                "    header_locator:",
+                "      scan_rows: [1, 1]",
+                "      required:",
+                '        - "part_name"',
+                '        - "inch"',
+                '        - "symptom"',
+                "    select:",
+                '      "part_name": "part_name"',
+                '      "inch": "inch"',
+                '      "symptom": "symptom"',
+                '    write_to: "result"',
+                "outputs:",
+                '  - sheet_name: "data6"',
+                "    summary:",
+                '      type: "panel_symptom_inch_matrix"',
+                '      layout_mode: "plain"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _: None,
+    )
+
+    data6_df = pd.read_excel(result.output_path, sheet_name="data6", keep_default_na=False)
+    data6_df.columns = [str(col) for col in data6_df.columns]
+
+    assert data6_df.columns.tolist() == ["part_name", "symptom", "24", "32", "55", "Grand Total"]
+
+    symptom_rows = data6_df[data6_df["part_name"] == "PANEL"]["symptom"].tolist()
+    assert symptom_rows == ["A", "B", "C"]
+
+    row_a = data6_df[(data6_df["part_name"] == "PANEL") & (data6_df["symptom"] == "A")].iloc[0]
+    assert row_a["24"] == 2
+    assert row_a["32"] == 1
+    assert row_a["55"] == 0
+    assert row_a["Grand Total"] == 3
+
+    panel_total = data6_df[data6_df["part_name"] == "PANEL Total"].iloc[0]
+    grand_total = data6_df[data6_df["part_name"] == "Grand Total"].iloc[0]
+    assert panel_total["Grand Total"] == 6
+    assert grand_total["Grand Total"] == 6

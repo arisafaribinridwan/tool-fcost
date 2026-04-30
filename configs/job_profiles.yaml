@@ -7,3 +7,7 @@ jobs:
   label: FCOST LCD SEID
   config_file: monthly-report-recipe.yaml
   enabled: true
+- id: job-summary-result
+  label: Job Summary Result
+  config_file: job_summary_result.yaml
+  enabled: true

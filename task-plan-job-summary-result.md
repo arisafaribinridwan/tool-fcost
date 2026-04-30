@@ -6,8 +6,22 @@
 
 - ✅ Tahap 0 — persiapan teknis dan guardrail: **sudah diimplementasikan**.
 - ✅ Tahap 1 — implementasi `data1`: **sudah diimplementasikan** (`summary.type = static_part_summary`, termasuk subtotal per section + grand total, dan test regresi lulus).
-- ▶️ **Next Tahap Implementasi: Tahap 2 — `data2`** (pivot semua `part_name` per `section`, sorting `Sum of total_cost` descending, subtotal per section, grand total).
+- ✅ Tahap 2 — implementasi `data2`: **sudah diimplementasikan** (`summary.type = part_pivot_summary`, sorting per section by `Sum of total_cost` descending, subtotal + grand total).
+- ✅ Tahap 3 — implementasi `data3a`, `data3b`, `data3c`: **sudah diimplementasikan** (`panel_model_summary`, `panel_symptom_summary`, `panel_area_summary`).
+- ✅ Tahap 4 — implementasi `data4`: **sudah diimplementasikan** (`panel_usage_summary`, fixed order kategori, ignore invalid/blank category).
+- ✅ Tahap 5 — implementasi `data5a`, `data5b`: **sudah diimplementasikan** (`panel_fcost_inch_summary`, `panel_top1_inch_model_summary`).
+- ✅ Tahap 6 — implementasi `data6`: **sudah diimplementasikan** (`panel_symptom_inch_matrix`).
+- ✅ Tahap 7 — integrasi job baru: **sudah diimplementasikan** (`configs/job_summary_result.yaml` + registry `configs/job_profiles.yaml`).
 
+Hasil validasi smoke test end-to-end (2026-04-30):
+
+- Output workbook: `outputs/Job_Summary_Result_20260430_185808.xlsx`
+- Total sheet output: `10` (`result`, `data1`, `data2`, `data3a`, `data3b`, `data3c`, `data4`, `data5a`, `data5b`, `data6`)
+- Konsistensi total utama:
+  - `data1.Grand Total.Sum of total_cost` = `921306087`
+  - `data2.Grand Total.Sum of total_cost` = `921306087`
+  - `data4.Grand Total.Total` = `482`
+  - `data6.Grand Total.Grand Total` = `482`
 
 Tujuan job baru adalah membaca satu workbook source yang berisi satu sheet berformat sama dengan sheet `result` pada `outputs/result_learning_source.xlsx`, lalu men-generate sheet `result` dan summary `data1`, `data2`, `data3a`, `data3b`, `data3c`, `data4`, `data5a`, `data5b`, dan `data6`.
 
@@ -16,7 +30,7 @@ Batasan kerja yang wajib dipertahankan:
 1. `outputs/result_learning_source.xlsx` sheet `result` menjadi sumber referensi untuk studi aturan output; source runtime adalah workbook input satu sheet dengan format tabel yang sama.
 2. Tidak melakukan perubahan kode sebelum ada konfirmasi final untuk setiap tahap summary.
 3. Implementasi final harus dibuat bertahap dan tervalidasi per sheet final.
-4. File ini adalah rencana implementasi; **status terbaru: Tahap 0 dan Tahap 1 sudah diimplementasikan**, sisanya masih bertahap.
+4. File ini adalah rencana implementasi; **status terbaru: Tahap 0 sampai Tahap 7 sudah diimplementasikan**.
 5. Jangan ubah perilaku engine yang sudah berjalan; implementasi hanya boleh menambahkan kemampuan baru secara additive agar job/config existing tetap aman.
 
 Keputusan terkonfirmasi:
@@ -612,7 +626,7 @@ Keputusan final sebelum coding:
 
 - `OTHER` adalah seluruh `part_name` non-kosong selain `PANEL`, `MAIN_UNIT`, dan `POWER_UNIT`.
 - Section selain `GQS`/`SASS` ditampilkan dinamis jika muncul di data masa depan.
-### Tahap 2 — implementasi data2 ▶️ (Next)
+### Tahap 2 — implementasi data2 ✅ (Implemented)
 
 Tujuan:
 
@@ -636,7 +650,7 @@ Keputusan final sebelum coding:
 
 - Sorting final memakai `Sum of total_cost` descending dalam tiap section.
 
-### Tahap 3 — implementasi data3a, data3b, data3c
+### Tahap 3 — implementasi data3a, data3b, data3c ✅ (Implemented)
 
 Tujuan:
 
@@ -660,7 +674,7 @@ Keputusan final sebelum coding:
 
 - Tiga blok dipisah menjadi sheet `data3a`, `data3b`, dan `data3c`.
 
-### Tahap 4 — implementasi data4
+### Tahap 4 — implementasi data4 ✅ (Implemented)
 
 Tujuan:
 
@@ -684,7 +698,7 @@ Keputusan final sebelum coding:
 
 - `panel_usage` kosong atau kategori baru di masa depan diabaikan.
 
-### Tahap 5 — implementasi data5a, data5b
+### Tahap 5 — implementasi data5a, data5b ✅ (Implemented)
 
 Tujuan:
 
@@ -721,7 +735,7 @@ Keputusan final sebelum coding:
 - `data5a` memakai Top 5 inch dinamis berdasarkan `Sum of total_cost`; inch lain menjadi `other`.
 - `data5b` memakai Top 5 model dari Top 1 inch hasil `data5a` berdasarkan `Sum of total_cost` descending; model lain menjadi `other`.
 
-### Tahap 6 — implementasi data6
+### Tahap 6 — implementasi data6 ✅ (Implemented)
 
 Tujuan:
 
@@ -748,7 +762,7 @@ Keputusan final sebelum coding:
 
 - Kolom inch mengikuti urutan numeric ascending, lalu `Grand Total`.
 
-### Tahap 7 — integrasi job baru
+### Tahap 7 — integrasi job baru ✅ (Implemented)
 
 Tujuan:
 

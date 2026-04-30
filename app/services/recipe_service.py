@@ -1094,6 +1094,629 @@ def _build_static_part_summary(data_df: pd.DataFrame, options: dict | None) -> p
     return summary_df
 
 
+def _build_part_pivot_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
+    cfg = options or {}
+    section_column = str(cfg.get("section_column", "section"))
+    part_column = str(cfg.get("part_column", "part_name"))
+
+    cost_columns = {
+        "Sum of labor_cost": str(cfg.get("labor_cost_column", "labor_cost")),
+        "Sum of transportation_cost": str(cfg.get("transportation_cost_column", "transportation_cost")),
+        "Sum of parts_cost": str(cfg.get("parts_cost_column", "parts_cost")),
+        "Sum of total_cost": str(cfg.get("total_cost_column", "total_cost")),
+    }
+
+    required_columns = [section_column, part_column, *cost_columns.values()]
+    missing = [column for column in required_columns if column not in data_df.columns]
+    if missing:
+        raise ValueError(
+            "Part pivot summary gagal, kolom tidak ditemukan: " + ", ".join(missing)
+        )
+
+    working_df = data_df.copy()
+    part_series = working_df[part_column].fillna("").astype(str).str.strip()
+    working_df = working_df.loc[part_series.ne("")].copy()
+    part_series = working_df[part_column].fillna("").astype(str).str.strip()
+    working_df[part_column] = part_series
+
+    for target_col, source_col in cost_columns.items():
+        working_df[target_col] = pd.to_numeric(working_df[source_col], errors="coerce").fillna(0)
+
+    grouped = (
+        working_df.groupby([section_column, part_column], dropna=False, sort=False)
+        .agg(
+            **{
+                "Sum of labor_cost": ("Sum of labor_cost", "sum"),
+                "Sum of transportation_cost": ("Sum of transportation_cost", "sum"),
+                "Sum of parts_cost": ("Sum of parts_cost", "sum"),
+                "Sum of total_cost": ("Sum of total_cost", "sum"),
+                "Count of part_name": (part_column, "count"),
+            }
+        )
+        .reset_index()
+    )
+    grouped = grouped.rename(columns={section_column: "section", part_column: "part_name"})
+
+    output_columns = [
+        "section",
+        "part_name",
+        "Sum of labor_cost",
+        "Sum of transportation_cost",
+        "Sum of parts_cost",
+        "Sum of total_cost",
+        "Count of part_name",
+    ]
+
+    section_order = working_df[section_column].drop_duplicates().tolist()
+    rows: list[dict[str, object]] = []
+
+    for section_value in section_order:
+        section_rows = grouped[grouped["section"].eq(section_value)].copy()
+        if section_rows.empty:
+            continue
+
+        section_rows = section_rows.sort_values(
+            by=["Sum of total_cost", "part_name"],
+            ascending=[False, True],
+            kind="stable",
+        )
+
+        section_total = {
+            "Sum of labor_cost": 0.0,
+            "Sum of transportation_cost": 0.0,
+            "Sum of parts_cost": 0.0,
+            "Sum of total_cost": 0.0,
+            "Count of part_name": 0.0,
+        }
+
+        for _, row in section_rows.iterrows():
+            data_row = {
+                "section": section_value,
+                "part_name": str(row["part_name"]),
+                "Sum of labor_cost": float(row["Sum of labor_cost"]),
+                "Sum of transportation_cost": float(row["Sum of transportation_cost"]),
+                "Sum of parts_cost": float(row["Sum of parts_cost"]),
+                "Sum of total_cost": float(row["Sum of total_cost"]),
+                "Count of part_name": float(row["Count of part_name"]),
+            }
+            rows.append(data_row)
+            for key in section_total:
+                section_total[key] += float(data_row[key])
+
+        rows.append(
+            {
+                "section": f"{section_value} Total",
+                "part_name": "",
+                **section_total,
+            }
+        )
+
+    summary_df = pd.DataFrame(rows, columns=output_columns)
+    if summary_df.empty:
+        summary_df = pd.DataFrame(columns=output_columns)
+
+    if not summary_df.empty:
+        subtotal_mask = summary_df["section"].astype(str).str.endswith(" Total")
+        total_row = {
+            "section": "Grand Total",
+            "part_name": "",
+            "Sum of labor_cost": float(summary_df.loc[~subtotal_mask, "Sum of labor_cost"].sum()),
+            "Sum of transportation_cost": float(summary_df.loc[~subtotal_mask, "Sum of transportation_cost"].sum()),
+            "Sum of parts_cost": float(summary_df.loc[~subtotal_mask, "Sum of parts_cost"].sum()),
+            "Sum of total_cost": float(summary_df.loc[~subtotal_mask, "Sum of total_cost"].sum()),
+            "Count of part_name": float(summary_df.loc[~subtotal_mask, "Count of part_name"].sum()),
+        }
+        summary_df = pd.concat([summary_df, pd.DataFrame([total_row])], ignore_index=True)
+
+    return summary_df
+
+
+def _build_panel_model_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
+    cfg = options or {}
+    part_column = str(cfg.get("part_column", "part_name"))
+    inch_column = str(cfg.get("inch_column", "inch"))
+    model_column = str(cfg.get("model_column", "model_name"))
+    total_cost_column = str(cfg.get("total_cost_column", "total_cost"))
+
+    required_columns = [part_column, inch_column, model_column, total_cost_column]
+    missing = [column for column in required_columns if column not in data_df.columns]
+    if missing:
+        raise ValueError("Panel model summary gagal, kolom tidak ditemukan: " + ", ".join(missing))
+
+    working_df = data_df.copy()
+    part_series = working_df[part_column].fillna("").astype(str).str.strip()
+    working_df = working_df.loc[part_series.eq("PANEL")].copy()
+    working_df[part_column] = "PANEL"
+    working_df[inch_column] = working_df[inch_column].fillna("").astype(str).str.strip()
+    working_df[model_column] = working_df[model_column].fillna("").astype(str).str.strip()
+    working_df["Total"] = pd.to_numeric(working_df[total_cost_column], errors="coerce").fillna(0)
+
+    grouped = (
+        working_df.groupby([part_column, inch_column, model_column], dropna=False, sort=False)
+        .agg(Total=("Total", "sum"))
+        .reset_index()
+        .rename(columns={part_column: "part_name", inch_column: "inch", model_column: "model_name"})
+    )
+
+    output_columns = ["part_name", "inch", "model_name", "Total"]
+    rows: list[dict[str, object]] = []
+    inch_order = working_df[inch_column].drop_duplicates().tolist()
+
+    for inch_value in inch_order:
+        inch_rows = grouped[grouped["inch"].eq(inch_value)].copy()
+        if inch_rows.empty:
+            continue
+
+        inch_rows = inch_rows.sort_values(by=["Total", "model_name"], ascending=[False, True], kind="stable")
+        inch_total = 0.0
+        for _, row in inch_rows.iterrows():
+            value = float(row["Total"])
+            rows.append(
+                {
+                    "part_name": "PANEL",
+                    "inch": str(inch_value),
+                    "model_name": str(row["model_name"]),
+                    "Total": value,
+                }
+            )
+            inch_total += value
+
+        rows.append({"part_name": "PANEL", "inch": f"{inch_value} Total", "model_name": "", "Total": inch_total})
+
+    summary_df = pd.DataFrame(rows, columns=output_columns)
+    if summary_df.empty:
+        summary_df = pd.DataFrame(columns=output_columns)
+
+    if not summary_df.empty:
+        subtotal_mask = summary_df["inch"].astype(str).str.endswith(" Total")
+        panel_total = float(summary_df.loc[~subtotal_mask, "Total"].sum())
+        summary_df = pd.concat(
+            [
+                summary_df,
+                pd.DataFrame(
+                    [
+                        {"part_name": "PANEL Total", "inch": "", "model_name": "", "Total": panel_total},
+                        {"part_name": "Grand Total", "inch": "", "model_name": "", "Total": panel_total},
+                    ]
+                ),
+            ],
+            ignore_index=True,
+        )
+
+    return summary_df
+
+
+def _build_panel_symptom_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
+    cfg = options or {}
+    part_column = str(cfg.get("part_column", "part_name"))
+    symptom_column = str(cfg.get("symptom_column", "symptom"))
+
+    required_columns = [part_column, symptom_column]
+    missing = [column for column in required_columns if column not in data_df.columns]
+    if missing:
+        raise ValueError("Panel symptom summary gagal, kolom tidak ditemukan: " + ", ".join(missing))
+
+    working_df = data_df.copy()
+    part_series = working_df[part_column].fillna("").astype(str).str.strip()
+    working_df = working_df.loc[part_series.eq("PANEL")].copy()
+    working_df["symptom"] = working_df[symptom_column].fillna("").astype(str).str.strip()
+
+    grouped = (
+        working_df.groupby("symptom", dropna=False, sort=False)
+        .size()
+        .reset_index(name="Total")
+        .sort_values(by=["Total", "symptom"], ascending=[False, True], kind="stable")
+    )
+
+    summary_df = grouped.rename(columns={"symptom": "symptom"})
+    summary_df.insert(0, "part_name", "PANEL")
+    summary_df = summary_df[["part_name", "symptom", "Total"]]
+
+    panel_total = float(summary_df["Total"].sum()) if not summary_df.empty else 0.0
+    summary_df = pd.concat(
+        [
+            summary_df,
+            pd.DataFrame(
+                [
+                    {"part_name": "PANEL Total", "symptom": "", "Total": panel_total},
+                    {"part_name": "Grand Total", "symptom": "", "Total": panel_total},
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
+    return summary_df
+
+
+def _build_panel_area_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
+    cfg = options or {}
+    part_column = str(cfg.get("part_column", "part_name"))
+    area_column = str(cfg.get("area_column", "branch"))
+
+    required_columns = [part_column, area_column]
+    missing = [column for column in required_columns if column not in data_df.columns]
+    if missing:
+        raise ValueError("Panel area summary gagal, kolom tidak ditemukan: " + ", ".join(missing))
+
+    working_df = data_df.copy()
+    part_series = working_df[part_column].fillna("").astype(str).str.strip()
+    working_df = working_df.loc[part_series.eq("PANEL")].copy()
+    working_df["branch"] = working_df[area_column].fillna("").astype(str).str.strip()
+
+    grouped = (
+        working_df.groupby("branch", dropna=False, sort=False)
+        .size()
+        .reset_index(name="Total")
+        .sort_values(by=["Total", "branch"], ascending=[False, True], kind="stable")
+    )
+
+    summary_df = grouped.rename(columns={"branch": "branch"})
+    summary_df.insert(0, "part_name", "PANEL")
+    summary_df = summary_df[["part_name", "branch", "Total"]]
+
+    panel_total = float(summary_df["Total"].sum()) if not summary_df.empty else 0.0
+    summary_df = pd.concat(
+        [
+            summary_df,
+            pd.DataFrame(
+                [
+                    {"part_name": "PANEL Total", "branch": "", "Total": panel_total},
+                    {"part_name": "Grand Total", "branch": "", "Total": panel_total},
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
+    return summary_df
+
+
+def _build_panel_usage_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
+    cfg = options or {}
+    part_column = str(cfg.get("part_column", "part_name"))
+    usage_column = str(cfg.get("usage_column", "panel_usage"))
+    usage_order = ["< 1 Year", "1 - 2 Years", "2 - 3 Years", "> 3 Years"]
+    usage_key_to_label = {item.casefold(): item for item in usage_order}
+
+    required_columns = [part_column, usage_column]
+    missing = [column for column in required_columns if column not in data_df.columns]
+    if missing:
+        raise ValueError("Panel usage summary gagal, kolom tidak ditemukan: " + ", ".join(missing))
+
+    working_df = data_df.copy()
+    part_series = working_df[part_column].fillna("").astype(str).str.strip()
+    working_df = working_df.loc[part_series.eq("PANEL")].copy()
+
+    usage_series = working_df[usage_column].fillna("").astype(str).str.strip()
+    usage_keys = usage_series.map(lambda value: value.casefold())
+    valid_mask = usage_keys.isin(usage_key_to_label.keys())
+    filtered_df = working_df.loc[valid_mask].copy()
+    filtered_df["panel_usage"] = usage_keys.loc[valid_mask].map(usage_key_to_label)
+
+    counts = filtered_df.groupby("panel_usage", dropna=False).size().to_dict()
+    rows = [
+        {"part_name": "PANEL", "panel_usage": label, "Total": float(counts.get(label, 0))}
+        for label in usage_order
+    ]
+
+    summary_df = pd.DataFrame(rows, columns=["part_name", "panel_usage", "Total"])
+    panel_total = float(summary_df["Total"].sum()) if not summary_df.empty else 0.0
+    summary_df = pd.concat(
+        [
+            summary_df,
+            pd.DataFrame(
+                [
+                    {"part_name": "PANEL Total", "panel_usage": "", "Total": panel_total},
+                    {"part_name": "Grand Total", "panel_usage": "", "Total": panel_total},
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
+    return summary_df
+
+
+def _build_panel_fcost_inch_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
+    cfg = options or {}
+    part_column = str(cfg.get("part_column", "part_name"))
+    inch_column = str(cfg.get("inch_column", "inch"))
+
+    cost_columns = {
+        "Sum of labor_cost": str(cfg.get("labor_cost_column", "labor_cost")),
+        "Sum of transportation_cost": str(cfg.get("transportation_cost_column", "transportation_cost")),
+        "Sum of parts_cost": str(cfg.get("parts_cost_column", "parts_cost")),
+        "Sum of total_cost": str(cfg.get("total_cost_column", "total_cost")),
+    }
+
+    required_columns = [part_column, inch_column, *cost_columns.values()]
+    missing = [column for column in required_columns if column not in data_df.columns]
+    if missing:
+        raise ValueError("Panel fcost inch summary gagal, kolom tidak ditemukan: " + ", ".join(missing))
+
+    working_df = data_df.copy()
+    part_series = working_df[part_column].fillna("").astype(str).str.strip()
+    working_df = working_df.loc[part_series.eq("PANEL")].copy()
+    working_df["inch"] = working_df[inch_column].fillna("").astype(str).str.strip()
+
+    for target_col, source_col in cost_columns.items():
+        working_df[target_col] = pd.to_numeric(working_df[source_col], errors="coerce").fillna(0)
+
+    grouped = (
+        working_df.groupby("inch", dropna=False, sort=False)
+        .agg(
+            **{
+                "Sum of labor_cost": ("Sum of labor_cost", "sum"),
+                "Sum of transportation_cost": ("Sum of transportation_cost", "sum"),
+                "Sum of parts_cost": ("Sum of parts_cost", "sum"),
+                "Sum of total_cost": ("Sum of total_cost", "sum"),
+                "Count of part_name": ("inch", "count"),
+            }
+        )
+        .reset_index()
+    )
+
+    grouped = grouped.sort_values(by=["Sum of total_cost", "inch"], ascending=[False, True], kind="stable")
+    top_inch_values = grouped["inch"].tolist()[:5]
+
+    rows: list[dict[str, object]] = []
+    for inch_value in top_inch_values:
+        row = grouped[grouped["inch"].eq(inch_value)].iloc[0]
+        rows.append(
+            {
+                "part_name": "PANEL",
+                "inch": str(inch_value),
+                "Sum of labor_cost": float(row["Sum of labor_cost"]),
+                "Sum of transportation_cost": float(row["Sum of transportation_cost"]),
+                "Sum of parts_cost": float(row["Sum of parts_cost"]),
+                "Sum of total_cost": float(row["Sum of total_cost"]),
+                "Count of part_name": float(row["Count of part_name"]),
+            }
+        )
+
+    other_df = grouped[~grouped["inch"].isin(top_inch_values)].copy()
+    if not other_df.empty:
+        rows.append(
+            {
+                "part_name": "PANEL",
+                "inch": "other",
+                "Sum of labor_cost": float(other_df["Sum of labor_cost"].sum()),
+                "Sum of transportation_cost": float(other_df["Sum of transportation_cost"].sum()),
+                "Sum of parts_cost": float(other_df["Sum of parts_cost"].sum()),
+                "Sum of total_cost": float(other_df["Sum of total_cost"].sum()),
+                "Count of part_name": float(other_df["Count of part_name"].sum()),
+            }
+        )
+
+    summary_df = pd.DataFrame(
+        rows,
+        columns=[
+            "part_name",
+            "inch",
+            "Sum of labor_cost",
+            "Sum of transportation_cost",
+            "Sum of parts_cost",
+            "Sum of total_cost",
+            "Count of part_name",
+        ],
+    )
+
+    if summary_df.empty:
+        summary_df = pd.DataFrame(
+            columns=[
+                "part_name",
+                "inch",
+                "Sum of labor_cost",
+                "Sum of transportation_cost",
+                "Sum of parts_cost",
+                "Sum of total_cost",
+                "Count of part_name",
+            ]
+        )
+
+    panel_total = {
+        "part_name": "PANEL Total",
+        "inch": "",
+        "Sum of labor_cost": float(summary_df["Sum of labor_cost"].sum()) if not summary_df.empty else 0.0,
+        "Sum of transportation_cost": float(summary_df["Sum of transportation_cost"].sum()) if not summary_df.empty else 0.0,
+        "Sum of parts_cost": float(summary_df["Sum of parts_cost"].sum()) if not summary_df.empty else 0.0,
+        "Sum of total_cost": float(summary_df["Sum of total_cost"].sum()) if not summary_df.empty else 0.0,
+        "Count of part_name": float(summary_df["Count of part_name"].sum()) if not summary_df.empty else 0.0,
+    }
+
+    grand_total = {**panel_total, "part_name": "Grand Total"}
+    summary_df = pd.concat([summary_df, pd.DataFrame([panel_total, grand_total])], ignore_index=True)
+    return summary_df
+
+
+def _build_panel_top1_inch_model_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
+    cfg = options or {}
+    part_column = str(cfg.get("part_column", "part_name"))
+    inch_column = str(cfg.get("inch_column", "inch"))
+    model_column = str(cfg.get("model_column", "model_name"))
+
+    cost_columns = {
+        "Sum of labor_cost": str(cfg.get("labor_cost_column", "labor_cost")),
+        "Sum of transportation_cost": str(cfg.get("transportation_cost_column", "transportation_cost")),
+        "Sum of parts_cost": str(cfg.get("parts_cost_column", "parts_cost")),
+        "Sum of total_cost": str(cfg.get("total_cost_column", "total_cost")),
+    }
+
+    required_columns = [part_column, inch_column, model_column, *cost_columns.values()]
+    missing = [column for column in required_columns if column not in data_df.columns]
+    if missing:
+        raise ValueError("Panel top1 inch model summary gagal, kolom tidak ditemukan: " + ", ".join(missing))
+
+    working_df = data_df.copy()
+    part_series = working_df[part_column].fillna("").astype(str).str.strip()
+    working_df = working_df.loc[part_series.eq("PANEL")].copy()
+    working_df["inch"] = working_df[inch_column].fillna("").astype(str).str.strip()
+    working_df["model_name"] = working_df[model_column].fillna("").astype(str).str.strip()
+
+    for target_col, source_col in cost_columns.items():
+        working_df[target_col] = pd.to_numeric(working_df[source_col], errors="coerce").fillna(0)
+
+    inch_grouped = (
+        working_df.groupby("inch", dropna=False, sort=False)
+        .agg(**{"Sum of total_cost": ("Sum of total_cost", "sum")})
+        .reset_index()
+        .sort_values(by=["Sum of total_cost", "inch"], ascending=[False, True], kind="stable")
+    )
+
+    top1_inch = str(inch_grouped.iloc[0]["inch"]) if not inch_grouped.empty else ""
+    filtered_df = working_df[working_df["inch"].eq(top1_inch)].copy()
+
+    model_grouped = (
+        filtered_df.groupby("model_name", dropna=False, sort=False)
+        .agg(
+            **{
+                "Sum of labor_cost": ("Sum of labor_cost", "sum"),
+                "Sum of transportation_cost": ("Sum of transportation_cost", "sum"),
+                "Sum of parts_cost": ("Sum of parts_cost", "sum"),
+                "Sum of total_cost": ("Sum of total_cost", "sum"),
+                "Count of part_name": ("model_name", "count"),
+            }
+        )
+        .reset_index()
+        .sort_values(by=["Sum of total_cost", "model_name"], ascending=[False, True], kind="stable")
+    )
+
+    top_models = model_grouped["model_name"].tolist()[:5]
+    rows: list[dict[str, object]] = []
+    for model_name in top_models:
+        row = model_grouped[model_grouped["model_name"].eq(model_name)].iloc[0]
+        rows.append(
+            {
+                "part_name": "PANEL",
+                "inch": top1_inch,
+                "model_name": str(model_name),
+                "Sum of labor_cost": float(row["Sum of labor_cost"]),
+                "Sum of transportation_cost": float(row["Sum of transportation_cost"]),
+                "Sum of parts_cost": float(row["Sum of parts_cost"]),
+                "Sum of total_cost": float(row["Sum of total_cost"]),
+                "Count of part_name": float(row["Count of part_name"]),
+            }
+        )
+
+    other_df = model_grouped[~model_grouped["model_name"].isin(top_models)].copy()
+    if not other_df.empty:
+        rows.append(
+            {
+                "part_name": "PANEL",
+                "inch": top1_inch,
+                "model_name": "other",
+                "Sum of labor_cost": float(other_df["Sum of labor_cost"].sum()),
+                "Sum of transportation_cost": float(other_df["Sum of transportation_cost"].sum()),
+                "Sum of parts_cost": float(other_df["Sum of parts_cost"].sum()),
+                "Sum of total_cost": float(other_df["Sum of total_cost"].sum()),
+                "Count of part_name": float(other_df["Count of part_name"].sum()),
+            }
+        )
+
+    summary_df = pd.DataFrame(
+        rows,
+        columns=[
+            "part_name",
+            "inch",
+            "model_name",
+            "Sum of labor_cost",
+            "Sum of transportation_cost",
+            "Sum of parts_cost",
+            "Sum of total_cost",
+            "Count of part_name",
+        ],
+    )
+
+    if summary_df.empty:
+        summary_df = pd.DataFrame(
+            columns=[
+                "part_name",
+                "inch",
+                "model_name",
+                "Sum of labor_cost",
+                "Sum of transportation_cost",
+                "Sum of parts_cost",
+                "Sum of total_cost",
+                "Count of part_name",
+            ]
+        )
+
+    panel_total = {
+        "part_name": "PANEL Total",
+        "inch": "",
+        "model_name": "",
+        "Sum of labor_cost": float(summary_df["Sum of labor_cost"].sum()) if not summary_df.empty else 0.0,
+        "Sum of transportation_cost": float(summary_df["Sum of transportation_cost"].sum()) if not summary_df.empty else 0.0,
+        "Sum of parts_cost": float(summary_df["Sum of parts_cost"].sum()) if not summary_df.empty else 0.0,
+        "Sum of total_cost": float(summary_df["Sum of total_cost"].sum()) if not summary_df.empty else 0.0,
+        "Count of part_name": float(summary_df["Count of part_name"].sum()) if not summary_df.empty else 0.0,
+    }
+    grand_total = {**panel_total, "part_name": "Grand Total"}
+    summary_df = pd.concat([summary_df, pd.DataFrame([panel_total, grand_total])], ignore_index=True)
+    return summary_df
+
+
+def _build_panel_symptom_inch_matrix(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
+    cfg = options or {}
+    part_column = str(cfg.get("part_column", "part_name"))
+    symptom_column = str(cfg.get("symptom_column", "symptom"))
+    inch_column = str(cfg.get("inch_column", "inch"))
+
+    required_columns = [part_column, symptom_column, inch_column]
+    missing = [column for column in required_columns if column not in data_df.columns]
+    if missing:
+        raise ValueError("Panel symptom inch matrix gagal, kolom tidak ditemukan: " + ", ".join(missing))
+
+    working_df = data_df.copy()
+    part_series = working_df[part_column].fillna("").astype(str).str.strip()
+    working_df = working_df.loc[part_series.eq("PANEL")].copy()
+    working_df["symptom"] = working_df[symptom_column].fillna("").astype(str).str.strip()
+    working_df["inch"] = working_df[inch_column].fillna("").astype(str).str.strip()
+
+    inch_keys = working_df["inch"].drop_duplicates().tolist()
+    inch_keys_sorted = sorted(
+        inch_keys,
+        key=lambda item: (
+            1 if pd.isna(pd.to_numeric(item, errors="coerce")) else 0,
+            float(pd.to_numeric(item, errors="coerce")) if pd.notna(pd.to_numeric(item, errors="coerce")) else str(item),
+        ),
+    )
+
+    pivot = (
+        working_df.pivot_table(index="symptom", columns="inch", values="part_name", aggfunc="count", fill_value=0)
+        .reindex(columns=inch_keys_sorted, fill_value=0)
+        .reset_index()
+    )
+
+    if "symptom" not in pivot.columns:
+        pivot = pd.DataFrame(columns=["symptom", *inch_keys_sorted])
+
+    if not pivot.empty:
+        pivot["Grand Total"] = pivot[inch_keys_sorted].sum(axis=1)
+        pivot = pivot.sort_values(by=["Grand Total", "symptom"], ascending=[False, True], kind="stable")
+    else:
+        pivot["Grand Total"] = []
+
+    pivot.insert(0, "part_name", "PANEL")
+
+    total_values = {inch: float(pivot[inch].sum()) if inch in pivot.columns else 0.0 for inch in inch_keys_sorted}
+    grand_total_value = float(sum(total_values.values()))
+
+    panel_total_row: dict[str, object] = {"part_name": "PANEL Total", "symptom": ""}
+    grand_total_row: dict[str, object] = {"part_name": "Grand Total", "symptom": ""}
+    for inch in inch_keys_sorted:
+        panel_total_row[inch] = total_values[inch]
+        grand_total_row[inch] = total_values[inch]
+    panel_total_row["Grand Total"] = grand_total_value
+    grand_total_row["Grand Total"] = grand_total_value
+
+    summary_df = pd.concat([pivot, pd.DataFrame([panel_total_row, grand_total_row])], ignore_index=True)
+    ordered_columns = ["part_name", "symptom", *inch_keys_sorted, "Grand Total"]
+    for col in ordered_columns:
+        if col not in summary_df.columns:
+            summary_df[col] = 0.0 if col not in {"part_name", "symptom"} else ""
+    summary_df = summary_df.loc[:, ordered_columns]
+    return summary_df
+
+
 def _build_summary_output_sheet(data_df: pd.DataFrame, item: dict) -> tuple[pd.DataFrame, str]:
     summary_cfg = item["summary"]
     summary_type = str(summary_cfg["type"]).strip()
@@ -1102,6 +1725,30 @@ def _build_summary_output_sheet(data_df: pd.DataFrame, item: dict) -> tuple[pd.D
 
     if summary_type == "static_part_summary":
         return _build_static_part_summary(data_df, options if isinstance(options, dict) else None), layout_mode
+
+    if summary_type == "part_pivot_summary":
+        return _build_part_pivot_summary(data_df, options if isinstance(options, dict) else None), layout_mode
+
+    if summary_type == "panel_model_summary":
+        return _build_panel_model_summary(data_df, options if isinstance(options, dict) else None), layout_mode
+
+    if summary_type == "panel_symptom_summary":
+        return _build_panel_symptom_summary(data_df, options if isinstance(options, dict) else None), layout_mode
+
+    if summary_type == "panel_area_summary":
+        return _build_panel_area_summary(data_df, options if isinstance(options, dict) else None), layout_mode
+
+    if summary_type == "panel_usage_summary":
+        return _build_panel_usage_summary(data_df, options if isinstance(options, dict) else None), layout_mode
+
+    if summary_type == "panel_fcost_inch_summary":
+        return _build_panel_fcost_inch_summary(data_df, options if isinstance(options, dict) else None), layout_mode
+
+    if summary_type == "panel_top1_inch_model_summary":
+        return _build_panel_top1_inch_model_summary(data_df, options if isinstance(options, dict) else None), layout_mode
+
+    if summary_type == "panel_symptom_inch_matrix":
+        return _build_panel_symptom_inch_matrix(data_df, options if isinstance(options, dict) else None), layout_mode
 
     summary_row: dict[str, object] = {
         "summary_type": summary_type,
