@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 import pandas as pd
 import pytest
 
@@ -244,6 +244,60 @@ def test_run_pipeline_without_period_override_keeps_fallback(app_paths):
 
     workbook = load_workbook(result.output_path, read_only=True)
     assert workbook["Detail"]["A2"].value == "Periode: -"
+
+
+def test_run_pipeline_step_recipe_reuses_source_period_text(app_paths):
+    source_path = app_paths.project_root / "job_summary_source.xlsx"
+    source_workbook = Workbook()
+    source_sheet = source_workbook.active
+    source_sheet.title = "result"
+    source_sheet["A1"] = "Monthly Report Final Recipe"
+    source_sheet["A2"] = "Periode: March 2026"
+    source_sheet["A3"] = "Dibuat: 01/05/2026 23:17:11"
+    source_sheet["A5"] = "notification"
+    source_sheet["A6"] = "1000001"
+    source_workbook.save(source_path)
+
+    config_path = app_paths.configs_dir / "job_summary_period.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Job Summary Result"',
+                "datasets:",
+                '  working_dataset: "result"',
+                "  canonical_columns:",
+                '    - "notification"',
+                "steps:",
+                '  - id: "extract_result_like_source"',
+                '    type: "extract_sheet"',
+                "    sheet_selector:",
+                '      mode: "single_sheet_workbook"',
+                "    header_locator:",
+                '      type: "required_columns"',
+                "      scan_rows: [1, 10]",
+                "      required:",
+                '        - "notification"',
+                "    select:",
+                '      "notification": "notification"',
+                '    write_to: "result"',
+                "outputs:",
+                '  - sheet_name: "result"',
+                "    columns:",
+                '      - "notification"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _message: None,
+    )
+
+    workbook = load_workbook(result.output_path, read_only=True)
+    assert workbook["result"]["A2"].value == "Periode: March 2026"
 
 
 def test_run_pipeline_skips_copy_when_source_already_in_uploads_subfolder(app_paths):

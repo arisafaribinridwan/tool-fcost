@@ -177,7 +177,10 @@ def write_output_workbook(
         raise ValueError(f"Path output tidak valid: {exc}") from exc
 
     safe_output_path.parent.mkdir(parents=True, exist_ok=True)
-    period_text = period_text_override or _build_period_text(source_df, header_cfg)
+    source_period_text = source_df.attrs.get("period_text")
+    if not isinstance(source_period_text, str) or not source_period_text.strip():
+        source_period_text = None
+    period_text = period_text_override or source_period_text or _build_period_text(source_df, header_cfg)
     used_sheet_names: set[str] = set()
 
     with pd.ExcelWriter(safe_output_path, engine="openpyxl") as writer:

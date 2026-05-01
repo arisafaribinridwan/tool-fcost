@@ -407,6 +407,22 @@ def _detect_header_row(raw_df: pd.DataFrame, header_cfg: dict, label: str) -> in
     raise ValueError(f"Header {label} tidak ditemukan dalam row scan {start_row}..{end_row}.")
 
 
+def _extract_period_text(raw_df: pd.DataFrame, header_index: int) -> str | None:
+    for row_index in range(header_index):
+        row_values = raw_df.iloc[row_index].tolist()
+        for col_index, value in enumerate(row_values):
+            text = " ".join(str(value).strip().split()) if not pd.isna(value) else ""
+            normalized = text.casefold()
+            if normalized.startswith("periode:"):
+                return f"Periode: {text.split(':', 1)[1].strip() or '-'}"
+            if normalized == "periode":
+                for next_value in row_values[col_index + 1 :]:
+                    next_text = " ".join(str(next_value).strip().split()) if not pd.isna(next_value) else ""
+                    if next_text:
+                        return f"Periode: {next_text}"
+    return None
+
+
 def _build_sheet_dataframe(source_path: Path, step_cfg: dict, log: LogFn) -> pd.DataFrame:
     header_cfg = step_cfg["header_locator"]
     candidate_sheets = _resolve_sheet_names(source_path, step_cfg["sheet_selector"])
@@ -427,9 +443,13 @@ def _build_sheet_dataframe(source_path: Path, step_cfg: dict, log: LogFn) -> pd.
         data_rows = data_rows.loc[
             :, [column for column in data_rows.columns if str(column).strip() != ""]
         ]
+        data_rows = data_rows.reset_index(drop=True)
+        period_text = _extract_period_text(raw_df, header_index)
+        if period_text is not None:
+            data_rows.attrs["period_text"] = period_text
 
         log(f"Sheet '{sheet_name}' dipakai untuk step '{step_cfg['id']}'.")
-        return data_rows.reset_index(drop=True)
+        return data_rows
 
     if last_error is not None:
         raise last_error
@@ -474,8 +494,11 @@ def _apply_extract_step(
     log: LogFn,
 ) -> None:
     extracted_df = _build_sheet_dataframe(source_path, step_cfg, log)
+    period_text = extracted_df.attrs.get("period_text")
     extracted_df = _apply_extract_filters(extracted_df, step_cfg.get("filters"))
     result_df = _select_and_rename_columns(extracted_df, step_cfg["select"], str(step_cfg["id"]))
+    if period_text is not None:
+        result_df.attrs["period_text"] = period_text
 
     for column, value in (step_cfg.get("fill_missing") or {}).items():
         result_df[str(column)] = value
