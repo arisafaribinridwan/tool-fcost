@@ -142,6 +142,22 @@ outputs:
     summary:
       type: "static_part_pivot_summary"
       layout_mode: "plain"
+      options:
+        formula_source_sheet: "result"
+        formula_section_ref: "$W:$W"
+        formula_part_ref: "$AB:$AB"
+        formula_labor_ref: "$S:$S"
+        formula_transportation_ref: "$T:$T"
+        formula_parts_ref: "$U:$U"
+        formula_total_ref: "$Z:$Z"
+        column_labels:
+          section: "Section"
+          part_name: "Part Name"
+          "Sum of labor_cost": "Labor Cost"
+          "Sum of transportation_cost": "Transportation Cost"
+          "Sum of parts_cost": "Parts Cost"
+          "Sum of total_cost": "Total Cost"
+          "Count of part_name": "Count"
 
   - sheet_name: "data2"
     summary:
@@ -182,3 +198,11 @@ outputs:
     summary:
       type: "panel_symptom_inch_matrix"
       layout_mode: "plain"
+
+styling:
+  font: "Calibri"
+  header_color: "4472C4"
+  zebra_stripe: true
+  zebra_color: "F2F2F2"
+  subtotal_color: "FFF2CC"
+  grand_total_color: "1F3864"

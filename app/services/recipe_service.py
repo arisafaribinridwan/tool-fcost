@@ -969,10 +969,34 @@ def _apply_duplicate_group_rewrite_step(data_df: pd.DataFrame, step_cfg: dict, l
     return result_df
 
 
+def _add_summary_metadata(summary_df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """Tambahkan kolom _row_type untuk styling dan terapkan column_labels dari config."""
+    if not summary_df.empty and "section" in summary_df.columns:
+        row_types = []
+        for section_val in summary_df["section"].astype(str):
+            if section_val == "Grand Total":
+                row_types.append("grand_total")
+            elif section_val.endswith(" Total"):
+                row_types.append("subtotal")
+            else:
+                row_types.append("data")
+        summary_df = summary_df.copy()
+        summary_df["_row_type"] = row_types
+
+    column_labels = cfg.get("column_labels") or {}
+    if column_labels:
+        rename_map = {k: v for k, v in column_labels.items() if k in summary_df.columns}
+        if rename_map:
+            summary_df = summary_df.rename(columns=rename_map)
+
+    return summary_df
+
+
 def _build_static_part_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
     cfg = options or {}
     section_column = str(cfg.get("section_column", "section"))
     part_column = str(cfg.get("part_column", "part_name"))
+
     static_parts = [str(item) for item in cfg.get("static_parts", ["PANEL", "MAIN_UNIT", "POWER_UNIT"])]
 
     cost_columns = {
@@ -1191,7 +1215,7 @@ def _build_static_part_summary(data_df: pd.DataFrame, options: dict | None) -> p
                 ignore_index=True,
             )
 
-        return summary_df
+        return _add_summary_metadata(summary_df, cfg)
 
     for section_value in section_order:
         section_rows = grouped[grouped[section_column].eq(section_value)].copy()
@@ -1254,7 +1278,7 @@ def _build_static_part_summary(data_df: pd.DataFrame, options: dict | None) -> p
             total_row[col] = float(summary_df.loc[~subtotal_mask, col].sum())
         summary_df = pd.concat([summary_df, pd.DataFrame([total_row])], ignore_index=True)
 
-    return summary_df
+    return _add_summary_metadata(summary_df, cfg)
 
 
 def _build_part_pivot_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
