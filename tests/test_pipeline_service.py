@@ -2031,6 +2031,115 @@ def test_run_pipeline_step_recipe_static_part_summary_builds_data1_totals(app_pa
     assert new_section_total["Sum of total_cost"] == 45
 
 
+def test_run_pipeline_step_recipe_static_part_pivot_summary_data1_forces_formula_mode(app_paths):
+    source_path = app_paths.project_root / "data1_formula_source.xlsx"
+    pd.DataFrame(
+        [
+            {"section": "GQS", "part_name": "PANEL", "labor_cost": 10, "transportation_cost": 1, "parts_cost": 100, "total_cost": 111},
+            {"section": "GQS", "part_name": "MAIN_UNIT", "labor_cost": 5, "transportation_cost": 1, "parts_cost": 50, "total_cost": 56},
+            {"section": "GQS", "part_name": "LED_BAR", "labor_cost": 3, "transportation_cost": 0, "parts_cost": 30, "total_cost": 33},
+            {"section": "SASS", "part_name": "PANEL", "labor_cost": 7, "transportation_cost": 1, "parts_cost": 70, "total_cost": 78},
+            {"section": "SASS", "part_name": "POWER_UNIT", "labor_cost": 2, "transportation_cost": 1, "parts_cost": 20, "total_cost": 23},
+            {"section": "SASS", "part_name": "REMOTE_CONTROL", "labor_cost": 1, "transportation_cost": 0, "parts_cost": 10, "total_cost": 11},
+        ]
+    ).to_excel(source_path, index=False, sheet_name="OnlySheet")
+
+    config_path = app_paths.configs_dir / "static_part_summary_data1_formula.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Data1 Static Part Summary Formula"',
+                "datasets:",
+                '  working_dataset: "result"',
+                "  canonical_columns:",
+                '    - "section"',
+                '    - "part_name"',
+                '    - "labor_cost"',
+                '    - "transportation_cost"',
+                '    - "parts_cost"',
+                '    - "total_cost"',
+                "steps:",
+                '  - id: "extract"',
+                '    type: "extract_sheet"',
+                "    sheet_selector:",
+                '      mode: "single_sheet_workbook"',
+                "    header_locator:",
+                "      scan_rows: [1, 1]",
+                "      required:",
+                '        - "section"',
+                '        - "part_name"',
+                '        - "labor_cost"',
+                '        - "transportation_cost"',
+                '        - "parts_cost"',
+                '        - "total_cost"',
+                "    select:",
+                '      "section": "section"',
+                '      "part_name": "part_name"',
+                '      "labor_cost": "labor_cost"',
+                '      "transportation_cost": "transportation_cost"',
+                '      "parts_cost": "parts_cost"',
+                '      "total_cost": "total_cost"',
+                '    write_to: "result"',
+                "outputs:",
+                '  - sheet_name: "result"',
+                "    columns:",
+                '      - "section"',
+                '      - "part_name"',
+                '      - "labor_cost"',
+                '      - "transportation_cost"',
+                '      - "parts_cost"',
+                '      - "total_cost"',
+                '  - sheet_name: "data1"',
+                "    summary:",
+                '      type: "static_part_pivot_summary"',
+                '      layout_mode: "plain"',
+                "      options:",
+                '        value_mode: "numeric"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _: None,
+    )
+
+    workbook = load_workbook(result.output_path, read_only=False, data_only=False)
+    sheet = workbook["data1"]
+
+    assert isinstance(sheet["C2"].value, str)
+    assert sheet["C2"].value.startswith("=SUMIFS(")
+    assert isinstance(sheet["G2"].value, str)
+    assert sheet["G2"].value.startswith("=COUNTIFS(")
+
+    other_row_idx = None
+    for row_idx in range(2, sheet.max_row + 1):
+        if sheet[f"A{row_idx}"].value == "GQS" and sheet[f"B{row_idx}"].value == "OTHER":
+            other_row_idx = row_idx
+            break
+
+    assert other_row_idx is not None
+    assert isinstance(sheet[f"F{other_row_idx}"].value, str)
+    assert sheet[f"F{other_row_idx}"].value.startswith("=SUMIFS(")
+    assert isinstance(sheet[f"G{other_row_idx}"].value, str)
+    assert sheet[f"G{other_row_idx}"].value.startswith("=COUNTIFS(")
+
+    grand_total_row_idx = None
+    for row_idx in range(2, sheet.max_row + 1):
+        if sheet[f"A{row_idx}"].value == "Grand Total":
+            grand_total_row_idx = row_idx
+            break
+
+    assert grand_total_row_idx is not None
+    assert isinstance(sheet[f"F{grand_total_row_idx}"].value, str)
+    assert sheet[f"F{grand_total_row_idx}"].value.startswith("=SUMIFS(")
+    assert isinstance(sheet[f"G{grand_total_row_idx}"].value, str)
+    assert sheet[f"G{grand_total_row_idx}"].value.startswith("=COUNTIFS(")
+
+
 def test_run_pipeline_step_recipe_part_pivot_summary_builds_data2_sorted_with_totals(app_paths):
     source_path = app_paths.project_root / "data2_source.xlsx"
     pd.DataFrame(

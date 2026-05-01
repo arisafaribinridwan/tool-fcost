@@ -1030,6 +1030,169 @@ def _build_static_part_summary(data_df: pd.DataFrame, options: dict | None) -> p
     part_order = [*static_parts, "OTHER"]
     rows: list[dict[str, object]] = []
 
+    value_mode = str(cfg.get("value_mode", "numeric")).strip().casefold()
+    formula_mode = value_mode == "excel_formula"
+
+    if formula_mode:
+        formula_source_sheet = str(cfg.get("formula_source_sheet", "result"))
+        formula_refs = {
+            "section": str(cfg.get("formula_section_ref", "$W:$W")),
+            "part_name": str(cfg.get("formula_part_ref", "$AB:$AB")),
+            "Sum of labor_cost": str(cfg.get("formula_labor_ref", "$S:$S")),
+            "Sum of transportation_cost": str(cfg.get("formula_transportation_ref", "$T:$T")),
+            "Sum of parts_cost": str(cfg.get("formula_parts_ref", "$U:$U")),
+            "Sum of total_cost": str(cfg.get("formula_total_ref", "$Z:$Z")),
+        }
+
+        def _excel_literal(value: object) -> str:
+            return '"' + str(value).replace('"', '""') + '"'
+
+        def _sumifs_formula(value_ref: str, section_value: str, part_value: str) -> str:
+            return (
+                f"=SUMIFS('{formula_source_sheet}'!{value_ref},"
+                f"'{formula_source_sheet}'!{formula_refs['section']},{_excel_literal(section_value)},"
+                f"'{formula_source_sheet}'!{formula_refs['part_name']},{_excel_literal(part_value)})"
+            )
+
+        def _countifs_formula(section_value: str, part_value: str) -> str:
+            return (
+                f"=COUNTIFS('{formula_source_sheet}'!{formula_refs['section']},{_excel_literal(section_value)},"
+                f"'{formula_source_sheet}'!{formula_refs['part_name']},{_excel_literal(part_value)})"
+            )
+
+        def _other_sum_formula(value_ref: str, section_value: str) -> str:
+            base = (
+                f"SUMIFS('{formula_source_sheet}'!{value_ref},"
+                f"'{formula_source_sheet}'!{formula_refs['section']},{_excel_literal(section_value)},"
+                f"'{formula_source_sheet}'!{formula_refs['part_name']},\"<>\")"
+            )
+            minus_parts = "-".join(
+                [
+                    (
+                        f"SUMIFS('{formula_source_sheet}'!{value_ref},"
+                        f"'{formula_source_sheet}'!{formula_refs['section']},{_excel_literal(section_value)},"
+                        f"'{formula_source_sheet}'!{formula_refs['part_name']},{_excel_literal(part_name)})"
+                    )
+                    for part_name in static_parts
+                ]
+            )
+            return f"={base}-{minus_parts}"
+
+        def _other_count_formula(section_value: str) -> str:
+            base = (
+                f"COUNTIFS('{formula_source_sheet}'!{formula_refs['section']},{_excel_literal(section_value)},"
+                f"'{formula_source_sheet}'!{formula_refs['part_name']},\"<>\")"
+            )
+            minus_parts = "-".join(
+                [
+                    (
+                        f"COUNTIFS('{formula_source_sheet}'!{formula_refs['section']},{_excel_literal(section_value)},"
+                        f"'{formula_source_sheet}'!{formula_refs['part_name']},{_excel_literal(part_name)})"
+                    )
+                    for part_name in static_parts
+                ]
+            )
+            return f"={base}-{minus_parts}"
+
+        def _section_total_sum_formula(value_ref: str, section_value: str) -> str:
+            return (
+                f"=SUMIFS('{formula_source_sheet}'!{value_ref},"
+                f"'{formula_source_sheet}'!{formula_refs['section']},{_excel_literal(section_value)},"
+                f"'{formula_source_sheet}'!{formula_refs['part_name']},\"<>\")"
+            )
+
+        def _section_total_count_formula(section_value: str) -> str:
+            return (
+                f"=COUNTIFS('{formula_source_sheet}'!{formula_refs['section']},{_excel_literal(section_value)},"
+                f"'{formula_source_sheet}'!{formula_refs['part_name']},\"<>\")"
+            )
+
+        def _grand_total_sum_formula(value_ref: str) -> str:
+            return (
+                f"=SUMIFS('{formula_source_sheet}'!{value_ref},"
+                f"'{formula_source_sheet}'!{formula_refs['part_name']},\"<>\")"
+            )
+
+        def _grand_total_count_formula() -> str:
+            return f"=COUNTIFS('{formula_source_sheet}'!{formula_refs['part_name']},\"<>\")"
+
+        for section_value in section_order:
+            section_rows = grouped[grouped[section_column].eq(section_value)].copy()
+            for part_name in part_order:
+                match = section_rows[section_rows["part_name"].eq(part_name)]
+                if match.empty:
+                    continue
+
+                if part_name == "OTHER":
+                    rows.append(
+                        {
+                            "section": section_value,
+                            "part_name": part_name,
+                            "Sum of labor_cost": _other_sum_formula(formula_refs["Sum of labor_cost"], str(section_value)),
+                            "Sum of transportation_cost": _other_sum_formula(formula_refs["Sum of transportation_cost"], str(section_value)),
+                            "Sum of parts_cost": _other_sum_formula(formula_refs["Sum of parts_cost"], str(section_value)),
+                            "Sum of total_cost": _other_sum_formula(formula_refs["Sum of total_cost"], str(section_value)),
+                            "Count of part_name": _other_count_formula(str(section_value)),
+                        }
+                    )
+                else:
+                    rows.append(
+                        {
+                            "section": section_value,
+                            "part_name": part_name,
+                            "Sum of labor_cost": _sumifs_formula(formula_refs["Sum of labor_cost"], str(section_value), part_name),
+                            "Sum of transportation_cost": _sumifs_formula(
+                                formula_refs["Sum of transportation_cost"], str(section_value), part_name
+                            ),
+                            "Sum of parts_cost": _sumifs_formula(formula_refs["Sum of parts_cost"], str(section_value), part_name),
+                            "Sum of total_cost": _sumifs_formula(formula_refs["Sum of total_cost"], str(section_value), part_name),
+                            "Count of part_name": _countifs_formula(str(section_value), part_name),
+                        }
+                    )
+
+            rows.append(
+                {
+                    "section": f"{section_value} Total",
+                    "part_name": "",
+                    "Sum of labor_cost": _section_total_sum_formula(formula_refs["Sum of labor_cost"], str(section_value)),
+                    "Sum of transportation_cost": _section_total_sum_formula(
+                        formula_refs["Sum of transportation_cost"], str(section_value)
+                    ),
+                    "Sum of parts_cost": _section_total_sum_formula(formula_refs["Sum of parts_cost"], str(section_value)),
+                    "Sum of total_cost": _section_total_sum_formula(formula_refs["Sum of total_cost"], str(section_value)),
+                    "Count of part_name": _section_total_count_formula(str(section_value)),
+                }
+            )
+
+        summary_df = pd.DataFrame(rows, columns=output_columns)
+        if summary_df.empty:
+            summary_df = pd.DataFrame(columns=output_columns)
+
+        if not summary_df.empty:
+            summary_df = pd.concat(
+                [
+                    summary_df,
+                    pd.DataFrame(
+                        [
+                            {
+                                "section": "Grand Total",
+                                "part_name": "",
+                                "Sum of labor_cost": _grand_total_sum_formula(formula_refs["Sum of labor_cost"]),
+                                "Sum of transportation_cost": _grand_total_sum_formula(
+                                    formula_refs["Sum of transportation_cost"]
+                                ),
+                                "Sum of parts_cost": _grand_total_sum_formula(formula_refs["Sum of parts_cost"]),
+                                "Sum of total_cost": _grand_total_sum_formula(formula_refs["Sum of total_cost"]),
+                                "Count of part_name": _grand_total_count_formula(),
+                            }
+                        ]
+                    ),
+                ],
+                ignore_index=True,
+            )
+
+        return summary_df
+
     for section_value in section_order:
         section_rows = grouped[grouped[section_column].eq(section_value)].copy()
         section_total = {
@@ -1725,6 +1888,11 @@ def _build_summary_output_sheet(data_df: pd.DataFrame, item: dict) -> tuple[pd.D
 
     if summary_type == "static_part_summary":
         return _build_static_part_summary(data_df, options if isinstance(options, dict) else None), layout_mode
+
+    if summary_type == "static_part_pivot_summary":
+        forced_options = dict(options) if isinstance(options, dict) else {}
+        forced_options["value_mode"] = "excel_formula"
+        return _build_static_part_summary(data_df, forced_options), layout_mode
 
     if summary_type == "part_pivot_summary":
         return _build_part_pivot_summary(data_df, options if isinstance(options, dict) else None), layout_mode
