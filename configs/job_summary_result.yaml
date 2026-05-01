@@ -140,7 +140,7 @@ outputs:
 
   - sheet_name: "data1"
     summary:
-      type: "static_part_summary"
+      type: "static_part_pivot_summary"
       layout_mode: "plain"
 
   - sheet_name: "data2"
