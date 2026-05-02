@@ -142,6 +142,9 @@ outputs:
     summary:
       type: "static_part_pivot_summary"
       layout_mode: "plain"
+      title: "PART COST (3 Worst)"
+      subtitle: "Part Category: PANEL | MAIN_UNIT | POWER_UNIT | OTHER (all non-blank parts excluding the 3 main)"
+      column_width: 13.0
       options:
         formula_source_sheet: "result"
         formula_section_ref: "$W:$W"
@@ -153,51 +156,129 @@ outputs:
         column_labels:
           section: "Section"
           part_name: "Part Name"
-          "Sum of labor_cost": "Labor Cost"
-          "Sum of transportation_cost": "Transportation Cost"
-          "Sum of parts_cost": "Parts Cost"
-          "Sum of total_cost": "Total Cost"
+          "Sum of labor_cost": "Labor"
+          "Sum of transportation_cost": "Transportation"
+          "Sum of parts_cost": "Parts"
+          "Sum of total_cost": "Total"
           "Count of part_name": "Count"
 
   - sheet_name: "data2"
     summary:
       type: "part_pivot_summary"
       layout_mode: "plain"
+      title: "PART COST SUMMARY"
+      subtitle: "Part cost summary by section and part name"
+      column_width: 13.0
+      options:
+        column_labels:
+          section: "Section"
+          part_name: "Part Name"
+          "Sum of labor_cost": "Labor"
+          "Sum of transportation_cost": "Transportation"
+          "Sum of parts_cost": "Parts"
+          "Sum of total_cost": "Total"
+          "Count of part_name": "Count"
 
   - sheet_name: "data3a"
     summary:
       type: "panel_model_summary"
       layout_mode: "plain"
+      title: "PANEL MODEL SUMMARY"
+      subtitle: "Panel summary by inch and model"
+      column_width: 13.0
+      options:
+        column_labels:
+          part_name: "Part Name"
+          inch: "Inch"
+          model_name: "Model Name"
+          Total: "Total"
 
   - sheet_name: "data3b"
     summary:
       type: "panel_symptom_summary"
       layout_mode: "plain"
+      title: "PANEL SYMPTOM SUMMARY"
+      subtitle: "Panel summary by symptom"
+      column_width: 13.0
+      options:
+        column_labels:
+          part_name: "Part Name"
+          symptom: "Symptom"
+          Total: "Total"
 
   - sheet_name: "data3c"
     summary:
       type: "panel_area_summary"
       layout_mode: "plain"
+      title: "PANEL AREA SUMMARY"
+      subtitle: "Panel summary by branch area"
+      column_width: 13.0
+      options:
+        column_labels:
+          part_name: "Part Name"
+          branch: "Branch"
+          Total: "Total"
 
   - sheet_name: "data4"
     summary:
       type: "panel_usage_summary"
       layout_mode: "plain"
+      title: "PANEL USAGE SUMMARY"
+      subtitle: "Panel summary by usage"
+      column_width: 13.0
+      options:
+        column_labels:
+          part_name: "Part Name"
+          panel_usage: "Panel Usage"
+          Total: "Total"
 
   - sheet_name: "data5a"
     summary:
       type: "panel_fcost_inch_summary"
       layout_mode: "plain"
+      title: "PANEL FCOST BY INCH"
+      subtitle: "Panel FCOST summary by inch"
+      column_width: 13.0
+      options:
+        column_labels:
+          part_name: "Part Name"
+          inch: "Inch"
+          "Sum of labor_cost": "Labor"
+          "Sum of transportation_cost": "Transportation"
+          "Sum of parts_cost": "Parts"
+          "Sum of total_cost": "Total"
+          "Count of part_name": "Count"
 
   - sheet_name: "data5b"
     summary:
       type: "panel_top1_inch_model_summary"
       layout_mode: "plain"
+      title: "PANEL TOP MODEL BY INCH"
+      subtitle: "Top panel model summary by inch"
+      column_width: 13.0
+      options:
+        column_labels:
+          part_name: "Part Name"
+          inch: "Inch"
+          model_name: "Model Name"
+          "Sum of labor_cost": "Labor"
+          "Sum of transportation_cost": "Transportation"
+          "Sum of parts_cost": "Parts"
+          "Sum of total_cost": "Total"
+          "Count of part_name": "Count"
 
   - sheet_name: "data6"
     summary:
       type: "panel_symptom_inch_matrix"
       layout_mode: "plain"
+      title: "PANEL SYMPTOM INCH MATRIX"
+      subtitle: "Panel symptom matrix by inch"
+      column_width: 13.0
+      options:
+        column_labels:
+          part_name: "Part Name"
+          symptom: "Symptom"
+          Grand Total: "Grand Total"
 
 styling:
   font: "Calibri"
