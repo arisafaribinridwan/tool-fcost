@@ -992,6 +992,17 @@ def _apply_duplicate_group_rewrite_step(data_df: pd.DataFrame, step_cfg: dict, l
     return result_df
 
 
+def _apply_summary_column_labels(summary_df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    column_labels = cfg.get("column_labels") or {}
+    if not isinstance(column_labels, dict) or not column_labels:
+        return summary_df
+
+    rename_map = {k: v for k, v in column_labels.items() if k in summary_df.columns}
+    if not rename_map:
+        return summary_df
+    return summary_df.rename(columns=rename_map)
+
+
 def _add_summary_metadata(summary_df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     """Tambahkan kolom _row_type untuk styling dan terapkan column_labels dari config."""
     if not summary_df.empty and "section" in summary_df.columns:
@@ -1006,13 +1017,7 @@ def _add_summary_metadata(summary_df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
         summary_df = summary_df.copy()
         summary_df["_row_type"] = row_types
 
-    column_labels = cfg.get("column_labels") or {}
-    if column_labels:
-        rename_map = {k: v for k, v in column_labels.items() if k in summary_df.columns}
-        if rename_map:
-            summary_df = summary_df.rename(columns=rename_map)
-
-    return summary_df
+    return _apply_summary_column_labels(summary_df, cfg)
 
 
 def _build_static_part_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
@@ -1515,9 +1520,11 @@ def _build_panel_model_summary(data_df: pd.DataFrame, options: dict | None) -> p
         summary_df = summary_df.copy()
         summary_df["_row_type"] = row_types
 
-    return summary_df.rename(
-        columns={"part_name": "Part Name", "inch": "Inch", "model_name": "Model Name"}
-    )
+    default_labels = {"part_name": "Part Name", "inch": "Inch", "model_name": "Model Name"}
+    column_labels = cfg.get("column_labels")
+    if isinstance(column_labels, dict):
+        default_labels.update(column_labels)
+    return summary_df.rename(columns={k: v for k, v in default_labels.items() if k in summary_df.columns})
 
 
 def _build_panel_symptom_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
@@ -1559,7 +1566,7 @@ def _build_panel_symptom_summary(data_df: pd.DataFrame, options: dict | None) ->
         ],
         ignore_index=True,
     )
-    return summary_df
+    return _apply_summary_column_labels(summary_df, cfg)
 
 
 def _build_panel_area_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
@@ -1601,7 +1608,7 @@ def _build_panel_area_summary(data_df: pd.DataFrame, options: dict | None) -> pd
         ],
         ignore_index=True,
     )
-    return summary_df
+    return _apply_summary_column_labels(summary_df, cfg)
 
 
 def _build_panel_usage_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
@@ -1646,7 +1653,7 @@ def _build_panel_usage_summary(data_df: pd.DataFrame, options: dict | None) -> p
         ],
         ignore_index=True,
     )
-    return summary_df
+    return _apply_summary_column_labels(summary_df, cfg)
 
 
 def _build_panel_fcost_inch_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
@@ -1758,7 +1765,7 @@ def _build_panel_fcost_inch_summary(data_df: pd.DataFrame, options: dict | None)
 
     grand_total = {**panel_total, "part_name": "Grand Total"}
     summary_df = pd.concat([summary_df, pd.DataFrame([panel_total, grand_total])], ignore_index=True)
-    return summary_df
+    return _apply_summary_column_labels(summary_df, cfg)
 
 
 def _build_panel_top1_inch_model_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
@@ -1885,7 +1892,7 @@ def _build_panel_top1_inch_model_summary(data_df: pd.DataFrame, options: dict | 
     }
     grand_total = {**panel_total, "part_name": "Grand Total"}
     summary_df = pd.concat([summary_df, pd.DataFrame([panel_total, grand_total])], ignore_index=True)
-    return summary_df
+    return _apply_summary_column_labels(summary_df, cfg)
 
 
 def _build_panel_symptom_inch_matrix(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
@@ -1948,7 +1955,7 @@ def _build_panel_symptom_inch_matrix(data_df: pd.DataFrame, options: dict | None
         if col not in summary_df.columns:
             summary_df[col] = 0.0 if col not in {"part_name", "symptom"} else ""
     summary_df = summary_df.loc[:, ordered_columns]
-    return summary_df
+    return _apply_summary_column_labels(summary_df, cfg)
 
 
 def _build_summary_output_sheet(data_df: pd.DataFrame, item: dict) -> tuple[pd.DataFrame, str]:

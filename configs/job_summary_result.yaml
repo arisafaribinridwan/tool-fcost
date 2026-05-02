@@ -186,6 +186,12 @@ outputs:
       title: "PANEL MODEL SUMMARY"
       subtitle: "Panel summary by inch and model"
       column_width: 13.0
+      options:
+        column_labels:
+          part_name: "Part Name"
+          inch: "Inch"
+          model_name: "Model Name"
+          Total: "Total"
 
   - sheet_name: "data3b"
     summary:
@@ -194,6 +200,11 @@ outputs:
       title: "PANEL SYMPTOM SUMMARY"
       subtitle: "Panel summary by symptom"
       column_width: 13.0
+      options:
+        column_labels:
+          part_name: "Part Name"
+          symptom: "Symptom"
+          Total: "Total"
 
   - sheet_name: "data3c"
     summary:
@@ -202,6 +213,11 @@ outputs:
       title: "PANEL AREA SUMMARY"
       subtitle: "Panel summary by branch area"
       column_width: 13.0
+      options:
+        column_labels:
+          part_name: "Part Name"
+          branch: "Branch"
+          Total: "Total"
 
   - sheet_name: "data4"
     summary:
@@ -210,6 +226,11 @@ outputs:
       title: "PANEL USAGE SUMMARY"
       subtitle: "Panel summary by usage"
       column_width: 13.0
+      options:
+        column_labels:
+          part_name: "Part Name"
+          panel_usage: "Panel Usage"
+          Total: "Total"
 
   - sheet_name: "data5a"
     summary:
@@ -218,6 +239,15 @@ outputs:
       title: "PANEL FCOST BY INCH"
       subtitle: "Panel FCOST summary by inch"
       column_width: 13.0
+      options:
+        column_labels:
+          part_name: "Part Name"
+          inch: "Inch"
+          "Sum of labor_cost": "Labor"
+          "Sum of transportation_cost": "Transportation"
+          "Sum of parts_cost": "Parts"
+          "Sum of total_cost": "Total"
+          "Count of part_name": "Count"
 
   - sheet_name: "data5b"
     summary:
@@ -226,6 +256,16 @@ outputs:
       title: "PANEL TOP MODEL BY INCH"
       subtitle: "Top panel model summary by inch"
       column_width: 13.0
+      options:
+        column_labels:
+          part_name: "Part Name"
+          inch: "Inch"
+          model_name: "Model Name"
+          "Sum of labor_cost": "Labor"
+          "Sum of transportation_cost": "Transportation"
+          "Sum of parts_cost": "Parts"
+          "Sum of total_cost": "Total"
+          "Count of part_name": "Count"
 
   - sheet_name: "data6"
     summary:
@@ -234,6 +274,11 @@ outputs:
       title: "PANEL SYMPTOM INCH MATRIX"
       subtitle: "Panel symptom matrix by inch"
       column_width: 13.0
+      options:
+        column_labels:
+          part_name: "Part Name"
+          symptom: "Symptom"
+          Grand Total: "Grand Total"
 
 styling:
   font: "Calibri"

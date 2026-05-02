@@ -2470,6 +2470,11 @@ def test_run_pipeline_step_recipe_panel_usage_summary_data4_with_fixed_order(app
                 "    summary:",
                 '      type: "panel_usage_summary"',
                 '      layout_mode: "plain"',
+                "      options:",
+                "        column_labels:",
+                '          part_name: "Part Name"',
+                '          panel_usage: "Panel Usage"',
+                '          Total: "Total"',
             ]
         ),
     )
@@ -2483,14 +2488,16 @@ def test_run_pipeline_step_recipe_panel_usage_summary_data4_with_fixed_order(app
 
     data4_df = pd.read_excel(result.output_path, sheet_name="data4", keep_default_na=False)
 
-    usage_rows = data4_df[data4_df["part_name"] == "PANEL"]["panel_usage"].tolist()
+    assert data4_df.columns.tolist() == ["Part Name", "Panel Usage", "Total"]
+
+    usage_rows = data4_df[data4_df["Part Name"] == "PANEL"]["Panel Usage"].tolist()
     assert usage_rows == ["< 1 Year", "1 - 2 Years", "2 - 3 Years", "> 3 Years"]
 
-    usage_counts = data4_df[data4_df["part_name"] == "PANEL"]["Total"].tolist()
+    usage_counts = data4_df[data4_df["Part Name"] == "PANEL"]["Total"].tolist()
     assert usage_counts == [1, 2, 1, 1]
 
-    panel_total = data4_df[data4_df["part_name"] == "PANEL Total"].iloc[0]
-    grand_total = data4_df[data4_df["part_name"] == "Grand Total"].iloc[0]
+    panel_total = data4_df[data4_df["Part Name"] == "PANEL Total"].iloc[0]
+    grand_total = data4_df[data4_df["Part Name"] == "Grand Total"].iloc[0]
     assert panel_total["Total"] == 5
     assert grand_total["Total"] == 5
 
@@ -2559,10 +2566,29 @@ def test_run_pipeline_step_recipe_panel_fcost_data5a_and_top1_model_data5b(app_p
                 "    summary:",
                 '      type: "panel_fcost_inch_summary"',
                 '      layout_mode: "plain"',
+                "      options:",
+                "        column_labels:",
+                '          part_name: "Part Name"',
+                '          inch: "Inch"',
+                '          "Sum of labor_cost": "Labor"',
+                '          "Sum of transportation_cost": "Transportation"',
+                '          "Sum of parts_cost": "Parts"',
+                '          "Sum of total_cost": "Total"',
+                '          "Count of part_name": "Count"',
                 '  - sheet_name: "data5b"',
                 "    summary:",
                 '      type: "panel_top1_inch_model_summary"',
                 '      layout_mode: "plain"',
+                "      options:",
+                "        column_labels:",
+                '          part_name: "Part Name"',
+                '          inch: "Inch"',
+                '          model_name: "Model Name"',
+                '          "Sum of labor_cost": "Labor"',
+                '          "Sum of transportation_cost": "Transportation"',
+                '          "Sum of parts_cost": "Parts"',
+                '          "Sum of total_cost": "Total"',
+                '          "Count of part_name": "Count"',
             ]
         ),
     )
@@ -2577,23 +2603,43 @@ def test_run_pipeline_step_recipe_panel_fcost_data5a_and_top1_model_data5b(app_p
     data5a_df = pd.read_excel(result.output_path, sheet_name="data5a", keep_default_na=False)
     data5b_df = pd.read_excel(result.output_path, sheet_name="data5b", keep_default_na=False)
 
-    inch_rows = data5a_df[data5a_df["part_name"] == "PANEL"]["inch"].map(str).tolist()
+    assert data5a_df.columns.tolist() == [
+        "Part Name",
+        "Inch",
+        "Labor",
+        "Transportation",
+        "Parts",
+        "Total",
+        "Count",
+    ]
+    assert data5b_df.columns.tolist() == [
+        "Part Name",
+        "Inch",
+        "Model Name",
+        "Labor",
+        "Transportation",
+        "Parts",
+        "Total",
+        "Count",
+    ]
+
+    inch_rows = data5a_df[data5a_df["Part Name"] == "PANEL"]["Inch"].map(str).tolist()
     assert inch_rows == ["55", "32", "65", "24", "75", "other"]
 
-    panel_total_a = data5a_df[data5a_df["part_name"] == "PANEL Total"].iloc[0]
-    grand_total_a = data5a_df[data5a_df["part_name"] == "Grand Total"].iloc[0]
-    assert panel_total_a["Sum of total_cost"] == 1240
-    assert grand_total_a["Sum of total_cost"] == 1240
+    panel_total_a = data5a_df[data5a_df["Part Name"] == "PANEL Total"].iloc[0]
+    grand_total_a = data5a_df[data5a_df["Part Name"] == "Grand Total"].iloc[0]
+    assert panel_total_a["Total"] == 1240
+    assert grand_total_a["Total"] == 1240
 
-    model_rows = data5b_df[data5b_df["part_name"] == "PANEL"]["model_name"].tolist()
+    model_rows = data5b_df[data5b_df["Part Name"] == "PANEL"]["Model Name"].tolist()
     assert model_rows == ["M1", "M2", "M3", "M4", "M5", "other"]
-    inch_value_rows = data5b_df[data5b_df["part_name"] == "PANEL"]["inch"].map(str).unique().tolist()
+    inch_value_rows = data5b_df[data5b_df["Part Name"] == "PANEL"]["Inch"].map(str).unique().tolist()
     assert inch_value_rows == ["55"]
 
-    panel_total_b = data5b_df[data5b_df["part_name"] == "PANEL Total"].iloc[0]
-    grand_total_b = data5b_df[data5b_df["part_name"] == "Grand Total"].iloc[0]
-    assert panel_total_b["Sum of total_cost"] == 500
-    assert grand_total_b["Sum of total_cost"] == 500
+    panel_total_b = data5b_df[data5b_df["Part Name"] == "PANEL Total"].iloc[0]
+    grand_total_b = data5b_df[data5b_df["Part Name"] == "Grand Total"].iloc[0]
+    assert panel_total_b["Total"] == 500
+    assert grand_total_b["Total"] == 500
 
 
 def test_run_pipeline_step_recipe_panel_symptom_inch_matrix_data6(app_paths):
@@ -2643,6 +2689,11 @@ def test_run_pipeline_step_recipe_panel_symptom_inch_matrix_data6(app_paths):
                 "    summary:",
                 '      type: "panel_symptom_inch_matrix"',
                 '      layout_mode: "plain"',
+                "      options:",
+                "        column_labels:",
+                '          part_name: "Part Name"',
+                '          symptom: "Symptom"',
+                '          "Grand Total": "Grand Total"',
             ]
         ),
     )
@@ -2657,18 +2708,68 @@ def test_run_pipeline_step_recipe_panel_symptom_inch_matrix_data6(app_paths):
     data6_df = pd.read_excel(result.output_path, sheet_name="data6", keep_default_na=False)
     data6_df.columns = [str(col) for col in data6_df.columns]
 
-    assert data6_df.columns.tolist() == ["part_name", "symptom", "24", "32", "55", "Grand Total"]
+    assert data6_df.columns.tolist() == ["Part Name", "Symptom", "24", "32", "55", "Grand Total"]
 
-    symptom_rows = data6_df[data6_df["part_name"] == "PANEL"]["symptom"].tolist()
+    symptom_rows = data6_df[data6_df["Part Name"] == "PANEL"]["Symptom"].tolist()
     assert symptom_rows == ["A", "B", "C"]
 
-    row_a = data6_df[(data6_df["part_name"] == "PANEL") & (data6_df["symptom"] == "A")].iloc[0]
+    row_a = data6_df[(data6_df["Part Name"] == "PANEL") & (data6_df["Symptom"] == "A")].iloc[0]
     assert row_a["24"] == 2
     assert row_a["32"] == 1
     assert row_a["55"] == 0
     assert row_a["Grand Total"] == 3
 
-    panel_total = data6_df[data6_df["part_name"] == "PANEL Total"].iloc[0]
-    grand_total = data6_df[data6_df["part_name"] == "Grand Total"].iloc[0]
+    panel_total = data6_df[data6_df["Part Name"] == "PANEL Total"].iloc[0]
+    grand_total = data6_df[data6_df["Part Name"] == "Grand Total"].iloc[0]
+    assert panel_total["Grand Total"] == 6
+    assert grand_total["Grand Total"] == 6
+                "    header_locator:",
+                "      scan_rows: [1, 1]",
+                "      required:",
+                '        - "part_name"',
+                '        - "inch"',
+                '        - "symptom"',
+                "    select:",
+                '      "part_name": "part_name"',
+                '      "inch": "inch"',
+                '      "symptom": "symptom"',
+                '    write_to: "result"',
+                "outputs:",
+                '  - sheet_name: "data6"',
+                "    summary:",
+                '      type: "panel_symptom_inch_matrix"',
+                '      layout_mode: "plain"',
+                "      options:",
+                "        column_labels:",
+                '          part_name: "Part Name"',
+                '          symptom: "Symptom"',
+                '          "Grand Total": "Grand Total"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _: None,
+    )
+
+    data6_df = pd.read_excel(result.output_path, sheet_name="data6", keep_default_na=False)
+    data6_df.columns = [str(col) for col in data6_df.columns]
+
+    assert data6_df.columns.tolist() == ["Part Name", "Symptom", "24", "32", "55", "Grand Total"]
+
+    symptom_rows = data6_df[data6_df["Part Name"] == "PANEL"]["Symptom"].tolist()
+    assert symptom_rows == ["A", "B", "C"]
+
+    row_a = data6_df[(data6_df["Part Name"] == "PANEL") & (data6_df["Symptom"] == "A")].iloc[0]
+    assert row_a["24"] == 2
+    assert row_a["32"] == 1
+    assert row_a["55"] == 0
+    assert row_a["Grand Total"] == 3
+
+    panel_total = data6_df[data6_df["Part Name"] == "PANEL Total"].iloc[0]
+    grand_total = data6_df[data6_df["Part Name"] == "Grand Total"].iloc[0]
     assert panel_total["Grand Total"] == 6
     assert grand_total["Grand Total"] == 6
