@@ -188,6 +188,40 @@ def test_run_pipeline_happy_path_csv_with_master_and_pivot(app_paths):
     assert summary_df.loc[summary_df["kategori"] == "Cat 2", "qty"].iloc[0] == 5
 
 
+def test_run_pipeline_uses_output_name_override_for_filename(app_paths):
+    source_path = app_paths.project_root / "source.csv"
+    pd.DataFrame([{"qty": 1}]).to_csv(source_path, index=False)
+
+    config_path = app_paths.configs_dir / "monthly-report-recipe-lcd-import.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Monthly Report Final Recipe"',
+                'source_sheet: "Sheet1"',
+                'header:',
+                '  title: "Monthly Report Final Recipe"',
+                'outputs:',
+                '  - sheet_name: "Detail"',
+                '    columns:',
+                '      - "qty"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _message: None,
+        output_name_override="FCOST LCD IMPORT",
+    )
+
+    assert result.output_path.name.startswith("FCOST_LCD_IMPORT_")
+    assert result.output_path.name.endswith(".xlsx")
+    assert not result.output_path.name.startswith("Monthly_Report_Final_Recipe_")
+
+
 def test_run_pipeline_writes_manual_period_override(app_paths):
     source_path = app_paths.project_root / "source.csv"
     pd.DataFrame([{"qty": 1}]).to_csv(source_path, index=False)

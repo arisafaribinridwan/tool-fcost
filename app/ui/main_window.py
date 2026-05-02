@@ -644,6 +644,7 @@ class DesktopApp(ctk.CTk):
             args=(
                 self.selected_source_path,
                 job.config_path,
+                job.label,
                 self._worker_queue,
                 period_text_override,
                 period_keydate_override,
@@ -657,6 +658,7 @@ class DesktopApp(ctk.CTk):
         self,
         source_path: Path,
         config_path: Path,
+        job_label: str,
         event_queue: Queue[tuple[str, object]],
         period_text_override: str | None = None,
         period_keydate_override: str | None = None,
@@ -672,6 +674,7 @@ class DesktopApp(ctk.CTk):
                 log=worker_log,
                 period_text_override=period_text_override,
                 period_keydate_override=period_keydate_override,
+                output_name_override=job_label,
             )
             event_queue.put(("success", result))
         except Exception as exc:

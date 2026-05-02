@@ -55,10 +55,9 @@ def test_run_preflight_ready_for_classic_config(app_paths):
     )
 
     assert result.status == "Ready"
-    assert result.output_path == app_paths.outputs_dir / "Laporan Tes.xlsx"
+    assert result.output_path is None
     assert result.can_execute is True
-    assert any(item.severity == "info" for item in result.findings)
-    assert any("Target output akan ditulis ke Laporan Tes.xlsx." in item.summary for item in result.findings)
+    assert not any("Target output akan ditulis" in item.summary for item in result.findings)
 
 
 def test_run_preflight_does_not_validate_required_columns_yet(app_paths):

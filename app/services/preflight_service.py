@@ -104,16 +104,5 @@ def run_preflight(
         findings.append(PreflightFinding(severity="error", summary=str(exc)))
         payload = None
 
-    output_path = None
-    if payload is not None:
-        config_name = str(payload.get("name", config_path.stem)).strip() or config_path.stem
-        output_path = paths.outputs_dir / f"{config_name}.xlsx"
-        findings.append(
-            PreflightFinding(
-                severity="info",
-                summary=f"Target output akan ditulis ke {output_path.name}.",
-            )
-        )
-
     status = "Blocked" if any(item.severity == "error" for item in findings) else "Ready"
-    return PreflightResult(status=status, findings=tuple(findings), output_path=output_path)
+    return PreflightResult(status=status, findings=tuple(findings), output_path=None)

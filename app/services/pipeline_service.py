@@ -69,6 +69,7 @@ def run_pipeline(
     progress: ProgressFn | None = None,
     period_text_override: str | None = None,
     period_keydate_override: str | None = None,
+    output_name_override: str | None = None,
 ) -> PipelineResult:
     started_at = perf_counter()
 
@@ -196,9 +197,10 @@ def run_pipeline(
         emit_progress("build_output", "Build output", "done", f"{len(output_sheets)} sheet")
 
     config_name = str(config.get("name", config_path.stem))
+    output_base_name = output_name_override or config_name
     sheet_options = _build_sheet_options(config)
     output_file_name = (
-        f"{_safe_filename(config_name)}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        f"{_safe_filename(output_base_name)}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     )
     output_path = paths.outputs_dir / output_file_name
 
