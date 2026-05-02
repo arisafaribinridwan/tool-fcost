@@ -14,6 +14,13 @@ def _write_yaml(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def _read_summary_sheet(path: Path, sheet_name: str, fill_forward: list[str] | None = None) -> pd.DataFrame:
+    frame = pd.read_excel(path, sheet_name=sheet_name, header=3, keep_default_na=False)
+    for column in fill_forward or []:
+        frame[column] = frame[column].replace("", pd.NA).ffill().fillna("")
+    return frame
+
+
 def _write_action_lookup_rules_step_recipe(path: Path, *, priority_column: str | None = "priority") -> None:
     lines = [
         'name: "Action Lookup Rules Step Recipe"',
@@ -1993,8 +2000,8 @@ def test_run_pipeline_step_recipe_summary_plain_layout_writes_without_report_hea
 
     workbook = load_workbook(result.output_path, read_only=True)
     assert workbook["result"]["A1"].value == "Summary Plain Layout"
-    assert workbook["data1"]["A1"].value == "summary_type"
-    assert workbook["data1"]["A2"].value == "recipe_summary_v1"
+    assert workbook["data1"]["A4"].value == "summary_type"
+    assert workbook["data1"]["A5"].value == "recipe_summary_v1"
 
 
 def test_run_pipeline_step_recipe_static_part_summary_builds_data1_totals(app_paths):
@@ -2065,7 +2072,7 @@ def test_run_pipeline_step_recipe_static_part_summary_builds_data1_totals(app_pa
         log=lambda _: None,
     )
 
-    data1_df = pd.read_excel(result.output_path, sheet_name="data1", keep_default_na=False)
+    data1_df = _read_summary_sheet(result.output_path, "data1", fill_forward=["section"])
 
     gqs_total = data1_df[data1_df["section"] == "GQS Total"].iloc[0]
     sass_total = data1_df[data1_df["section"] == "SASS Total"].iloc[0]
@@ -2164,14 +2171,18 @@ def test_run_pipeline_step_recipe_static_part_pivot_summary_data1_forces_formula
     workbook = load_workbook(result.output_path, read_only=False, data_only=False)
     sheet = workbook["data1"]
 
-    assert isinstance(sheet["C2"].value, str)
-    assert sheet["C2"].value.startswith("=SUMIFS(")
-    assert isinstance(sheet["G2"].value, str)
-    assert sheet["G2"].value.startswith("=COUNTIFS(")
+    assert isinstance(sheet["C5"].value, str)
+    assert sheet["C5"].value.startswith("=SUMIFS(")
+    assert isinstance(sheet["G5"].value, str)
+    assert sheet["G5"].value.startswith("=COUNTIFS(")
 
     other_row_idx = None
-    for row_idx in range(2, sheet.max_row + 1):
-        if sheet[f"A{row_idx}"].value == "GQS" and sheet[f"B{row_idx}"].value == "OTHER":
+    current_section = ""
+    for row_idx in range(5, sheet.max_row + 1):
+        section_value = sheet[f"A{row_idx}"].value
+        if section_value:
+            current_section = str(section_value)
+        if current_section == "GQS" and sheet[f"B{row_idx}"].value == "OTHER":
             other_row_idx = row_idx
             break
 
@@ -2182,7 +2193,7 @@ def test_run_pipeline_step_recipe_static_part_pivot_summary_data1_forces_formula
     assert sheet[f"G{other_row_idx}"].value.startswith("=COUNTIFS(")
 
     grand_total_row_idx = None
-    for row_idx in range(2, sheet.max_row + 1):
+    for row_idx in range(5, sheet.max_row + 1):
         if sheet[f"A{row_idx}"].value == "Grand Total":
             grand_total_row_idx = row_idx
             break
@@ -2263,7 +2274,7 @@ def test_run_pipeline_step_recipe_part_pivot_summary_builds_data2_sorted_with_to
         log=lambda _: None,
     )
 
-    data2_df = pd.read_excel(result.output_path, sheet_name="data2", keep_default_na=False)
+    data2_df = _read_summary_sheet(result.output_path, "data2", fill_forward=["section"])
 
     gqs_part_rows = data2_df[data2_df["section"] == "GQS"]["part_name"].tolist()
     assert gqs_part_rows == ["MAIN_UNIT", "PANEL", "LED_BAR"]
@@ -2366,9 +2377,9 @@ def test_run_pipeline_step_recipe_panel_summaries_data3a_data3b_data3c(app_paths
         log=lambda _: None,
     )
 
-    data3a_df = pd.read_excel(result.output_path, sheet_name="data3a", keep_default_na=False)
-    data3b_df = pd.read_excel(result.output_path, sheet_name="data3b", keep_default_na=False)
-    data3c_df = pd.read_excel(result.output_path, sheet_name="data3c", keep_default_na=False)
+    data3a_df = _read_summary_sheet(result.output_path, "data3a", fill_forward=["Part Name"])
+    data3b_df = _read_summary_sheet(result.output_path, "data3b", fill_forward=["part_name"])
+    data3c_df = _read_summary_sheet(result.output_path, "data3c", fill_forward=["part_name"])
 
     inch_group_order = (
         data3a_df[
@@ -2486,7 +2497,7 @@ def test_run_pipeline_step_recipe_panel_usage_summary_data4_with_fixed_order(app
         log=lambda _: None,
     )
 
-    data4_df = pd.read_excel(result.output_path, sheet_name="data4", keep_default_na=False)
+    data4_df = _read_summary_sheet(result.output_path, "data4", fill_forward=["Part Name"])
 
     assert data4_df.columns.tolist() == ["Part Name", "Panel Usage", "Total"]
 
@@ -2600,8 +2611,8 @@ def test_run_pipeline_step_recipe_panel_fcost_data5a_and_top1_model_data5b(app_p
         log=lambda _: None,
     )
 
-    data5a_df = pd.read_excel(result.output_path, sheet_name="data5a", keep_default_na=False)
-    data5b_df = pd.read_excel(result.output_path, sheet_name="data5b", keep_default_na=False)
+    data5a_df = _read_summary_sheet(result.output_path, "data5a", fill_forward=["Part Name"])
+    data5b_df = _read_summary_sheet(result.output_path, "data5b", fill_forward=["Part Name"])
 
     assert data5a_df.columns.tolist() == [
         "Part Name",
@@ -2705,7 +2716,7 @@ def test_run_pipeline_step_recipe_panel_symptom_inch_matrix_data6(app_paths):
         log=lambda _: None,
     )
 
-    data6_df = pd.read_excel(result.output_path, sheet_name="data6", keep_default_na=False)
+    data6_df = _read_summary_sheet(result.output_path, "data6", fill_forward=["Part Name"])
     data6_df.columns = [str(col) for col in data6_df.columns]
 
     assert data6_df.columns.tolist() == ["Part Name", "Symptom", "24", "32", "55", "Grand Total"]
