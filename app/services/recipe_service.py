@@ -1450,7 +1450,15 @@ def _build_panel_model_summary(data_df: pd.DataFrame, options: dict | None) -> p
 
     output_columns = ["part_name", "inch", "model_name", "Total"]
     rows: list[dict[str, object]] = []
-    inch_order = working_df[inch_column].drop_duplicates().tolist()
+
+    def inch_sort_key(value: object) -> tuple[int, float, str]:
+        text = str(value).strip()
+        numeric_value = pd.to_numeric(text, errors="coerce")
+        if pd.notna(numeric_value):
+            return (0, float(numeric_value), text)
+        return (1, 0.0, text.casefold())
+
+    inch_order = sorted(working_df[inch_column].drop_duplicates().tolist(), key=inch_sort_key)
 
     for inch_value in inch_order:
         inch_rows = grouped[grouped["inch"].eq(inch_value)].copy()
@@ -1493,7 +1501,23 @@ def _build_panel_model_summary(data_df: pd.DataFrame, options: dict | None) -> p
             ignore_index=True,
         )
 
-    return summary_df
+    if not summary_df.empty:
+        row_types = []
+        for _, row in summary_df.iterrows():
+            part_name = str(row["part_name"]).strip()
+            inch_value = str(row["inch"]).strip()
+            if part_name == "Grand Total":
+                row_types.append("grand_total")
+            elif part_name.endswith(" Total") or inch_value.endswith(" Total"):
+                row_types.append("subtotal")
+            else:
+                row_types.append("data")
+        summary_df = summary_df.copy()
+        summary_df["_row_type"] = row_types
+
+    return summary_df.rename(
+        columns={"part_name": "Part Name", "inch": "Inch", "model_name": "Model Name"}
+    )
 
 
 def _build_panel_symptom_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:

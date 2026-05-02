@@ -2288,12 +2288,13 @@ def test_run_pipeline_step_recipe_panel_summaries_data3a_data3b_data3c(app_paths
     source_path = app_paths.project_root / "data3_source.xlsx"
     pd.DataFrame(
         [
+            {"part_name": "PANEL", "inch": "55", "model_name": "M3", "total_cost": 200, "symptom": "NO DISPLAY", "branch": "SBY", "panel_usage": "> 3 Years"},
             {"part_name": "PANEL", "inch": "32", "model_name": "M1", "total_cost": 100, "symptom": "LINE", "branch": "JKT", "panel_usage": "< 1 Year"},
+            {"part_name": "PANEL", "inch": "65", "model_name": "M5", "total_cost": 80, "symptom": "DEAD", "branch": "MDN", "panel_usage": "INVALID"},
+            {"part_name": "PANEL", "inch": "24", "model_name": "M0", "total_cost": 40, "symptom": "DEAD", "branch": "MDN", "panel_usage": "INVALID"},
             {"part_name": "PANEL", "inch": "32", "model_name": "M2", "total_cost": 50, "symptom": "LINE", "branch": "BDG", "panel_usage": "1 - 2 Years"},
             {"part_name": "PANEL", "inch": "32", "model_name": "M1", "total_cost": 25, "symptom": "NO DISPLAY", "branch": "JKT", "panel_usage": "2 - 3 Years"},
-            {"part_name": "PANEL", "inch": "55", "model_name": "M3", "total_cost": 200, "symptom": "NO DISPLAY", "branch": "SBY", "panel_usage": "> 3 Years"},
             {"part_name": "PANEL", "inch": "55", "model_name": "M4", "total_cost": 100, "symptom": "DEAD", "branch": "JKT", "panel_usage": ""},
-            {"part_name": "PANEL", "inch": "65", "model_name": "M5", "total_cost": 80, "symptom": "DEAD", "branch": "MDN", "panel_usage": "INVALID"},
             {"part_name": "MAIN_UNIT", "inch": "55", "model_name": "X1", "total_cost": 999, "symptom": "X", "branch": "XXX", "panel_usage": "< 1 Year"},
         ]
     ).to_excel(source_path, index=False, sheet_name="OnlySheet")
@@ -2343,6 +2344,9 @@ def test_run_pipeline_step_recipe_panel_summaries_data3a_data3b_data3c(app_paths
                 "    summary:",
                 '      type: "panel_model_summary"',
                 '      layout_mode: "plain"',
+                '      title: "PANEL MODEL SUMMARY"',
+                '      subtitle: "Panel summary by inch and model"',
+                "      column_width: 13.0",
                 '  - sheet_name: "data3b"',
                 "    summary:",
                 '      type: "panel_symptom_summary"',
@@ -2366,29 +2370,59 @@ def test_run_pipeline_step_recipe_panel_summaries_data3a_data3b_data3c(app_paths
     data3b_df = pd.read_excel(result.output_path, sheet_name="data3b", keep_default_na=False)
     data3c_df = pd.read_excel(result.output_path, sheet_name="data3c", keep_default_na=False)
 
-    inch32_models = data3a_df[(data3a_df["part_name"] == "PANEL") & (data3a_df["inch"] == "32")]["model_name"].tolist()
+    inch_group_order = (
+        data3a_df[
+            (data3a_df["Part Name"] == "PANEL")
+            & data3a_df["Inch"].astype(str).isin(["24", "32", "55", "65"])
+        ]["Inch"]
+        .astype(str)
+        .drop_duplicates()
+        .tolist()
+    )
+    assert inch_group_order == ["24", "32", "55", "65"]
+
+    inch32_models = data3a_df[
+        (data3a_df["Part Name"] == "PANEL") & (data3a_df["Inch"].astype(str) == "32")
+    ]["Model Name"].tolist()
     assert inch32_models == ["M1", "M2"]
 
-    inch32_total = data3a_df[data3a_df["inch"] == "32 Total"].iloc[0]
-    panel_total_a = data3a_df[data3a_df["part_name"] == "PANEL Total"].iloc[0]
-    grand_total_a = data3a_df[data3a_df["part_name"] == "Grand Total"].iloc[0]
+    inch32_total = data3a_df[data3a_df["Inch"] == "32 Total"].iloc[0]
+    panel_total_a = data3a_df[data3a_df["Part Name"] == "PANEL Total"].iloc[0]
+    grand_total_a = data3a_df[data3a_df["Part Name"] == "Grand Total"].iloc[0]
     assert inch32_total["Total"] == 175
-    assert panel_total_a["Total"] == 555
-    assert grand_total_a["Total"] == 555
+    assert panel_total_a["Total"] == 595
+    assert grand_total_a["Total"] == 595
+
+    data3a_sheet = load_workbook(result.output_path)["data3a"]
+    assert data3a_sheet["A1"].value == "PANEL MODEL SUMMARY"
+    assert data3a_sheet["A2"].value == "Panel summary by inch and model"
+    assert data3a_sheet["A4"].value == "Part Name"
+    assert data3a_sheet["B4"].value == "Inch"
+    assert data3a_sheet["C4"].value == "Model Name"
+    assert data3a_sheet["D4"].value == "Total"
+    assert data3a_sheet.freeze_panes == "B5"
+    assert data3a_sheet.sheet_view.showGridLines is False
+    assert "A1:D1" in {str(merged_range) for merged_range in data3a_sheet.merged_cells.ranges}
+    assert "A2:D2" in {str(merged_range) for merged_range in data3a_sheet.merged_cells.ranges}
+    assert data3a_sheet["A4"].fill.fgColor.rgb == "00E4DFEC"
+    assert data3a_sheet["B4"].fill.fgColor.rgb == "00BDD7EE"
+    assert data3a_sheet["C4"].fill.fgColor.rgb == "00C6EFCE"
+    assert data3a_sheet["D4"].fill.fgColor.rgb == "00E4DFEC"
+    assert data3a_sheet["D5"].number_format == "#,##0"
 
     symptom_rows = data3b_df[data3b_df["part_name"] == "PANEL"]["symptom"].tolist()
     assert symptom_rows == ["DEAD", "LINE", "NO DISPLAY"]
     panel_total_b = data3b_df[data3b_df["part_name"] == "PANEL Total"].iloc[0]
     grand_total_b = data3b_df[data3b_df["part_name"] == "Grand Total"].iloc[0]
-    assert panel_total_b["Total"] == 6
-    assert grand_total_b["Total"] == 6
+    assert panel_total_b["Total"] == 7
+    assert grand_total_b["Total"] == 7
 
     branch_rows = data3c_df[data3c_df["part_name"] == "PANEL"]["branch"].tolist()
-    assert branch_rows == ["JKT", "BDG", "MDN", "SBY"]
+    assert branch_rows == ["JKT", "MDN", "BDG", "SBY"]
     panel_total_c = data3c_df[data3c_df["part_name"] == "PANEL Total"].iloc[0]
     grand_total_c = data3c_df[data3c_df["part_name"] == "Grand Total"].iloc[0]
-    assert panel_total_c["Total"] == 6
-    assert grand_total_c["Total"] == 6
+    assert panel_total_c["Total"] == 7
+    assert grand_total_c["Total"] == 7
 
 
 def test_run_pipeline_step_recipe_panel_usage_summary_data4_with_fixed_order(app_paths):
