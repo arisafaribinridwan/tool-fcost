@@ -230,6 +230,19 @@ def _validate_output_items(outputs: object, errors: list[str]) -> None:
                     f"outputs[{idx}].summary.layout_mode harus salah satu dari: standard, plain."
                 )
 
+            for text_field in ("title", "subtitle", "freeze_pane"):
+                value = summary_cfg.get(text_field)
+                if value is not None and not isinstance(value, str):
+                    errors.append(
+                        f"outputs[{idx}].summary.{text_field} harus berupa string jika diisi."
+                    )
+
+            column_width = summary_cfg.get("column_width")
+            if column_width is not None and not isinstance(column_width, int | float):
+                errors.append(
+                    f"outputs[{idx}].summary.column_width harus berupa angka jika diisi."
+                )
+
             options = summary_cfg.get("options")
             if options is not None and not isinstance(options, dict):
                 errors.append(f"outputs[{idx}].summary.options harus berupa object jika diisi.")

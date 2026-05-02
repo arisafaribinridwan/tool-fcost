@@ -30,6 +30,30 @@ ProgressFn = Callable[[PipelineStepStatus], None]
 _UNSAFE_FILENAME_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
 
 
+def _build_sheet_options(config: dict) -> dict[str, dict]:
+    sheet_options: dict[str, dict] = {}
+    outputs = config.get("outputs")
+    if not isinstance(outputs, list):
+        return sheet_options
+
+    for item in outputs:
+        if not isinstance(item, dict):
+            continue
+        sheet_name = item.get("sheet_name")
+        summary_cfg = item.get("summary")
+        if not isinstance(sheet_name, str) or not isinstance(summary_cfg, dict):
+            continue
+
+        options: dict[str, object] = {}
+        for key in ("title", "subtitle", "column_width", "freeze_pane"):
+            value = summary_cfg.get(key)
+            if value is not None:
+                options[key] = value
+        sheet_options[sheet_name] = options
+
+    return sheet_options
+
+
 def _safe_filename(raw_name: str) -> str:
     normalized = _UNSAFE_FILENAME_CHARS.sub("_", raw_name.strip())
     normalized = normalized.strip("._")
@@ -172,6 +196,7 @@ def run_pipeline(
         emit_progress("build_output", "Build output", "done", f"{len(output_sheets)} sheet")
 
     config_name = str(config.get("name", config_path.stem))
+    sheet_options = _build_sheet_options(config)
     output_file_name = (
         f"{_safe_filename(config_name)}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     )
@@ -190,6 +215,7 @@ def run_pipeline(
             source_df=source_df,
             period_text_override=period_text_override,
             sheet_layouts=sheet_layouts,
+            sheet_options=sheet_options,
         )
     except Exception as exc:
         raise PipelineError(f"Gagal menulis file output: {exc}") from exc
