@@ -169,6 +169,15 @@ outputs:
       title: "PART COST SUMMARY"
       subtitle: "Part cost summary by section and part name"
       column_width: 13.0
+      options:
+        column_labels:
+          section: "Section"
+          part_name: "Part Name"
+          "Sum of labor_cost": "Labor"
+          "Sum of transportation_cost": "Transportation"
+          "Sum of parts_cost": "Parts"
+          "Sum of total_cost": "Total"
+          "Count of part_name": "Count"
 
   - sheet_name: "data3a"
     summary:

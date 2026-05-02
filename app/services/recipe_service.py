@@ -1418,7 +1418,7 @@ def _build_part_pivot_summary(data_df: pd.DataFrame, options: dict | None) -> pd
         }
         summary_df = pd.concat([summary_df, pd.DataFrame([total_row])], ignore_index=True)
 
-    return summary_df
+    return _add_summary_metadata(summary_df, cfg)
 
 
 def _build_panel_model_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
