@@ -12,7 +12,7 @@ Secara prioritas, area improvement terbaik adalah meningkatkan kualitas `comment
 
 ## Cara kerja flow LCD SEID saat ini
 
-Flow LCD SEID dikendalikan oleh `configs/monthly-report-recipe.yaml`. Config ini mengekstrak data dari sheet GQS dan SASS pada source workbook, lalu hanya mengambil baris dengan `Category = LCD SEID`. Setelah itu pipeline menjalankan normalisasi `symptom_comment` dan `repair_comment` dengan master `comment_synonyms`, menurunkan `section`, menyesuaikan biaya GQS, menghitung `prod_month`, `inch`, `total_cost`, `diff_month`, dan `panel_usage`, melakukan lookup `part_name` dari `part_used`, lalu melakukan klasifikasi `symptom` dan `action`.
+Flow LCD SEID dikendalikan oleh `configs/monthly-report-recipe.yaml`. Config ini mengekstrak data dari sheet GQS dan SASS pada source workbook, lalu hanya mengambil baris dengan `Category = LCD SEID`. Setelah itu pipeline menjalankan normalisasi `symptom_comment` dan `repair_comment` dengan master `comment_synonyms`, menurunkan `section`, menyesuaikan biaya GQS, menghitung `prod_lot`, `inch`, `total_cost`, `diff_month`, dan `panel_usage`, melakukan lookup `part_name` dari `part_used`, lalu melakukan klasifikasi `symptom` dan `action`.
 
 Rule symptom berjalan berbasis `part_name + symptom_comment`, dengan prioritas dan `match_type` per rule. Rule action berjalan berbasis kombinasi `job_sheet_section + part_name + symptom_comment + repair_comment`, dan saat ini masih sangat dipengaruhi oleh regex pada `repair_comment`. Setelah action terbentuk, tool memetakan `defect_category` dan `defect` dari `defect_category.csv`.
 

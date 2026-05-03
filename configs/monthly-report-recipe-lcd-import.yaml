@@ -50,7 +50,7 @@ datasets:
     - "parts_cost"
     - "part_used"
     - "section"
-    - "prod_month"
+    - "prod_lot"
     - "inch"
     - "total_cost"
     - "diff_month"
@@ -235,9 +235,9 @@ steps:
           column: "parts_cost"
           value: 100
 
-  - id: "sub_5_add_prod_month"
+  - id: "sub_5_add_prod_lot"
     type: "derive_column"
-    target: "prod_month"
+    target: "prod_lot"
     expression:
       substring:
         column: "serial_number"
@@ -629,7 +629,7 @@ outputs:
       - "parts_cost"
       - "part_used"
       - "section"
-      - "prod_month"
+      - "prod_lot"
       - "inch"
       - "total_cost"
       - "diff_month"

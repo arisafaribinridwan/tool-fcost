@@ -1679,7 +1679,7 @@ def test_run_pipeline_supports_monthly_step_recipe_end_to_end(app_paths):
     assert detail_df["transportation_cost"].tolist() == [300, 0, 3, 0]
     assert detail_df["parts_cost"].tolist() == [5000, 0, 400, 100]
     assert detail_df["total_cost"].tolist() == [6800, 0, 414, 100]
-    assert detail_df["prod_month"].astype(str).tolist() == ["123", "123", "987", "987"]
+    assert detail_df["prod_lot"].astype(str).tolist() == ["123", "123", "987", "987"]
     assert detail_df["inch"].astype(str).tolist() == ["42", "42", "32", "32"]
     assert detail_df["panel_usage"].tolist() == ["< 1 Year", "< 1 Year", "2 - 3 Years", "2 - 3 Years"]
     assert detail_df["factory"].tolist() == ["Factory A", "Factory A", "Factory B", "Factory B"]

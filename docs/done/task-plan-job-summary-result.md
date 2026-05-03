@@ -93,7 +93,7 @@ Pada workbook referensi, sheet `result` memiliki layout report dengan 3 baris he
 - `parts_cost`
 - `part_used`
 - `section`
-- `prod_month`
+- `prod_lot`
 - `inch`
 - `total_cost`
 - `diff_month`
