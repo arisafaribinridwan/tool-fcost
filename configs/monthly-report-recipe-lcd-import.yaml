@@ -51,6 +51,7 @@ datasets:
     - "part_used"
     - "section"
     - "prod_lot"
+    - "prod_date"
     - "inch"
     - "total_cost"
     - "diff_month"
@@ -239,11 +240,30 @@ steps:
     type: "derive_column"
     target: "prod_lot"
     expression:
-      substring:
-        column: "serial_number"
-        start: 5
-        length: 3
+      case:
+        - when:
+            starts_with:
+              column: "serial_number"
+              value: "I"
+          then:
+            substring:
+              column: "serial_number"
+              start: 1
+              length: 3
+        - else:
+            substring:
+              column: "serial_number"
+              start: 0
+              length: 3
     on_short_input: null
+
+  - id: "sub5a_add_prod_date"
+    type: "derive_column"
+    target: "prod_date"
+    expression:
+      short_year_month_date:
+        column: "prod_lot"
+    on_invalid_input: null
 
   - id: "sub_6_add_inch"
     type: "derive_column"
@@ -630,6 +650,7 @@ outputs:
       - "part_used"
       - "section"
       - "prod_lot"
+      - "prod_date"
       - "inch"
       - "total_cost"
       - "diff_month"
@@ -641,3 +662,6 @@ outputs:
       - "defect_category"
       - "defect"
       - "keydate"
+
+styling:
+  date_format: "YYYY-MM-DD"

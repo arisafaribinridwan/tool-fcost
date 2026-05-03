@@ -271,6 +271,30 @@ def _evaluate_expression(
 
         return pd.to_datetime(data_df[column].map(parse_lot_date), errors="coerce")
 
+    if operator == "short_year_month_date":
+        column = str(payload["column"])
+        if column not in data_df.columns:
+            raise ValueError(f"{context} gagal, kolom '{column}' tidak ditemukan.")
+
+        current_year = int(payload.get("current_year", pd.Timestamp.today().year))
+        current_decade = (current_year // 10) * 10
+        current_year_digit = current_year % 10
+
+        def parse_short_year_month_date(value: object) -> pd.Timestamp | pd.NaT:
+            if pd.isna(value):
+                return pd.NaT
+            text = str(value).strip()
+            if len(text) != 3 or not text.isdigit():
+                return pd.NaT
+            year_digit = int(text[0])
+            month = int(text[1:])
+            if month < 1 or month > 12:
+                return pd.NaT
+            decade = current_decade if year_digit <= current_year_digit else current_decade - 10
+            return pd.Timestamp(year=decade + year_digit, month=month, day=1)
+
+        return pd.to_datetime(data_df[column].map(parse_short_year_month_date), errors="coerce")
+
     if operator == "add":
         columns = payload["columns"]
         null_as_zero = bool(payload.get("null_as_zero", False))

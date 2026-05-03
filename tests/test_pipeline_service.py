@@ -5,6 +5,7 @@ from pathlib import Path
 from openpyxl import Workbook, load_workbook
 import pandas as pd
 import pytest
+import yaml
 
 from app.services.pipeline_service import run_pipeline
 from app.services.pipeline_types import PipelineError, PipelineStepStatus
@@ -261,6 +262,103 @@ def test_run_pipeline_step_recipe_derives_prod_date_from_prod_lot(app_paths):
 
     workbook = load_workbook(result.output_path)
     assert workbook["result"]["B5"].number_format == "YYYY-MM-DD"
+
+
+def test_run_pipeline_step_recipe_derives_lcd_import_prod_date_from_ym_lot(app_paths):
+    source_path = app_paths.project_root / "source.xlsx"
+    pd.DataFrame(
+        [
+            {"prod_lot": "605"},
+            {"prod_lot": "812"},
+            {"prod_lot": "912"},
+            {"prod_lot": "613"},
+            {"prod_lot": "6AA"},
+            {"prod_lot": ""},
+        ]
+    ).to_excel(source_path, index=False, sheet_name="Data")
+
+    config_path = app_paths.configs_dir / "lcd_import_prod_date_recipe.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "LCD Import Prod Date Recipe"',
+                "datasets:",
+                '  working_dataset: "result"',
+                "  canonical_columns:",
+                '    - "prod_lot"',
+                '    - "prod_date"',
+                "steps:",
+                '  - id: "extract"',
+                '    type: "extract_sheet"',
+                "    sheet_selector:",
+                '      contains: "Data"',
+                "    header_locator:",
+                '      type: "required_columns"',
+                "      scan_rows: [1, 1]",
+                "      required:",
+                '        - "prod_lot"',
+                "    select:",
+                '      "prod_lot": "prod_lot"',
+                '    write_to: "result"',
+                '    mode: "replace"',
+                '  - id: "sub5a_add_prod_date"',
+                '    type: "derive_column"',
+                '    target: "prod_date"',
+                "    expression:",
+                "      short_year_month_date:",
+                '        column: "prod_lot"',
+                '        current_year: 2028',
+                "outputs:",
+                '  - sheet_name: "result"',
+                "    columns:",
+                '      - "prod_lot"',
+                '      - "prod_date"',
+                "styling:",
+                '  date_format: "YYYY-MM-DD"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _message: None,
+    )
+
+    detail_df = pd.read_excel(result.output_path, sheet_name="result", skiprows=3, keep_default_na=False)
+
+    assert detail_df["prod_date"].tolist()[:3] == [
+        pd.Timestamp("2026-05-01"),
+        pd.Timestamp("2028-12-01"),
+        pd.Timestamp("2019-12-01"),
+    ]
+    assert detail_df["prod_date"].tolist()[3:] == ["", "", ""]
+
+    workbook = load_workbook(result.output_path)
+    assert workbook["result"]["B5"].number_format == "YYYY-MM-DD"
+
+
+def test_lcd_import_prod_lot_and_prod_date_rules_are_config_specific():
+    lcd_cfg = yaml.safe_load(Path("configs/monthly-report-recipe-lcd-import.yaml").read_text(encoding="utf-8"))
+    regular_cfg = yaml.safe_load(Path("configs/monthly-report-recipe.yaml").read_text(encoding="utf-8"))
+
+    lcd_step = next(step for step in lcd_cfg["steps"] if step["id"] == "sub_5_add_prod_lot")
+    regular_step = next(step for step in regular_cfg["steps"] if step["id"] == "sub_5_add_prod_lot")
+    lcd_prod_date_step = next(step for step in lcd_cfg["steps"] if step["id"] == "sub5a_add_prod_date")
+    regular_prod_date_step = next(step for step in regular_cfg["steps"] if step["id"] == "sub5a_add_prod_date")
+
+    lcd_case = lcd_step["expression"]["case"]
+    assert lcd_case[0]["when"]["starts_with"]["value"] == "I"
+    assert lcd_case[0]["then"]["substring"]["start"] == 1
+    assert lcd_case[0]["then"]["substring"]["length"] == 3
+    assert lcd_case[1]["else"]["substring"]["start"] == 0
+    assert lcd_case[1]["else"]["substring"]["length"] == 3
+    assert regular_step["expression"]["substring"]["start"] == 5
+    assert regular_step["expression"]["substring"]["length"] == 3
+    assert "short_year_month_date" in lcd_prod_date_step["expression"]
+    assert "lot_month_date" in regular_prod_date_step["expression"]
 
 
 def test_run_pipeline_uses_output_name_override_for_filename(app_paths):
