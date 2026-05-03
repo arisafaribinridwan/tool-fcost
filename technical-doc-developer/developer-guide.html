@@ -1,0 +1,35 @@
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Panduan Developer</title><link rel="stylesheet" href="assets/styles.css"></head><body><div class="layout">
+<aside class="sidebar">
+  <div class="brand"><div class="kicker">XLS-Flow Automator</div><h1>Technical Docs</h1><p>Panduan developer sekaligus jalur belajar pemrograman untuk project Excel Automation Tool.</p></div>
+  <div class="nav-section"><h2>Dokumentasi</h2>
+    <a href="index.html" >Ringkasan</a>
+    <a href="getting-started.html" >Setup & Menjalankan</a>
+    <a href="architecture.html" >Arsitektur</a>
+    <a href="pipeline.html" >Alur Pipeline</a>
+    <a href="config-yaml.html" >Config YAML</a>
+    <a href="developer-guide.html" class="active">Panduan Developer</a>
+    <a href="learning-path.html" >Jalur Belajar Pemula</a>
+  </div>
+  <div class="nav-section"><h2>Shortcut Repo</h2>
+    <a href="../run.py">run.py</a>
+    <a href="../app/services/pipeline_service.py">pipeline_service.py</a>
+    <a href="../configs/job_profiles.yaml">job_profiles.yaml</a>
+    <a href="../tests/test_pipeline_service.py">test_pipeline_service.py</a>
+  </div>
+</aside><main class="content">
+<section class="hero"><div class="kicker">Developer guide</div><h1>Cara aman mengubah, menambah fitur, dan mengetes project</h1><p class="lead">Bagian ini berisi panduan kerja untuk developer. Tujuannya agar perubahan tetap selaras dengan arsitektur yang ada dan tidak merusak flow Excel automation yang sudah berjalan.</p></section>
+<section class="card"><h2>Prinsip perubahan</h2><ol><li><strong>Jangan taruh business logic di UI.</strong> UI cukup mengambil input, memanggil service, dan menampilkan hasil.</li><li><strong>Gunakan helper path safety.</strong> Untuk config/master/output runtime, pakai fungsi di <code>app/utils/path_safety.py</code>.</li><li><strong>Tambahkan validasi sebelum eksekusi.</strong> Jika menambah field YAML, update validator di <code>config_service.py</code> dan tambahkan test.</li><li><strong>Jaga compatibility cross-platform.</strong> Pakai <code>pathlib</code> atau <code>os.path</code>, jangan hardcode separator Windows/Linux.</li><li><strong>Pertahankan Excel master runtime.</strong> Master runtime saat ini memakai file Excel/CSV di <code>masters/</code>; jangan merekomendasikan migrasi master runtime ke CSV saja kecuali memang diminta.</li></ol></section>
+<section class="card"><h2>Menambah step recipe baru</h2><p>Urutan umum untuk menambah step baru di recipe engine:</p><ol><li>Tambahkan nama step ke <code>SUPPORTED_RECIPE_STEP_TYPES</code> di <code>config_service.py</code>.</li><li>Tambahkan validasi field wajib step tersebut di validator recipe.</li><li>Implementasikan function di <code>recipe_service.py</code>, idealnya dengan nama <code>_apply_nama_step_step()</code>.</li><li>Tambahkan cabang dispatch di <code>execute_step_recipe()</code>.</li><li>Buat test di <code>tests/test_pipeline_service.py</code> atau file test khusus recipe.</li><li>Jalankan <code>python -m ruff check .</code> dan <code>python -m pytest -q</code>.</li></ol></section>
+<section class="card"><h2>Menambah transform klasik</h2><p>Transform klasik dikelola di <code>transform_service.py</code> dan divalidasi di <code>config_service.py</code>. Jangan hanya menambah implementasi tanpa validasi, karena config invalid bisa gagal terlambat saat user menekan execute.</p><pre><code># pola umum
+SUPPORTED_TRANSFORM_TYPES.add("nama_transform")
+
+def _apply_nama_transform(data_df, transform_cfg, log):
+    # validasi kolom dan tipe data
+    # return DataFrame baru atau copy yang dimodifikasi
+    return data_df</code></pre></section>
+<section class="card"><h2>Menambah output summary baru</h2><p>Summary khusus berada di <code>recipe_service.py</code>. Tambahkan builder function yang menerima <code>data_df</code> dan <code>options</code>, mengembalikan DataFrame final. Kemudian hubungkan ke <code>_build_summary_output_sheet()</code>. Jika summary punya layout/styling khusus, pastikan <code>output_service.py</code> masih bisa menulisnya dengan layout <code>plain</code> atau <code>standard</code>.</p></section>
+<section class="card"><h2>Testing strategy</h2><table><tr><th>Area</th><th>Test yang disarankan</th></tr><tr><td>Path safety</td><td>Test path normal, Windows separator, absolute path, <code>..</code>, case-insensitive filename, dan output escape.</td></tr><tr><td>Config validator</td><td>Test valid payload dan invalid payload untuk field baru.</td></tr><tr><td>Pipeline</td><td>Test happy path minimal dengan source kecil, master kecil, config kecil, lalu baca workbook output.</td></tr><tr><td>Recipe step</td><td>Test step secara end-to-end melalui pipeline agar integrasi dengan YAML ikut tercakup.</td></tr><tr><td>UI</td><td>Test behavior yang bisa dipisah dari rendering berat, misalnya parsing periode dan state execute.</td></tr></table></section>
+<section class="card"><h2>Debugging checklist</h2><ul><li>Jika source gagal dibaca, cek ekstensi, ukuran file, sheet name, dan apakah file Excel corrupt.</li><li>Jika job tidak muncul, cek <code>enabled</code>, validitas <code>job_profiles.yaml</code>, dan validitas config target.</li><li>Jika master lookup gagal, cek path master harus di bawah <code>masters/</code>, nama sheet, dan nama kolom key.</li><li>Jika output gagal, cek sheet name, kolom output yang diminta, dan apakah output path tetap di <code>outputs/</code>.</li><li>Jika UI freeze, pastikan proses berat tetap berjalan di worker thread, bukan langsung di main thread Tkinter.</li></ul></section>
+<section class="callout learn"><strong>Belajar konsep:</strong> test yang baik tidak hanya memastikan “kode tidak error”, tapi juga memastikan hasil output sesuai. Contohnya test pipeline membaca kembali workbook output dan mengecek kolom serta nilai summary.</section>
+<div class="next-prev"><a href="config-yaml.html">← Config YAML</a><a href="learning-path.html">Lanjut: Jalur Belajar →</a></div>
+<div class="footer">Dokumentasi ini dibuat dari pembacaan source code project saat ini. Jika kode berubah, perbarui bagian terkait agar tetap sinkron.</div></main></div></body></html>

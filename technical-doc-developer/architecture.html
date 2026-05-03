@@ -1,0 +1,31 @@
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Arsitektur Project</title><link rel="stylesheet" href="assets/styles.css"></head><body><div class="layout">
+<aside class="sidebar">
+  <div class="brand"><div class="kicker">XLS-Flow Automator</div><h1>Technical Docs</h1><p>Panduan developer sekaligus jalur belajar pemrograman untuk project Excel Automation Tool.</p></div>
+  <div class="nav-section"><h2>Dokumentasi</h2>
+    <a href="index.html" >Ringkasan</a>
+    <a href="getting-started.html" >Setup & Menjalankan</a>
+    <a href="architecture.html" class="active">Arsitektur</a>
+    <a href="pipeline.html" >Alur Pipeline</a>
+    <a href="config-yaml.html" >Config YAML</a>
+    <a href="developer-guide.html" >Panduan Developer</a>
+    <a href="learning-path.html" >Jalur Belajar Pemula</a>
+  </div>
+  <div class="nav-section"><h2>Shortcut Repo</h2>
+    <a href="../run.py">run.py</a>
+    <a href="../app/services/pipeline_service.py">pipeline_service.py</a>
+    <a href="../configs/job_profiles.yaml">job_profiles.yaml</a>
+    <a href="../tests/test_pipeline_service.py">test_pipeline_service.py</a>
+  </div>
+</aside><main class="content">
+<section class="hero"><div class="kicker">Architecture</div><h1>Arsitektur aplikasi: UI tipis, service layer tebal</h1><p class="lead">Project ini memakai pemisahan tanggung jawab yang cukup jelas. UI bertugas menerima input user dan menampilkan status. Service layer menjalankan business logic. Utility layer menangani hal pendukung seperti path safety dan integrasi OS.</p></section>
+<section class="card"><h2>Peta layer</h2><div class="flow"><div><strong>Entry point</strong>: <code>run.py</code> memanggil <code>ensure_runtime_dirs()</code> lalu <code>run_desktop_app(paths)</code>.</div><div><strong>Runtime paths</strong>: <code>app/__init__.py</code> mendefinisikan <code>AppPaths</code>, <code>get_runtime_root()</code>, dan folder <code>configs</code>, <code>masters</code>, <code>uploads</code>, <code>outputs</code>.</div><div><strong>UI layer</strong>: <code>app/ui/main_window.py</code> dan <code>app/ui/settings.py</code>.</div><div><strong>Service layer</strong>: <code>app/services/*</code> memegang validasi, import, registry job, preflight, pipeline, recipe, transform, output.</div><div><strong>Utility layer</strong>: <code>app/utils/*</code> untuk dialog OS, path safety, log sanitizer, runtime guardrails.</div></div></section>
+<section class="card"><h2>Modul service penting</h2><table><tr><th>Modul</th><th>Tanggung jawab</th></tr><tr><td><code>source_service.py</code></td><td>Validasi source <code>.xlsx</code>/<code>.csv</code>, load DataFrame, cek kolom wajib, copy source ke <code>uploads/</code>.</td></tr><tr><td><code>dataframe_io_service.py</code></td><td>Membaca CSV/Excel dengan pesan error yang ramah. Nama sheet Excel dicocokkan case-insensitive.</td></tr><tr><td><code>config_service.py</code></td><td>Discover, load, normalisasi, dan validasi YAML. Mendukung schema klasik dan step recipe.</td></tr><tr><td><code>job_profile_service.py</code></td><td>Membaca/menulis <code>configs/job_profiles.yaml</code>, validasi registry, ekstraksi dependensi master.</td></tr><tr><td><code>preflight_service.py</code></td><td>Cek source dan config sebelum tombol execute diaktifkan.</td></tr><tr><td><code>pipeline_service.py</code></td><td>Orkestrator utama: load config, copy source, baca source, jalankan transform/recipe, tulis output.</td></tr><tr><td><code>recipe_service.py</code></td><td>Engine untuk recipe step-based seperti extract sheet, derive column, lookup rules, summary FCOST.</td></tr><tr><td><code>transform_service.py</code></td><td>Engine config klasik: master lookup, transform conditional/formula/filter, pivot/group_by output.</td></tr><tr><td><code>output_service.py</code></td><td>Menulis workbook <code>.xlsx</code>, sanitasi nama sheet, styling, header, periode, freeze pane.</td></tr><tr><td><code>import_service.py</code></td><td>Copy config/master dari luar ke folder runtime dengan suffix jika nama bentrok.</td></tr></table></section>
+<section class="card"><h2>Design choice yang perlu dipertahankan</h2><p>Project ini sengaja membatasi path runtime. Config harus berada di <code>configs/</code>, master di <code>masters/</code>, source yang diproses dicopy ke <code>uploads/</code>, dan output di <code>outputs/</code>. Jangan membuat fitur yang langsung menerima path bebas untuk master/output tanpa melewati helper path safety.</p><p>UI juga tidak menjalankan pipeline di thread utama. Di <code>main_window.py</code>, eksekusi dilakukan lewat <code>Thread</code> dan komunikasi balik ke UI memakai <code>Queue</code>. Ini penting agar window tidak freeze saat pandas/openpyxl bekerja.</p></section>
+<section class="callout learn"><strong>Belajar konsep:</strong> “separation of concerns” berarti setiap file punya tugas spesifik. Jika semua logic ditaruh di UI, kode cepat sulit dites. Dengan service layer, test bisa memanggil function langsung tanpa membuka window desktop.</section>
+<section class="card"><h2>Data type domain</h2><p><code>pipeline_types.py</code> berisi dataclass kecil seperti <code>PipelineResult</code>, <code>PipelineStepStatus</code>, <code>PreflightFinding</code>, dan <code>PreflightResult</code>. Dataclass membuat data hasil proses lebih eksplisit daripada dictionary acak.</p><pre><code>PipelineResult:
+  output_path: Path
+  source_copy_path: Path
+  sheets_written: int
+  duration_ms: int | None</code></pre></section>
+<div class="next-prev"><a href="getting-started.html">← Setup</a><a href="pipeline.html">Lanjut: Alur Pipeline →</a></div>
+<div class="footer">Dokumentasi ini dibuat dari pembacaan source code project saat ini. Jika kode berubah, perbarui bagian terkait agar tetap sinkron.</div></main></div></body></html>

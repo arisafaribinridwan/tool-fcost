@@ -1,0 +1,83 @@
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Config YAML</title><link rel="stylesheet" href="assets/styles.css"></head><body><div class="layout">
+<aside class="sidebar">
+  <div class="brand"><div class="kicker">XLS-Flow Automator</div><h1>Technical Docs</h1><p>Panduan developer sekaligus jalur belajar pemrograman untuk project Excel Automation Tool.</p></div>
+  <div class="nav-section"><h2>Dokumentasi</h2>
+    <a href="index.html" >Ringkasan</a>
+    <a href="getting-started.html" >Setup & Menjalankan</a>
+    <a href="architecture.html" >Arsitektur</a>
+    <a href="pipeline.html" >Alur Pipeline</a>
+    <a href="config-yaml.html" class="active">Config YAML</a>
+    <a href="developer-guide.html" >Panduan Developer</a>
+    <a href="learning-path.html" >Jalur Belajar Pemula</a>
+  </div>
+  <div class="nav-section"><h2>Shortcut Repo</h2>
+    <a href="../run.py">run.py</a>
+    <a href="../app/services/pipeline_service.py">pipeline_service.py</a>
+    <a href="../configs/job_profiles.yaml">job_profiles.yaml</a>
+    <a href="../tests/test_pipeline_service.py">test_pipeline_service.py</a>
+  </div>
+</aside><main class="content">
+<section class="hero"><div class="kicker">YAML config</div><h1>Memahami registry job, config klasik, dan step recipe</h1><p class="lead">Kekuatan tool ini ada pada pendekatan config-driven. Banyak perubahan proses bisa dilakukan di YAML tanpa mengubah kode Python, selama masih mengikuti schema yang didukung validator.</p></section>
+<section class="card"><h2>Registry job: <code>configs/job_profiles.yaml</code></h2><p>Registry menghubungkan nama pekerjaan di UI dengan file config yang dipakai engine. Hanya job yang enabled, valid, dan menunjuk ke config valid yang muncul di selector utama.</p><pre><code>jobs:
+- id: fcost-lcd-import
+  label: FCOST LCD IMPORT
+  config_file: monthly-report-recipe-lcd-import.yaml
+  enabled: true
+- id: fcost-lcd-seid
+  label: FCOST LCD SEID
+  config_file: monthly-report-recipe.yaml
+  enabled: true</code></pre><p><code>job_profile_service.py</code> memvalidasi bahwa <code>id</code>, <code>label</code>, <code>config_file</code> adalah string non-kosong, <code>enabled</code> boolean, dan tidak ada duplikasi id/label.</p></section>
+<section class="card"><h2>Mode config klasik</h2><p>Config klasik minimal memiliki <code>name</code>, <code>source_sheet</code>, <code>header</code>, dan <code>outputs</code>. Mode ini cocok untuk input yang tabular dan transformasinya tidak terlalu bercabang.</p><pre><code>name: "Laporan Tes"
+source_sheet: "Sheet1"
+header:
+  title: "Laporan Tes"
+  period_from_column: "tanggal"
+masters:
+  - file: "masters/produk.csv"
+    key: "kode_produk"
+    columns:
+      - "nama_produk"
+      - "kategori"
+transforms:
+  - type: "formula"
+    target: "total"
+    operation: "multiply"
+    left: "qty"
+    right: "harga"
+outputs:
+  - sheet_name: "Detail"
+    columns: ["tanggal", "kode_produk", "nama_produk", "kategori", "qty", "total"]
+  - sheet_name: "Summary"
+    group_by:
+      by: "kategori"
+      aggregations:
+        total: "sum"</code></pre><h3>Master strategy klasik</h3><p>Strategy yang didukung adalah <code>lookup</code>, <code>ordered_rules</code>, dan <code>lookup_rules</code>. Lookup biasa mirip VLOOKUP/join. Ordered rules dan lookup rules cocok untuk mapping berbasis kombinasi kondisi atau teks.</p><h3>Transform klasik</h3><table><tr><th>Type</th><th>Fungsi</th></tr><tr><td><code>ensure_optional_columns</code></td><td>Menambah kolom jika belum ada agar output tetap stabil.</td></tr><tr><td><code>filter_rows</code></td><td>Menyaring baris dengan operator seperti equals, contains, in, gt/gte/lt/lte, blank/not blank.</td></tr><tr><td><code>formula</code></td><td>Menghitung kolom baru dengan add, subtract, multiply, divide; termasuk validasi numerik dan proteksi divide by zero.</td></tr><tr><td><code>conditional</code></td><td>Menulis nilai berdasarkan kondisi if/elif/else.</td></tr></table></section>
+<section class="card"><h2>Mode step recipe</h2><p>Recipe step-based dikenali jika payload punya <code>datasets</code> dan <code>steps</code>. Ini dipakai oleh config monthly report yang lebih kompleks.</p><pre><code>name: "Monthly Report Final Recipe"
+datasets:
+  working_dataset: "result"
+  canonical_columns:
+    - "notification"
+    - "model_name"
+    - "labor_cost"
+steps:
+  - id: "sub_1_copy_gqs"
+    type: "extract_sheet"
+    sheet_selector:
+      contains: "GQS"
+      case_sensitive: false
+    header_locator:
+      type: "required_columns"
+      scan_rows: [1, 15]
+      required: ["Notification", "Category", "Labor Cost"]
+    select:
+      "Notification": "notification"
+      "Model Name": "model_name"
+      "Labor Cost": "labor_cost"
+    write_to: "result"
+outputs:
+  - sheet_name: "result"
+    columns: ["notification", "model_name", "labor_cost"]</code></pre><p>Recipe bisa memakai expression seperti <code>substring</code>, <code>add</code>, <code>divide</code>, <code>ceil</code>, <code>date_diff_days</code>, <code>case</code>, dan <code>runtime_value</code>. Untuk monthly report, UI dapat meminta input periode <code>YYYYMM</code> jika config memiliki <code>ui.period_prompt.enabled: true</code>.</p></section>
+<section class="card"><h2>Output workbook</h2><p>Setiap item di <code>outputs</code> minimal punya <code>sheet_name</code> dan salah satu rule output: <code>columns</code>, <code>pivot</code>, <code>group_by</code>, atau <code>summary</code>. Nama sheet disanitasi agar aman untuk Excel: karakter invalid diganti, panjang maksimal 31 karakter, dan duplikasi diberi suffix.</p><p><code>summary</code> dipakai untuk builder khusus di recipe service, misalnya <code>static_part_pivot_summary</code>, <code>part_pivot_summary</code>, <code>panel_model_summary</code>, dan summary FCOST lain.</p></section>
+<section class="callout warn"><strong>Aturan path penting.</strong> Master file harus ditulis sebagai path relatif di bawah <code>masters/</code>, misalnya <code>masters/master_table.xlsx</code>. Jangan memakai <code>../</code>, absolute path, atau drive path Windows.</section>
+<div class="next-prev"><a href="pipeline.html">← Pipeline</a><a href="developer-guide.html">Lanjut: Panduan Developer →</a></div>
+<div class="footer">Dokumentasi ini dibuat dari pembacaan source code project saat ini. Jika kode berubah, perbarui bagian terkait agar tetap sinkron.</div></main></div></body></html>

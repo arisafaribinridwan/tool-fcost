@@ -1,0 +1,25 @@
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Ringkasan Technical Doc</title><link rel="stylesheet" href="assets/styles.css"></head><body><div class="layout">
+<aside class="sidebar">
+  <div class="brand"><div class="kicker">XLS-Flow Automator</div><h1>Technical Docs</h1><p>Panduan developer sekaligus jalur belajar pemrograman untuk project Excel Automation Tool.</p></div>
+  <div class="nav-section"><h2>Dokumentasi</h2>
+    <a href="index.html" class="active">Ringkasan</a>
+    <a href="getting-started.html" >Setup & Menjalankan</a>
+    <a href="architecture.html" >Arsitektur</a>
+    <a href="pipeline.html" >Alur Pipeline</a>
+    <a href="config-yaml.html" >Config YAML</a>
+    <a href="developer-guide.html" >Panduan Developer</a>
+    <a href="learning-path.html" >Jalur Belajar Pemula</a>
+  </div>
+  <div class="nav-section"><h2>Shortcut Repo</h2>
+    <a href="../run.py">run.py</a>
+    <a href="../app/services/pipeline_service.py">pipeline_service.py</a>
+    <a href="../configs/job_profiles.yaml">job_profiles.yaml</a>
+    <a href="../tests/test_pipeline_service.py">test_pipeline_service.py</a>
+  </div>
+</aside><main class="content">
+<section class="hero"><div class="kicker">Panduan utama</div><h1>Technical documentation untuk developer dan pemula</h1><p class="lead">Project ini adalah aplikasi desktop automasi Excel/CSV. User memilih source, memilih job, lalu engine membaca YAML config untuk mengubah data dan menulis output workbook <code>.xlsx</code>. Mini situs ini dibuat agar developer bisa memahami kode, dan pemula bisa belajar konsep programming dari contoh nyata.</p><p><span class="badge">Python</span><span class="badge">CustomTkinter</span><span class="badge">pandas</span><span class="badge">openpyxl</span><span class="badge">YAML</span></p></section>
+<section class="card"><h2>Gambaran besar tool</h2><p>Tool ini memindahkan pekerjaan Excel manual yang berulang ke proses yang lebih konsisten. Alih-alih user melakukan copy-paste, filter, lookup, rumus, dan summary secara manual, aturan proses ditulis dalam file YAML di folder <code>configs/</code>. Data master diletakkan di <code>masters/</code>. Source yang dipilih user diproses dan hasilnya disimpan ke <code>outputs/</code>.</p><div class="flow"><div><strong>1. Input</strong> — user memilih file <code>.xlsx</code> atau <code>.csv</code>.</div><div><strong>2. Job</strong> — UI membaca registry <code>configs/job_profiles.yaml</code> untuk menampilkan pekerjaan valid.</div><div><strong>3. Config</strong> — engine membaca YAML config yang berisi aturan transformasi.</div><div><strong>4. Processing</strong> — service layer memakai pandas untuk data frame, lookup master, transform, dan summary.</div><div><strong>5. Output</strong> — openpyxl menulis workbook multi-sheet dengan styling.</div></div></section>
+<section class="grid"><div class="grid-card"><h3>Untuk developer</h3><p>Mulai dari <a href="architecture.html">Arsitektur</a>, lalu lanjut ke <a href="pipeline.html">Alur Pipeline</a>. Dua halaman itu menjelaskan file penting, dependency antar layer, dan alur end-to-end dari UI sampai output.</p></div><div class="grid-card"><h3>Untuk pemula</h3><p>Mulai dari <a href="learning-path.html">Jalur Belajar Pemula</a>. Di sana konsep seperti function, class, dataclass, exception, thread, YAML, DataFrame, dan testing dijelaskan memakai contoh dari project ini.</p></div><div class="grid-card"><h3>Untuk config author</h3><p>Baca <a href="config-yaml.html">Config YAML</a>. Halaman itu menjelaskan registry job, mode config klasik, mode step recipe, master lookup, transform, dan output sheet.</p></div></section>
+<section class="card"><h2>Daftar folder penting</h2><table><tr><th>Folder/file</th><th>Peran</th></tr><tr><td><code>run.py</code></td><td>Entry point aplikasi. Memastikan folder runtime tersedia lalu menjalankan desktop UI.</td></tr><tr><td><code>app/ui/</code></td><td>Layer tampilan desktop. <code>main_window.py</code> untuk workflow utama, <code>settings.py</code> untuk manajemen job/config/master.</td></tr><tr><td><code>app/services/</code></td><td>Business logic. Di sinilah source dibaca, config divalidasi, pipeline dijalankan, transform diterapkan, dan output ditulis.</td></tr><tr><td><code>app/utils/</code></td><td>Helper lintas OS, keamanan path, sanitasi log, dan dialog file.</td></tr><tr><td><code>configs/</code></td><td>Registry job dan file YAML recipe/config runtime.</td></tr><tr><td><code>masters/</code></td><td>Workbook/CSV master untuk lookup. Project saat ini tetap memakai Excel master runtime.</td></tr><tr><td><code>tests/</code></td><td>Test pytest untuk service, UI behavior, path safety, recipe, transform, output, dan pipeline.</td></tr></table></section>
+<div class="next-prev"><span></span><a href="getting-started.html">Lanjut: Setup & Menjalankan →</a></div>
+<div class="footer">Dokumentasi ini dibuat dari pembacaan source code project saat ini. Jika kode berubah, perbarui bagian terkait agar tetap sinkron.</div></main></div></body></html>

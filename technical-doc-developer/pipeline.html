@@ -1,0 +1,39 @@
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Alur Pipeline</title><link rel="stylesheet" href="assets/styles.css"></head><body><div class="layout">
+<aside class="sidebar">
+  <div class="brand"><div class="kicker">XLS-Flow Automator</div><h1>Technical Docs</h1><p>Panduan developer sekaligus jalur belajar pemrograman untuk project Excel Automation Tool.</p></div>
+  <div class="nav-section"><h2>Dokumentasi</h2>
+    <a href="index.html" >Ringkasan</a>
+    <a href="getting-started.html" >Setup & Menjalankan</a>
+    <a href="architecture.html" >Arsitektur</a>
+    <a href="pipeline.html" class="active">Alur Pipeline</a>
+    <a href="config-yaml.html" >Config YAML</a>
+    <a href="developer-guide.html" >Panduan Developer</a>
+    <a href="learning-path.html" >Jalur Belajar Pemula</a>
+  </div>
+  <div class="nav-section"><h2>Shortcut Repo</h2>
+    <a href="../run.py">run.py</a>
+    <a href="../app/services/pipeline_service.py">pipeline_service.py</a>
+    <a href="../configs/job_profiles.yaml">job_profiles.yaml</a>
+    <a href="../tests/test_pipeline_service.py">test_pipeline_service.py</a>
+  </div>
+</aside><main class="content">
+<section class="hero"><div class="kicker">Pipeline</div><h1>Dari tombol Execute sampai file Excel keluar</h1><p class="lead">Pipeline adalah rangkaian proses yang dijalankan setelah user memilih source dan job. Orkestrator utamanya adalah <code>run_pipeline()</code> di <code>app/services/pipeline_service.py</code>.</p></section>
+<section class="card"><h2>Alur utama <code>run_pipeline()</code></h2><ol><li><strong>Validasi source.</strong> <code>validate_source_file()</code> memastikan file ada, bukan folder, ekstensi didukung, dan tidak kosong.</li><li><strong>Load config.</strong> <code>load_config_payload()</code> membaca YAML dan menjalankan validator.</li><li><strong>Copy source.</strong> Source di luar folder upload dicopy ke <code>uploads/</code> dengan timestamp sebagai audit trail.</li><li><strong>Pilih engine.</strong> Jika payload punya root <code>steps</code> dan <code>datasets</code>, pipeline memakai step recipe. Jika tidak, pipeline memakai mode config klasik.</li><li><strong>Build output sheets.</strong> Engine menghasilkan dictionary <code>{sheet_name: DataFrame}</code>.</li><li><strong>Write workbook.</strong> <code>write_output_workbook()</code> membuat file <code>.xlsx</code> di <code>outputs/</code>.</li><li><strong>Return result.</strong> Pipeline mengembalikan <code>PipelineResult</code> berisi path output, path source copy, jumlah sheet, dan durasi.</li></ol></section>
+<section class="card"><h2>Mode 1: config klasik</h2><p>Mode klasik dipakai untuk flow yang relatif umum: baca satu source sheet, enrich dengan master, apply transform, lalu buat output detail/pivot/group by.</p><pre><code>source file
+  → load_source_dataframe()
+  → validate_required_source_columns()
+  → apply_master_lookups()
+  → apply_transform_steps()
+  → build_output_sheets()
+  → write_output_workbook()</code></pre><p>Transform klasik mendukung <code>ensure_optional_columns</code>, <code>filter_rows</code>, <code>formula</code>, dan <code>conditional</code>. Output klasik mendukung select columns, pivot, dan group by aggregation.</p></section>
+<section class="card"><h2>Mode 2: step recipe</h2><p>Mode step recipe dipakai untuk workflow yang lebih kompleks, misalnya monthly report FCOST yang mengambil sheet berbeda, mendeteksi header dinamis, append dataset, menghitung kolom turunan, lookup rules, resolve duplicate notification, dan membuat summary khusus.</p><pre><code>source workbook
+  → execute_step_recipe()
+  → extract_sheet / derive_column / update_columns / lookup_*
+  → duplicate_group_rewrite / map_ranges
+  → summary output builders
+  → write_output_workbook()</code></pre><p>Step yang didukung validator: <code>extract_sheet</code>, <code>derive_column</code>, <code>duplicate_group_rewrite</code>, <code>lookup_exact</code>, <code>lookup_exact_replace</code>, <code>lookup_rules</code>, <code>map_ranges</code>, dan <code>update_columns</code>.</p></section>
+<section class="card"><h2>Preflight di UI</h2><p>UI tidak langsung mengaktifkan tombol execute. Setelah source dan job dipilih, <code>run_preflight()</code> memvalidasi source dan config. Hasilnya berupa <code>PreflightResult</code>. Tombol execute hanya aktif jika <code>can_execute</code> bernilai true.</p><p>Di halaman Settings, <code>run_settings_precheck()</code> mengecek config dan referensi master dari root <code>masters</code> maupun dari <code>steps[].master.file</code>. Ini membantu user menemukan config invalid sebelum dipakai di workflow utama.</p></section>
+<section class="card"><h2>Error handling</h2><p>Service layer memakai <code>ValueError</code> untuk kegagalan validasi detail, lalu pipeline membungkusnya sebagai <code>PipelineError</code> untuk pesan domain yang bisa ditampilkan ke user. Di UI, pesan error disanitasi agar tidak membocorkan path internal yang membingungkan.</p></section>
+<section class="callout learn"><strong>Belajar konsep:</strong> pandas <code>DataFrame</code> bisa dibayangkan seperti tabel Excel di memory. Setiap transform mengubah tabel ini sedikit demi sedikit sampai siap ditulis kembali menjadi workbook.</section>
+<div class="next-prev"><a href="architecture.html">← Arsitektur</a><a href="config-yaml.html">Lanjut: Config YAML →</a></div>
+<div class="footer">Dokumentasi ini dibuat dari pembacaan source code project saat ini. Jika kode berubah, perbarui bagian terkait agar tetap sinkron.</div></main></div></body></html>

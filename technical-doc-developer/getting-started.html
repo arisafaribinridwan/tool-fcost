@@ -1,0 +1,42 @@
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Setup dan Menjalankan</title><link rel="stylesheet" href="assets/styles.css"></head><body><div class="layout">
+<aside class="sidebar">
+  <div class="brand"><div class="kicker">XLS-Flow Automator</div><h1>Technical Docs</h1><p>Panduan developer sekaligus jalur belajar pemrograman untuk project Excel Automation Tool.</p></div>
+  <div class="nav-section"><h2>Dokumentasi</h2>
+    <a href="index.html" >Ringkasan</a>
+    <a href="getting-started.html" class="active">Setup & Menjalankan</a>
+    <a href="architecture.html" >Arsitektur</a>
+    <a href="pipeline.html" >Alur Pipeline</a>
+    <a href="config-yaml.html" >Config YAML</a>
+    <a href="developer-guide.html" >Panduan Developer</a>
+    <a href="learning-path.html" >Jalur Belajar Pemula</a>
+  </div>
+  <div class="nav-section"><h2>Shortcut Repo</h2>
+    <a href="../run.py">run.py</a>
+    <a href="../app/services/pipeline_service.py">pipeline_service.py</a>
+    <a href="../configs/job_profiles.yaml">job_profiles.yaml</a>
+    <a href="../tests/test_pipeline_service.py">test_pipeline_service.py</a>
+  </div>
+</aside><main class="content">
+<section class="hero"><div class="kicker">Getting started</div><h1>Setup environment, menjalankan app, lint, test, dan build</h1><p class="lead">Halaman ini adalah checklist praktis untuk menyiapkan project di komputer developer. Project menargetkan Python 3.14.x dan memakai virtual environment agar dependency tidak bercampur dengan Python global.</p></section>
+<section class="card"><h2>Setup Windows PowerShell</h2><pre><code>py -3.14 -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+python run.py</code></pre><p>Jika memakai CMD, aktifkan environment dengan <code>.venv\Scripts\activate.bat</code>. Setelah aktif, prompt terminal biasanya menampilkan <code>(.venv)</code>.</p></section>
+<section class="card"><h2>Setup Linux/macOS</h2><pre><code>python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install --upgrade pip
+pip install -r requirements.txt
+python run.py</code></pre><div class="callout warn"><strong>Catatan Linux.</strong> App desktop membutuhkan Tk/Tcl. Pada Ubuntu/Mint biasanya perlu paket <code>python3-tk</code>. File picker native bisa memakai <code>zenity</code> atau <code>kdialog</code>, tetapi aplikasi akan fallback ke dialog Tk jika helper itu tidak ada.</div></section>
+<section class="card"><h2>Command harian developer</h2><table><tr><th>Kebutuhan</th><th>Command</th><th>Kapan dipakai</th></tr><tr><td>Jalankan UI utama</td><td><code>python run.py</code></td><td>Saat ingin mencoba flow user dari pilih source sampai output.</td></tr><tr><td>Jalankan settings</td><td><code>python -m app.ui.settings</code></td><td>Saat menguji manajemen job/config/master secara langsung.</td></tr><tr><td>Lint</td><td><code>python -m ruff check .</code></td><td>Sebelum commit atau setelah refactor.</td></tr><tr><td>Semua test</td><td><code>python -m pytest -q</code></td><td>Sebelum menganggap perubahan aman.</td></tr><tr><td>Test satu file</td><td><code>python -m pytest tests/test_pipeline_service.py -q</code></td><td>Saat sedang fokus di area pipeline.</td></tr><tr><td>Test satu case</td><td><code>python -m pytest tests/test_pipeline_service.py::test_run_pipeline_happy_path_csv_with_master_and_pivot -q</code></td><td>Saat debugging test tertentu.</td></tr></table></section>
+<section class="card"><h2>Dependency utama</h2><p><code>customtkinter</code> dipakai untuk UI desktop modern. <code>pandas</code> adalah engine data frame untuk membaca, filter, merge, group by, dan membuat output data. <code>openpyxl</code> dipakai untuk membaca/menulis Excel dan styling workbook. <code>PyYAML</code> membaca config YAML. <code>pyinstaller</code> membangun bundle portable. <code>pytest</code> dan <code>ruff</code> menjaga kualitas kode.</p></section>
+<section class="card"><h2>Build portable</h2><p>Build harus dilakukan di OS target. Jangan mengandalkan PyInstaller cross-build untuk membuat binary OS lain.</p><h3>Windows</h3><pre><code>.\packaging\windows\build.ps1
+# atau
+.\packaging\windows\build.ps1 -PythonExe "C:\Path\To\python.exe"</code></pre><h3>Linux</h3><pre><code>sudo apt-get update
+sudo apt-get install -y python3-tk python3.12-venv zenity kdialog
+./packaging/linux/bootstrap-build-env.sh
+./packaging/linux/build.sh
+./packaging/linux/smoke-test.sh</code></pre><p>Hasil build Linux berada di <code>dist/ExcelAutoTool/</code> dan archive <code>dist/ExcelAutoTool-linux-x86_64.tar.gz</code>. Hasil build Windows berada di <code>dist\ExcelAutoTool\</code>.</p></section>
+<section class="callout learn"><strong>Belajar konsep:</strong> virtual environment adalah “kotak dependency” khusus project. Dengan venv, versi pandas/openpyxl milik project ini tidak mengganggu project Python lain.</section>
+<div class="next-prev"><a href="index.html">← Ringkasan</a><a href="architecture.html">Lanjut: Arsitektur →</a></div>
+<div class="footer">Dokumentasi ini dibuat dari pembacaan source code project saat ini. Jika kode berubah, perbarui bagian terkait agar tetap sinkron.</div></main></div></body></html>
