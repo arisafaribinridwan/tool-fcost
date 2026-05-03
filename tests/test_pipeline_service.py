@@ -264,6 +264,100 @@ def test_run_pipeline_step_recipe_derives_prod_date_from_prod_lot(app_paths):
     assert workbook["result"]["B5"].number_format == "YYYY-MM-DD"
 
 
+def test_run_pipeline_step_recipe_derives_diff_month_with_prod_date_fallback(app_paths):
+    source_path = app_paths.project_root / "source.xlsx"
+    pd.DataFrame(
+        [
+            {
+                "purchased_date": "2025-02-01",
+                "prod_date": "2025-01-01",
+                "malfunction_start_date": "2025-03-02",
+            },
+            {
+                "purchased_date": "2025-01-01",
+                "prod_date": "2025-02-01",
+                "malfunction_start_date": "2025-03-03",
+            },
+            {
+                "purchased_date": "2025-01-01",
+                "prod_date": "2025-01-01",
+                "malfunction_start_date": "2025-01-31",
+            },
+            {
+                "purchased_date": "2025-01-01",
+                "prod_date": "",
+                "malfunction_start_date": "2025-02-15",
+            },
+        ]
+    ).to_excel(source_path, index=False, sheet_name="Data")
+
+    config_path = app_paths.configs_dir / "diff_month_recipe.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Diff Month Recipe"',
+                "datasets:",
+                '  working_dataset: "result"',
+                "  canonical_columns:",
+                '    - "purchased_date"',
+                '    - "prod_date"',
+                '    - "malfunction_start_date"',
+                '    - "diff_month"',
+                "steps:",
+                '  - id: "extract"',
+                '    type: "extract_sheet"',
+                "    sheet_selector:",
+                '      contains: "Data"',
+                "    header_locator:",
+                '      type: "required_columns"',
+                "      scan_rows: [1, 1]",
+                "      required:",
+                '        - "purchased_date"',
+                '        - "prod_date"',
+                '        - "malfunction_start_date"',
+                "    select:",
+                '      "purchased_date": "purchased_date"',
+                '      "prod_date": "prod_date"',
+                '      "malfunction_start_date": "malfunction_start_date"',
+                '    write_to: "result"',
+                '    mode: "replace"',
+                '  - id: "add_diff_month"',
+                '    type: "derive_column"',
+                '    target: "diff_month"',
+                "    expression:",
+                "      ceil:",
+                "        value:",
+                "          divide:",
+                "            left:",
+                "              date_diff_days_with_start_fallback:",
+                '                primary_start_column: "purchased_date"',
+                '                fallback_start_column: "prod_date"',
+                '                end_column: "malfunction_start_date"',
+                "            right: 30",
+                "outputs:",
+                '  - sheet_name: "result"',
+                "    columns:",
+                '      - "purchased_date"',
+                '      - "prod_date"',
+                '      - "malfunction_start_date"',
+                '      - "diff_month"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _message: None,
+    )
+
+    detail_df = pd.read_excel(result.output_path, sheet_name="result", skiprows=3, keep_default_na=False)
+
+    assert detail_df["diff_month"].tolist() == [1, 1, 1, 2]
+
+
 def test_run_pipeline_step_recipe_derives_lcd_import_prod_date_from_ym_lot(app_paths):
     source_path = app_paths.project_root / "source.xlsx"
     pd.DataFrame(

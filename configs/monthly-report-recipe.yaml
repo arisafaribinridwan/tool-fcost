@@ -435,8 +435,9 @@ steps:
         value:
           divide:
             left:
-              date_diff_days:
-                start_column: "purchased_date"
+              date_diff_days_with_start_fallback:
+                primary_start_column: "purchased_date"
+                fallback_start_column: "prod_date"
                 end_column: "malfunction_start_date"
             right: 30
     on_missing_input: null

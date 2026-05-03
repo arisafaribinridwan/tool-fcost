@@ -350,6 +350,21 @@ def _evaluate_expression(
         end_series = pd.to_datetime(data_df[end_column], errors="coerce")
         return (end_series - start_series).dt.days
 
+    if operator == "date_diff_days_with_start_fallback":
+        primary_start_column = str(payload["primary_start_column"])
+        fallback_start_column = str(payload["fallback_start_column"])
+        end_column = str(payload["end_column"])
+        required_columns = {primary_start_column, fallback_start_column, end_column}
+        if not required_columns.issubset(data_df.columns):
+            raise ValueError(f"{context} gagal, kolom tanggal tidak ditemukan.")
+
+        primary_start = pd.to_datetime(data_df[primary_start_column], errors="coerce")
+        fallback_start = pd.to_datetime(data_df[fallback_start_column], errors="coerce")
+        end_series = pd.to_datetime(data_df[end_column], errors="coerce")
+        use_primary_mask = fallback_start.isna() | primary_start.ge(fallback_start)
+        start_series = primary_start.where(use_primary_mask, fallback_start)
+        return (end_series - start_series).dt.days
+
     if operator == "case":
         result = pd.Series("", index=data_df.index, dtype="object")
         remaining_mask = pd.Series(True, index=data_df.index)
