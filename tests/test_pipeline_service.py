@@ -188,6 +188,81 @@ def test_run_pipeline_happy_path_csv_with_master_and_pivot(app_paths):
     assert summary_df.loc[summary_df["kategori"] == "Cat 2", "qty"].iloc[0] == 5
 
 
+def test_run_pipeline_step_recipe_derives_prod_date_from_prod_lot(app_paths):
+    source_path = app_paths.project_root / "source.xlsx"
+    pd.DataFrame(
+        [
+            {"prod_lot": "25A"},
+            {"prod_lot": "25C"},
+            {"prod_lot": "26L"},
+            {"prod_lot": "25M"},
+            {"prod_lot": "bad"},
+            {"prod_lot": ""},
+        ]
+    ).to_excel(source_path, index=False, sheet_name="Data")
+
+    config_path = app_paths.configs_dir / "prod_date_recipe.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Prod Date Recipe"',
+                "datasets:",
+                '  working_dataset: "result"',
+                "  canonical_columns:",
+                '    - "prod_lot"',
+                '    - "prod_date"',
+                "steps:",
+                '  - id: "extract"',
+                '    type: "extract_sheet"',
+                "    sheet_selector:",
+                '      contains: "Data"',
+                "    header_locator:",
+                '      type: "required_columns"',
+                "      scan_rows: [1, 1]",
+                "      required:",
+                '        - "prod_lot"',
+                "    select:",
+                '      "prod_lot": "prod_lot"',
+                '    write_to: "result"',
+                '    mode: "replace"',
+                '  - id: "sub5a_add_prod_date"',
+                '    type: "derive_column"',
+                '    target: "prod_date"',
+                "    expression:",
+                "      lot_month_date:",
+                '        column: "prod_lot"',
+                "outputs:",
+                '  - sheet_name: "result"',
+                "    columns:",
+                '      - "prod_lot"',
+                '      - "prod_date"',
+                "styling:",
+                '  date_format: "YYYY-MM-DD"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _message: None,
+    )
+
+    detail_df = pd.read_excel(result.output_path, sheet_name="result", skiprows=3, keep_default_na=False)
+
+    assert detail_df["prod_date"].tolist()[:3] == [
+        pd.Timestamp("2025-01-01"),
+        pd.Timestamp("2025-03-01"),
+        pd.Timestamp("2026-12-01"),
+    ]
+    assert detail_df["prod_date"].tolist()[3:] == ["", "", ""]
+
+    workbook = load_workbook(result.output_path)
+    assert workbook["result"]["B5"].number_format == "YYYY-MM-DD"
+
+
 def test_run_pipeline_uses_output_name_override_for_filename(app_paths):
     source_path = app_paths.project_root / "source.csv"
     pd.DataFrame([{"qty": 1}]).to_csv(source_path, index=False)

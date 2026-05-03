@@ -51,6 +51,7 @@ datasets:
     - "part_used"
     - "section"
     - "prod_lot"
+    - "prod_date"
     - "inch"
     - "total_cost"
     - "diff_month"
@@ -244,6 +245,14 @@ steps:
         start: 5
         length: 3
     on_short_input: null
+
+  - id: "sub5a_add_prod_date"
+    type: "derive_column"
+    target: "prod_date"
+    expression:
+      lot_month_date:
+        column: "prod_lot"
+    on_invalid_input: null
 
   - id: "sub_6_add_inch"
     type: "derive_column"
@@ -606,6 +615,7 @@ outputs:
       - "part_used"
       - "section"
       - "prod_lot"
+      - "prod_date"
       - "inch"
       - "total_cost"
       - "diff_month"
@@ -617,3 +627,6 @@ outputs:
       - "defect_category"
       - "defect"
       - "keydate"
+
+styling:
+  date_format: "YYYY-MM-DD"

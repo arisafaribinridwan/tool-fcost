@@ -250,6 +250,27 @@ def _evaluate_expression(
         result.loc[short_mask] = None
         return result
 
+    if operator == "lot_month_date":
+        column = str(payload["column"])
+        if column not in data_df.columns:
+            raise ValueError(f"{context} gagal, kolom '{column}' tidak ditemukan.")
+
+        month_by_code = {chr(ord("A") + idx): idx + 1 for idx in range(12)}
+
+        def parse_lot_date(value: object) -> pd.Timestamp | pd.NaT:
+            if pd.isna(value):
+                return pd.NaT
+            text = str(value).strip()
+            if len(text) != 3:
+                return pd.NaT
+            year_text = text[:2]
+            month_code = text[2].upper()
+            if not year_text.isdigit() or month_code not in month_by_code:
+                return pd.NaT
+            return pd.Timestamp(year=2000 + int(year_text), month=month_by_code[month_code], day=1)
+
+        return pd.to_datetime(data_df[column].map(parse_lot_date), errors="coerce")
+
     if operator == "add":
         columns = payload["columns"]
         null_as_zero = bool(payload.get("null_as_zero", False))
