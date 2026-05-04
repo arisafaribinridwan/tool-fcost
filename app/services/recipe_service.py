@@ -1955,6 +1955,99 @@ def _build_panel_top1_inch_model_summary(data_df: pd.DataFrame, options: dict | 
     return _apply_summary_column_labels(summary_df, cfg)
 
 
+def _build_part_model_symptom_top_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
+    cfg = options or {}
+    part_column = str(cfg.get("part_column", "part_name"))
+    model_column = str(cfg.get("model_column", "model_name"))
+    symptom_column = str(cfg.get("symptom_column", "symptom"))
+    top_n = int(cfg.get("top_n", 3))
+    part_order_cfg = cfg.get("part_order")
+    if isinstance(part_order_cfg, list):
+        part_order = [str(value).strip() for value in part_order_cfg if str(value).strip()]
+    else:
+        part_order = []
+
+    required_columns = [part_column, model_column, symptom_column]
+    missing = [column for column in required_columns if column not in data_df.columns]
+    if missing:
+        raise ValueError("Part model symptom summary gagal, kolom tidak ditemukan: " + ", ".join(missing))
+
+    working_df = data_df.copy()
+    working_df["part_name"] = working_df[part_column].fillna("").astype(str).str.strip()
+    working_df["model_name"] = working_df[model_column].fillna("").astype(str).str.strip()
+    working_df["symptom"] = working_df[symptom_column].fillna("").astype(str).str.strip()
+    working_df = working_df.loc[working_df["part_name"].ne("")].copy()
+
+    if part_order:
+        working_df = working_df.loc[working_df["part_name"].isin(part_order)].copy()
+    else:
+        part_order = working_df["part_name"].drop_duplicates().tolist()
+
+    grouped = (
+        working_df.groupby(["part_name", "model_name", "symptom"], dropna=False, sort=False)
+        .size()
+        .reset_index(name="Total")
+    )
+
+    rows: list[dict[str, object]] = []
+    for part_name in part_order:
+        part_rows = grouped[grouped["part_name"].eq(part_name)].copy()
+        if part_rows.empty:
+            continue
+
+        part_rows = part_rows.sort_values(
+            by=["Total", "model_name", "symptom"],
+            ascending=[False, True, True],
+            kind="stable",
+        )
+        if top_n > 0 and len(part_rows) > top_n:
+            cutoff = part_rows.iloc[top_n - 1]["Total"]
+            part_rows = part_rows.loc[part_rows["Total"] >= cutoff]
+
+        part_total = 0.0
+        for _, row in part_rows.iterrows():
+            total = float(row["Total"])
+            rows.append(
+                {
+                    "part_name": part_name,
+                    "model_name": str(row["model_name"]),
+                    "symptom": str(row["symptom"]),
+                    "Total": total,
+                    "_row_type": "data",
+                }
+            )
+            part_total += total
+
+        rows.append(
+            {
+                "part_name": f"{part_name} Total",
+                "model_name": "",
+                "symptom": "",
+                "Total": part_total,
+                "_row_type": "subtotal",
+            }
+        )
+
+    grand_total = float(
+        sum(float(row["Total"]) for row in rows if row.get("_row_type") == "data")
+    )
+    rows.append(
+        {
+            "part_name": "Grand Total",
+            "model_name": "",
+            "symptom": "",
+            "Total": grand_total,
+            "_row_type": "grand_total",
+        }
+    )
+
+    summary_df = pd.DataFrame(
+        rows,
+        columns=["part_name", "model_name", "symptom", "Total", "_row_type"],
+    )
+    return _apply_summary_column_labels(summary_df, cfg)
+
+
 def _build_panel_symptom_inch_matrix(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
     cfg = options or {}
     part_column = str(cfg.get("part_column", "part_name"))
@@ -2052,6 +2145,9 @@ def _build_summary_output_sheet(data_df: pd.DataFrame, item: dict) -> tuple[pd.D
 
     if summary_type == "panel_top1_inch_model_summary":
         return _build_panel_top1_inch_model_summary(data_df, options if isinstance(options, dict) else None), layout_mode
+
+    if summary_type == "part_model_symptom_top_summary":
+        return _build_part_model_symptom_top_summary(data_df, options if isinstance(options, dict) else None), layout_mode
 
     if summary_type == "panel_symptom_inch_matrix":
         return _build_panel_symptom_inch_matrix(data_df, options if isinstance(options, dict) else None), layout_mode

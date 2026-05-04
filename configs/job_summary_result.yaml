@@ -280,6 +280,25 @@ outputs:
           symptom: "Symptom"
           Grand Total: "Grand Total"
 
+  - sheet_name: "data7"
+    summary:
+      type: "part_model_symptom_top_summary"
+      layout_mode: "plain"
+      title: "COUNT OF SYMPTOM"
+      subtitle: "Top symptom count by part and model"
+      column_width: 13.0
+      options:
+        top_n: 3
+        part_order:
+          - "PANEL"
+          - "MAIN_UNIT"
+          - "POWER_UNIT"
+        column_labels:
+          part_name: "Part Name"
+          model_name: "Model Name"
+          symptom: "Symptom"
+          Total: "Total"
+
 styling:
   font: "Calibri"
   header_color: "4472C4"
