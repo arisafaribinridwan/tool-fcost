@@ -162,6 +162,30 @@ Untuk pemakaian harian di Linux, simpan bundle di folder yang writable oleh user
 
 ### Build di Windows
 
+Build Windows harus memakai Python environment yang sama dengan dependency project. PyInstaller membundel package dari interpreter Python yang menjalankan build, bukan otomatis dari environment development di PC lain. Jika build memakai Python global atau virtualenv yang belum lengkap, bundle bisa tetap terbentuk tetapi gagal saat runtime, misalnya `ModuleNotFoundError: No module named 'PIL'` karena `Pillow` tidak ikut terbawa.
+
+Checklist saat build di PC berbeda:
+
+- Pastikan repo sudah terbaru dan virtualenv dibuat di root project.
+- Install ulang dependency ke virtualenv build dari `requirements.txt`.
+- Jangan mengandalkan command `python` global untuk build final.
+- Jalankan build melalui script Windows agar `.venv` dari root project diprioritaskan.
+- Validasi hasil bundle dari folder `dist\ExcelAutoTool\`, bukan dari source tree.
+
+Setup environment build yang direkomendasikan:
+
+```powershell
+py -3.14 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+Validasi dependency penting sebelum build:
+
+```powershell
+.\.venv\Scripts\python.exe -c "import PIL, customtkinter, pandas, openpyxl, PyInstaller; print('OK')"
+```
+
 PowerShell:
 
 ```powershell
@@ -173,6 +197,8 @@ Jika ingin memakai Python lain:
 ```powershell
 .\packaging\windows\build.ps1 -PythonExe "C:\Path\To\python.exe"
 ```
+
+Catatan: script build Windows akan mengecek `PIL` dan `PyInstaller` lebih awal. Jika dependency belum lengkap, jalankan kembali install dependency dengan `.\.venv\Scripts\python.exe -m pip install -r requirements.txt` sebelum build ulang.
 
 Hasil build akan tersedia di:
 
