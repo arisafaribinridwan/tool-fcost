@@ -4,7 +4,11 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.services.preflight_service import run_preflight, run_settings_precheck
+from app.services.preflight_service import (
+    get_config_master_refs,
+    run_preflight,
+    run_settings_precheck,
+)
 
 
 def _write_yaml(path: Path, content: str) -> None:
@@ -338,6 +342,69 @@ def test_run_settings_precheck_ready_when_all_masters_exist(app_paths):
                 '  - sheet_name: "Detail"',
                 "    columns:",
                 '      - "kode_produk"',
+            ]
+        ),
+    )
+
+    result = run_settings_precheck(paths=app_paths, config_path=config_path)
+
+    assert result.status == "Ready"
+    assert result.can_execute is True
+
+
+def test_get_config_master_refs_detects_required_masters(app_paths):
+    config_path = app_paths.configs_dir / "report.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Laporan Tes"',
+                'source_sheet: "Sheet1"',
+                "header:",
+                '  title: "Laporan Tes"',
+                "masters:",
+                '  - file: "masters/produk.csv"',
+                '    key: "kode_produk"',
+                "    columns:",
+                '      - "nama_produk"',
+                "outputs:",
+                '  - sheet_name: "Detail"',
+                "    columns:",
+                '      - "kode_produk"',
+            ]
+        ),
+    )
+
+    assert get_config_master_refs(config_path) == ("masters/produk.csv",)
+
+
+def test_run_settings_precheck_ready_when_config_has_no_masters(app_paths):
+    config_path = app_paths.configs_dir / "summary.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Summary Result"',
+                "datasets:",
+                '  working_dataset: "result"',
+                "  canonical_columns:",
+                '    - "notification"',
+                "steps:",
+                '  - id: "extract_result"',
+                '    type: "extract_sheet"',
+                "    sheet_selector:",
+                '      mode: "single_sheet_workbook"',
+                "    header_locator:",
+                '      type: "required_columns"',
+                "      required:",
+                '        - "notification"',
+                "    select:",
+                '      "notification": "notification"',
+                '    write_to: "result"',
+                "outputs:",
+                '  - sheet_name: "result"',
+                "    columns:",
+                '      - "notification"',
             ]
         ),
     )

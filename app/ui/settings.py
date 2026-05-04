@@ -11,6 +11,7 @@ from app import AppPaths, ensure_runtime_dirs, get_app_paths
 from app.services import (
     discover_configs,
     discover_job_profiles,
+    get_config_master_refs,
     import_config_to_configs,
     import_master_to_masters,
     run_settings_precheck,
@@ -80,6 +81,7 @@ class JobSettingsApp(ctk.CTk):
 
         self.imported_config_path: str | None = None
         self.master_items: list[str] = []
+        self.config_master_refs: tuple[str, ...] = ()
 
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
@@ -600,16 +602,27 @@ class JobSettingsApp(ctk.CTk):
         else:
             self.selected_config_path = Path(self.imported_config_path) if self.imported_config_path else None
 
+        self._refresh_selected_config_master_refs()
+
         has_job_name = bool(getattr(self, "entry_label", None) and self.entry_label.get().strip())
-        has_master = bool(self.master_items)
+        has_required_master = not self.config_master_refs or bool(self.master_items)
         has_config = self.selected_config_path is not None
-        can_run_precheck = has_job_name and has_master and has_config
+        can_run_precheck = has_job_name and has_config and has_required_master
         if hasattr(self, "btn_run_precheck"):
             self.btn_run_precheck.configure(state="normal" if can_run_precheck else "disabled")
 
         can_save = bool(getattr(self, "entry_label", None) and self.entry_label.get().strip()) and self.precheck_status == "Valid"
         if hasattr(self, "btn_save"):
             self.btn_save.configure(state="normal" if can_save else "disabled")
+
+    def _refresh_selected_config_master_refs(self) -> None:
+        if self.selected_config_path is None:
+            self.config_master_refs = ()
+            return
+        try:
+            self.config_master_refs = get_config_master_refs(self.selected_config_path)
+        except ValueError:
+            self.config_master_refs = ()
 
     def _set_precheck_status(self, is_valid: bool, detail: str | None = None) -> None:
         self.precheck_status = "Valid" if is_valid else "Non Valid"
@@ -778,8 +791,8 @@ class JobSettingsApp(ctk.CTk):
         if self.config_mode == "Import config" and not self.imported_config_path:
             errors.append("Config import belum dipilih.")
 
-        if not self.master_items:
-            errors.append("Minimal pilih satu file master.")
+        if self.config_master_refs and not self.master_items:
+            errors.append("Config ini membutuhkan minimal satu file master.")
 
         if errors:
             self._set_precheck_status(False, "\n".join(errors))

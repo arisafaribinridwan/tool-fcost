@@ -32,18 +32,23 @@ def _extract_master_refs(payload: dict) -> tuple[str, ...]:
     return tuple(refs)
 
 
+def get_config_master_refs(config_path: Path) -> tuple[str, ...]:
+    payload = load_config_payload(config_path)
+    return _extract_master_refs(payload)
+
+
 def run_settings_precheck(
     *,
     paths: AppPaths,
     config_path: Path,
 ) -> PreflightResult:
     findings: list[PreflightFinding] = []
+    payload = None
 
     try:
         payload = load_config_payload(config_path)
     except ValueError as exc:
         findings.append(PreflightFinding(severity="error", summary=str(exc)))
-        payload = None
 
     if payload is not None:
         for master_ref in _extract_master_refs(payload):
@@ -99,10 +104,9 @@ def run_preflight(
         findings.append(PreflightFinding(severity="error", summary=error))
 
     try:
-        payload = load_config_payload(config_path)
+        load_config_payload(config_path)
     except ValueError as exc:
         findings.append(PreflightFinding(severity="error", summary=str(exc)))
-        payload = None
 
     status = "Blocked" if any(item.severity == "error" for item in findings) else "Ready"
     return PreflightResult(status=status, findings=tuple(findings), output_path=None)
