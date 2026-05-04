@@ -639,6 +639,7 @@ class DesktopApp(ctk.CTk):
             )
             return
 
+        job_label = getattr(job, "label", getattr(job, "config_file", str(job.config_path)))
         self._set_execute_ready(False)
         self.add_log("Memulai proses eksekusi...")
         self._worker_queue = Queue()
@@ -647,7 +648,7 @@ class DesktopApp(ctk.CTk):
             args=(
                 self.selected_source_path,
                 job.config_path,
-                job.label,
+                job_label,
                 self._worker_queue,
                 period_text_override,
                 period_keydate_override,

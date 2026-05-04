@@ -197,8 +197,8 @@ def test_run_pipeline_step_recipe_derives_prod_date_from_prod_lot(app_paths):
             {"prod_lot": "25C"},
             {"prod_lot": "26L"},
             {"prod_lot": "25M"},
-            {"prod_lot": "bad"},
             {"prod_lot": ""},
+            {"prod_lot": "bad"},
         ]
     ).to_excel(source_path, index=False, sheet_name="Data")
 
@@ -366,8 +366,8 @@ def test_run_pipeline_step_recipe_derives_lcd_import_prod_date_from_ym_lot(app_p
             {"prod_lot": "812"},
             {"prod_lot": "912"},
             {"prod_lot": "613"},
-            {"prod_lot": "6AA"},
             {"prod_lot": ""},
+            {"prod_lot": "6AA"},
         ]
     ).to_excel(source_path, index=False, sheet_name="Data")
 
