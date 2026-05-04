@@ -553,7 +553,10 @@ class DesktopApp(ctk.CTk):
         self.textbox.delete("1.0", "end")
 
     def open_settings_window(self) -> None:
-        subprocess.Popen([sys.executable, "-m", "app.ui.settings"])
+        if getattr(sys, "frozen", False):
+            subprocess.Popen([sys.executable, "--settings"])
+        else:
+            subprocess.Popen([sys.executable, "-m", "app.ui.settings"])
         self.add_log("Membuka jendela Settings...")
 
     def add_log(self, message: str) -> None:
