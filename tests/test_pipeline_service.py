@@ -608,6 +608,152 @@ def test_run_pipeline_step_recipe_reuses_source_period_text(app_paths):
     assert workbook["result"]["A2"].value == "Periode: March 2026"
 
 
+def test_run_pipeline_step_recipe_supports_sales_dataset_with_factory_lookup(app_paths):
+    source_path = app_paths.project_root / "sales_recipe_source.xlsx"
+    with pd.ExcelWriter(source_path) as writer:
+        pd.DataFrame([{"notification": "N-001"}]).to_excel(
+            writer,
+            index=False,
+            sheet_name="ResultSource",
+        )
+        pd.DataFrame(
+            [
+                {
+                    "Model": "ABC42ZZ",
+                    "Category": "LCD SEID",
+                    "Sales Amount": 123456,
+                    "Sales (Qty)": 5,
+                },
+                {
+                    "Model": "UNKNOWN",
+                    "Category": "LCD Import",
+                    "Sales Amount": 789,
+                    "Sales (Qty)": 2,
+                },
+            ]
+        ).to_excel(writer, index=False, sheet_name="Calculation Mar26")
+
+    master_path = app_paths.masters_dir / "master_table.xlsx"
+    with pd.ExcelWriter(master_path) as writer:
+        pd.DataFrame([{"model_name": "ABC42ZZ", "factory": "Factory A"}]).to_excel(
+            writer,
+            index=False,
+            sheet_name="factory",
+        )
+
+    config_path = app_paths.configs_dir / "sales_recipe.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Sales Recipe"',
+                "datasets:",
+                '  working_dataset: "result"',
+                "  canonical_columns:",
+                '    - "notification"',
+                "steps:",
+                '  - id: "extract_result"',
+                '    type: "extract_sheet"',
+                "    sheet_selector:",
+                '      contains: "ResultSource"',
+                '      case_sensitive: false',
+                "    header_locator:",
+                '      type: "required_columns"',
+                "      scan_rows: [1, 1]",
+                '      case_sensitive: false',
+                '      normalize: true',
+                "      required:",
+                '        - "notification"',
+                "    select:",
+                '      "notification": "notification"',
+                '    write_to: "result"',
+                '    mode: "replace"',
+                '  - id: "extract_sales"',
+                '    type: "extract_sheet"',
+                "    sheet_selector:",
+                '      contains: "calculation"',
+                '      case_sensitive: false',
+                "    header_locator:",
+                '      type: "required_columns"',
+                "      scan_rows: [1, 1]",
+                '      case_sensitive: false',
+                '      normalize: true',
+                "      required:",
+                '        - "Model"',
+                '        - "Category"',
+                '        - "Sales Amount"',
+                '        - "Sales (Qty)"',
+                "    filters:",
+                '      - column: "Category"',
+                '        equals: "LCD SEID"',
+                "    select:",
+                '      "Model": "Model"',
+                '      "Category": "Category"',
+                '      "Sales Amount": "Sales Amount"',
+                '      "Sales (Qty)": "Sales (Qty)"',
+                '    write_to: "sales"',
+                '    mode: "replace"',
+                '  - id: "sales_model_name"',
+                '    type: "derive_column"',
+                '    dataset: "sales"',
+                '    target: "model_name"',
+                "    expression:",
+                '      column: "Model"',
+                '  - id: "sales_factory"',
+                '    type: "lookup_exact"',
+                '    dataset: "sales"',
+                '    source_column: "model_name"',
+                '    target_column: "Factory"',
+                "    master:",
+                '      file: "masters/master_table.xlsx"',
+                '      sheet: "factory"',
+                '      key: "model_name"',
+                '      value: "factory"',
+                "    matching:",
+                '      trim: true',
+                '      case_sensitive: true',
+                '    on_missing_match: "N/A"',
+                "outputs:",
+                '  - sheet_name: "result"',
+                "    columns:",
+                '      - "notification"',
+                '  - sheet_name: "sales"',
+                '    dataset: "sales"',
+                "    columns:",
+                '      - "Model"',
+                '      - "Category"',
+                '      - "Sales Amount"',
+                '      - "Sales (Qty)"',
+                '      - "Factory"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _message: None,
+    )
+
+    workbook = load_workbook(result.output_path, read_only=True)
+    assert "result" in workbook.sheetnames
+    assert "sales" in workbook.sheetnames
+
+    sales_df = pd.read_excel(result.output_path, sheet_name="sales", header=3, keep_default_na=False)
+    assert sales_df[["Model", "Category", "Sales Amount", "Sales (Qty)", "Factory"]].to_dict(
+        "records"
+    ) == [
+        {
+            "Model": "ABC42ZZ",
+            "Category": "LCD SEID",
+            "Sales Amount": 123456,
+            "Sales (Qty)": 5,
+            "Factory": "Factory A",
+        }
+    ]
+
+
 def test_run_pipeline_skips_copy_when_source_already_in_uploads_subfolder(app_paths):
     upload_subdir = app_paths.uploads_dir / "nested"
     upload_subdir.mkdir(parents=True, exist_ok=True)

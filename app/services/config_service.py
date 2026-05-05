@@ -165,6 +165,9 @@ def _validate_output_items(outputs: object, errors: list[str]) -> None:
         has_group_by = "group_by" in item
         has_summary = "summary" in item
 
+        if "dataset" in item and not isinstance(item.get("dataset"), str):
+            errors.append(f"outputs[{idx}].dataset harus berupa string jika diisi.")
+
         if not has_columns and not has_pivot and not has_group_by and not has_summary:
             errors.append(
                 f"outputs[{idx}] wajib memiliki minimal salah satu: 'columns', 'pivot', 'group_by', atau 'summary'."
@@ -595,6 +598,8 @@ def _validate_step_recipe_payload(payload: dict, errors: list[str]) -> None:
                 continue
             if "id" not in step or not isinstance(step.get("id"), str):
                 errors.append(f"{path}.id wajib berupa string.")
+            if "dataset" in step and not isinstance(step.get("dataset"), str):
+                errors.append(f"{path}.dataset harus berupa string jika diisi.")
 
             if step_type == "extract_sheet":
                 for field in ("sheet_selector", "header_locator", "select", "write_to"):

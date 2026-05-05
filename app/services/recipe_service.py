@@ -231,6 +231,12 @@ def _evaluate_expression(
 
     operator, payload = next(iter(expression_cfg.items()))
 
+    if operator == "column":
+        column = str(payload)
+        if column not in data_df.columns:
+            raise ValueError(f"{context} gagal, kolom '{column}' tidak ditemukan.")
+        return data_df[column]
+
     if operator == "runtime_value":
         key = str(payload)
         values = runtime_values or {}
@@ -527,14 +533,42 @@ def _apply_extract_filters(data_df: pd.DataFrame, filters_cfg: list[dict] | None
     return filtered_df
 
 
+def _resolve_source_column(data_df: pd.DataFrame, column: object) -> str | None:
+    column_name = str(column)
+    if column_name in data_df.columns:
+        return column_name
+
+    normalized_column = _normalize_header(
+        column_name,
+        case_sensitive=False,
+        normalize=True,
+    )
+    matches = [
+        candidate
+        for candidate in data_df.columns
+        if _normalize_header(candidate, case_sensitive=False, normalize=True) == normalized_column
+    ]
+    if len(matches) == 1:
+        return str(matches[0])
+    return None
+
+
 def _select_and_rename_columns(data_df: pd.DataFrame, select_cfg: dict, step_id: str) -> pd.DataFrame:
-    missing_columns = [column for column in select_cfg if column not in data_df.columns]
+    resolved_columns: dict[object, str] = {}
+    missing_columns: list[object] = []
+    for column in select_cfg:
+        resolved_column = _resolve_source_column(data_df, column)
+        if resolved_column is None:
+            missing_columns.append(column)
+        else:
+            resolved_columns[column] = resolved_column
     if missing_columns:
         raise ValueError(
-            f"Step '{step_id}' gagal, kolom source tidak ditemukan: {', '.join(missing_columns)}"
+            f"Step '{step_id}' gagal, kolom source tidak ditemukan: {', '.join(str(column) for column in missing_columns)}"
         )
-    selected = data_df.loc[:, list(select_cfg.keys())].copy()
-    return selected.rename(columns={str(src): str(dst) for src, dst in select_cfg.items()})
+    selected = data_df.loc[:, [resolved_columns[column] for column in select_cfg]].copy()
+    selected.columns = [str(select_cfg[column]) for column in select_cfg]
+    return selected
 
 
 def _append_dataset(existing_df: pd.DataFrame | None, new_df: pd.DataFrame) -> pd.DataFrame:
@@ -550,9 +584,11 @@ def _apply_extract_step(
     datasets: dict[str, pd.DataFrame],
     source_path: Path,
     step_cfg: dict,
+    working_dataset: str,
     canonical_columns: list[str],
     log: LogFn,
 ) -> None:
+    target_dataset = str(step_cfg["write_to"])
     extracted_df = _build_sheet_dataframe(source_path, step_cfg, log)
     period_text = extracted_df.attrs.get("period_text")
     extracted_df = _apply_extract_filters(extracted_df, step_cfg.get("filters"))
@@ -563,13 +599,12 @@ def _apply_extract_step(
     for column, value in (step_cfg.get("fill_missing") or {}).items():
         result_df[str(column)] = value
 
-    if canonical_columns:
+    if target_dataset == working_dataset and canonical_columns:
         for column in canonical_columns:
             if column not in result_df.columns:
                 result_df[column] = None
         result_df = result_df.loc[:, canonical_columns].copy()
 
-    target_dataset = str(step_cfg["write_to"])
     mode = str(step_cfg.get("mode", "replace"))
     if mode == "replace":
         datasets[target_dataset] = result_df.reset_index(drop=True)
@@ -2166,6 +2201,8 @@ def _build_output_sheets(
     data_df: pd.DataFrame,
     outputs_cfg: list[dict],
     log: LogFn,
+    datasets: dict[str, pd.DataFrame] | None = None,
+    working_dataset: str | None = None,
 ) -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
     output_sheets: dict[str, pd.DataFrame] = {}
     sheet_layouts: dict[str, str] = {}
@@ -2179,11 +2216,18 @@ def _build_output_sheets(
             log(f"Output recipe summary '{sheet_name}' siap ({len(summary_df)} baris).")
             continue
 
+        dataset_name = str(item.get("dataset", working_dataset or ""))
+        source_df = data_df
+        if datasets is not None and dataset_name:
+            if dataset_name not in datasets:
+                raise ValueError(f"Output '{sheet_name}' gagal, dataset '{dataset_name}' tidak ditemukan.")
+            source_df = datasets[dataset_name]
+
         columns = [str(column) for column in item.get("columns", [])]
-        missing = [column for column in columns if column not in data_df.columns]
+        missing = [column for column in columns if column not in source_df.columns]
         if missing:
             raise ValueError(f"Output '{sheet_name}' gagal, kolom tidak ditemukan: {', '.join(missing)}")
-        output_sheets[sheet_name] = data_df.loc[:, columns].copy()
+        output_sheets[sheet_name] = source_df.loc[:, columns].copy()
         sheet_layouts[sheet_name] = "standard"
         log(f"Output recipe '{sheet_name}' siap ({len(output_sheets[sheet_name])} baris).")
     return output_sheets, sheet_layouts
@@ -2206,30 +2250,31 @@ def execute_step_recipe(
     for step_cfg in recipe_cfg["steps"]:
         step_type = str(step_cfg["type"])
         if step_type == "extract_sheet":
-            _apply_extract_step(datasets, source_path, step_cfg, canonical_columns, log)
+            _apply_extract_step(datasets, source_path, step_cfg, working_dataset, canonical_columns, log)
             continue
 
-        if working_dataset not in datasets:
-            raise ValueError(f"Dataset kerja '{working_dataset}' belum tersedia saat step '{step_cfg['id']}'.")
+        target_dataset = str(step_cfg.get("dataset", working_dataset))
+        if target_dataset not in datasets:
+            raise ValueError(f"Dataset '{target_dataset}' belum tersedia saat step '{step_cfg['id']}'.")
 
-        current_df = datasets[working_dataset]
+        current_df = datasets[target_dataset]
         if step_type == "derive_column":
-            datasets[working_dataset] = _apply_derive_column_step(
+            datasets[target_dataset] = _apply_derive_column_step(
                 current_df,
                 step_cfg,
                 log,
                 runtime_values,
             )
         elif step_type == "update_columns":
-            datasets[working_dataset] = _apply_update_columns_step(current_df, step_cfg, log)
+            datasets[target_dataset] = _apply_update_columns_step(current_df, step_cfg, log)
         elif step_type in {"lookup_exact", "lookup_exact_replace"}:
-            datasets[working_dataset] = _apply_lookup_exact_step(current_df, step_cfg, context, log)
+            datasets[target_dataset] = _apply_lookup_exact_step(current_df, step_cfg, context, log)
         elif step_type == "lookup_rules":
-            datasets[working_dataset] = _apply_lookup_rules_step(current_df, step_cfg, context, log)
+            datasets[target_dataset] = _apply_lookup_rules_step(current_df, step_cfg, context, log)
         elif step_type == "map_ranges":
-            datasets[working_dataset] = _apply_map_ranges_step(current_df, step_cfg, log)
+            datasets[target_dataset] = _apply_map_ranges_step(current_df, step_cfg, log)
         elif step_type == "duplicate_group_rewrite":
-            datasets[working_dataset] = _apply_duplicate_group_rewrite_step(current_df, step_cfg, log)
+            datasets[target_dataset] = _apply_duplicate_group_rewrite_step(current_df, step_cfg, log)
         else:
             raise ValueError(f"Step type tidak didukung: '{step_type}'.")
 
@@ -2237,7 +2282,13 @@ def execute_step_recipe(
     if final_df is None:
         raise ValueError(f"Dataset kerja '{working_dataset}' tidak terbentuk.")
 
-    output_sheets, sheet_layouts = _build_output_sheets(final_df, recipe_cfg["outputs"], log)
+    output_sheets, sheet_layouts = _build_output_sheets(
+        final_df,
+        recipe_cfg["outputs"],
+        log,
+        datasets=datasets,
+        working_dataset=working_dataset,
+    )
     return RecipeExecutionResult(
         final_df=final_df,
         output_sheets=output_sheets,

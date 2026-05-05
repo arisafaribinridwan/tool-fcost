@@ -589,6 +589,54 @@ steps:
     expression:
       runtime_value: "period_keydate"
 
+  - id: "sub_19_add_sales"
+    type: "extract_sheet"
+    sheet_selector:
+      contains: "calculation"
+      case_sensitive: false
+    header_locator:
+      type: "required_columns"
+      scan_rows: [1, 15]
+      case_sensitive: false
+      normalize: true
+      required:
+        - "Model"
+        - "Category"
+        - "Sales Amount"
+        - "Sales (Qty)"
+    filters:
+      - column: "Category"
+        equals: "LCD SEID"
+    select:
+      "Model": "Model"
+      "Category": "Category"
+      "Sales Amount": "Sales Amount"
+      "Sales (Qty)": "Sales (Qty)"
+    write_to: "sales"
+    mode: "replace"
+
+  - id: "sub_19_add_sales_model_name"
+    type: "derive_column"
+    dataset: "sales"
+    target: "model_name"
+    expression:
+      column: "Model"
+
+  - id: "sub_19_add_sales_factory"
+    type: "lookup_exact"
+    dataset: "sales"
+    source_column: "model_name"
+    target_column: "Factory"
+    master:
+      file: "masters/master_table.xlsx"
+      sheet: "factory"
+      key: "model_name"
+      value: "factory"
+    matching:
+      trim: true
+      case_sensitive: true
+    on_missing_match: "N/A"
+
 outputs:
   - sheet_name: "result"
     columns:
@@ -628,6 +676,14 @@ outputs:
       - "defect_category"
       - "defect"
       - "keydate"
+  - sheet_name: "sales"
+    dataset: "sales"
+    columns:
+      - "Model"
+      - "Category"
+      - "Sales Amount"
+      - "Sales (Qty)"
+      - "Factory"
 
 styling:
   date_format: "YYYY-MM-DD"
