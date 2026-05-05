@@ -100,6 +100,31 @@ steps:
       "keydate": "keydate"
     write_to: "result"
 
+  - id: "extract_sales_source"
+    type: "extract_sheet"
+    sheet_selector:
+      contains: "sales"
+      case_sensitive: false
+    header_locator:
+      type: "required_columns"
+      scan_rows: [1, 25]
+      case_sensitive: false
+      normalize: true
+      required:
+        - "Model"
+        - "Category"
+        - "Sales Amount"
+        - "Sales (Qty)"
+        - "Factory"
+    select:
+      "Model": "Model"
+      "Category": "Category"
+      "Sales Amount": "Sales Amount"
+      "Sales (Qty)": "Sales (Qty)"
+      "Factory": "Factory"
+    write_to: "sales"
+    mode: "replace"
+
 outputs:
   - sheet_name: "result"
     columns:
@@ -138,6 +163,15 @@ outputs:
       - "defect_category"
       - "defect"
       - "keydate"
+
+  - sheet_name: "sales"
+    dataset: "sales"
+    columns:
+      - "Model"
+      - "Category"
+      - "Sales Amount"
+      - "Sales (Qty)"
+      - "Factory"
 
   - sheet_name: "data1"
     summary:
@@ -299,6 +333,51 @@ outputs:
           model_name: "Model Name"
           symptom: "Symptom"
           Total: "Total"
+
+  - sheet_name: "data8"
+    summary:
+      type: "section_cost_summary"
+      layout_mode: "plain"
+      title: "SECTION COST SUMMARY"
+      subtitle: "FCost summary by section"
+      column_width: 13.0
+      options:
+        column_labels:
+          section: "Section"
+          "Sum of labor_cost": "Labor"
+          "Sum of transportation_cost": "Transportation"
+          "Sum of parts_cost": "Parts"
+          "Sum of total_cost": "Total"
+          "Count of part_name": "Count"
+
+  - sheet_name: "data9"
+    summary:
+      type: "sales_fcost_occupancy_summary"
+      layout_mode: "plain"
+      title: "SALES VS FCOST OCCUPANCY BY FACTORY"
+      subtitle: "Sales amount and FCost amount occupancy by factory"
+      column_width: 13.0
+      options:
+        sales_dataset: "sales"
+        result_dataset: "result"
+
+  - sheet_name: "data10"
+    summary:
+      type: "part_pivot_summary"
+      layout_mode: "plain"
+      title: "PART COST BY FACTORY"
+      subtitle: "Part cost summary by factory and part name"
+      column_width: 13.0
+      options:
+        section_column: "factory"
+        column_labels:
+          section: "Factory"
+          part_name: "Part Name"
+          "Sum of labor_cost": "Labor"
+          "Sum of transportation_cost": "Transportation"
+          "Sum of parts_cost": "Parts"
+          "Sum of total_cost": "Total"
+          "Count of part_name": "Count"
 
 styling:
   font: "Calibri"

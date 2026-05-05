@@ -160,6 +160,15 @@ def _fill_from_config(styling_cfg: dict, key: str, default: str) -> PatternFill:
     return PatternFill(fill_type="solid", fgColor=color)
 
 
+def _should_apply_summary_number_format(header_value: object, cell_value: object) -> bool:
+    header_text = str(header_value).strip().casefold()
+    if header_text in {"inch", "occupancy"}:
+        return False
+    if isinstance(cell_value, int | float) and not isinstance(cell_value, bool):
+        return True
+    return isinstance(cell_value, str) and cell_value.startswith("=")
+
+
 def _apply_summary_sheet_style(
     worksheet,
     frame: pd.DataFrame,
@@ -284,7 +293,8 @@ def _apply_summary_sheet_style(
             if row_type in {"subtotal", "grand_total"} and col_idx == 1:
                 horizontal = "center"
             cell.alignment = Alignment(horizontal=horizontal, vertical=vertical)
-            if col_idx >= 3:
+            header_value = worksheet.cell(row=header_row, column=col_idx).value
+            if _should_apply_summary_number_format(header_value, cell.value):
                 cell.number_format = str(styling_cfg.get("number_format", "#,##0"))
 
     if data_last_row >= data_first_row:

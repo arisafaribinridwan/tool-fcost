@@ -2153,7 +2153,182 @@ def _build_panel_symptom_inch_matrix(data_df: pd.DataFrame, options: dict | None
     return _apply_summary_column_labels(summary_df, cfg)
 
 
-def _build_summary_output_sheet(data_df: pd.DataFrame, item: dict) -> tuple[pd.DataFrame, str]:
+def _build_section_cost_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
+    cfg = options or {}
+    section_column = str(cfg.get("section_column", "section"))
+    part_column = str(cfg.get("part_column", "part_name"))
+    cost_columns = {
+        "Sum of labor_cost": str(cfg.get("labor_cost_column", "labor_cost")),
+        "Sum of transportation_cost": str(cfg.get("transportation_cost_column", "transportation_cost")),
+        "Sum of parts_cost": str(cfg.get("parts_cost_column", "parts_cost")),
+        "Sum of total_cost": str(cfg.get("total_cost_column", "total_cost")),
+    }
+
+    required_columns = [section_column, part_column, *cost_columns.values()]
+    missing = [column for column in required_columns if column not in data_df.columns]
+    if missing:
+        raise ValueError("Section cost summary gagal, kolom tidak ditemukan: " + ", ".join(missing))
+
+    working_df = data_df.copy()
+    working_df[section_column] = working_df[section_column].fillna("").astype(str).str.strip()
+    working_df[part_column] = working_df[part_column].fillna("").astype(str).str.strip()
+    working_df = working_df.loc[working_df[section_column].ne("")].copy()
+
+    for target_col, source_col in cost_columns.items():
+        working_df[target_col] = pd.to_numeric(working_df[source_col], errors="coerce").fillna(0)
+
+    grouped = (
+        working_df.groupby(section_column, dropna=False, sort=False)
+        .agg(
+            **{
+                "Sum of labor_cost": ("Sum of labor_cost", "sum"),
+                "Sum of transportation_cost": ("Sum of transportation_cost", "sum"),
+                "Sum of parts_cost": ("Sum of parts_cost", "sum"),
+                "Sum of total_cost": ("Sum of total_cost", "sum"),
+                "Count of part_name": (part_column, lambda series: series.astype(str).str.strip().ne("").sum()),
+            }
+        )
+        .reset_index()
+        .rename(columns={section_column: "section"})
+    )
+
+    rows: list[dict[str, object]] = []
+    for _, row in grouped.iterrows():
+        rows.append(
+            {
+                "section": str(row["section"]),
+                "Sum of labor_cost": float(row["Sum of labor_cost"]),
+                "Sum of transportation_cost": float(row["Sum of transportation_cost"]),
+                "Sum of parts_cost": float(row["Sum of parts_cost"]),
+                "Sum of total_cost": float(row["Sum of total_cost"]),
+                "Count of part_name": float(row["Count of part_name"]),
+            }
+        )
+
+    summary_df = pd.DataFrame(
+        rows,
+        columns=["section", "Sum of labor_cost", "Sum of transportation_cost", "Sum of parts_cost", "Sum of total_cost", "Count of part_name"],
+    )
+    if summary_df.empty:
+        summary_df = pd.DataFrame(columns=["section", "Sum of labor_cost", "Sum of transportation_cost", "Sum of parts_cost", "Sum of total_cost", "Count of part_name"])
+        summary_df = _apply_summary_column_labels(summary_df, cfg)
+        return summary_df
+
+    total_row = {
+        "section": "Grand Total",
+        "Sum of labor_cost": float(summary_df["Sum of labor_cost"].sum()),
+        "Sum of transportation_cost": float(summary_df["Sum of transportation_cost"].sum()),
+        "Sum of parts_cost": float(summary_df["Sum of parts_cost"].sum()),
+        "Sum of total_cost": float(summary_df["Sum of total_cost"].sum()),
+        "Count of part_name": float(summary_df["Count of part_name"].sum()),
+    }
+    summary_df = pd.concat([summary_df, pd.DataFrame([total_row])], ignore_index=True)
+    summary_df["_row_type"] = ["data"] * (len(summary_df) - 1) + ["grand_total"]
+    return _apply_summary_column_labels(summary_df, cfg)
+
+
+def _build_sales_fcost_occupancy_summary(
+    data_df: pd.DataFrame,
+    options: dict | None,
+    datasets: dict[str, pd.DataFrame] | None,
+) -> pd.DataFrame:
+    cfg = options or {}
+    result_dataset_name = str(cfg.get("result_dataset", "result"))
+    sales_dataset_name = str(cfg.get("sales_dataset", "sales"))
+    result_factory_column = str(cfg.get("result_factory_column", "factory"))
+    sales_factory_column = str(cfg.get("sales_factory_column", "Factory"))
+    sales_amount_column = str(cfg.get("sales_amount_column", "Sales Amount"))
+    fcost_amount_column = str(cfg.get("fcost_amount_column", "total_cost"))
+
+    if datasets is None:
+        raise ValueError("Sales vs FCost summary memerlukan datasets tambahan.")
+    if result_dataset_name not in datasets:
+        raise ValueError(f"Dataset '{result_dataset_name}' tidak ditemukan untuk sales vs FCost summary.")
+    if sales_dataset_name not in datasets:
+        raise ValueError(f"Dataset '{sales_dataset_name}' tidak ditemukan untuk sales vs FCost summary.")
+
+    result_df = datasets[result_dataset_name].copy()
+    sales_df = datasets[sales_dataset_name].copy()
+
+    result_required = [result_factory_column, fcost_amount_column]
+    sales_required = [sales_factory_column, sales_amount_column]
+    missing_result = [column for column in result_required if column not in result_df.columns]
+    missing_sales = [column for column in sales_required if column not in sales_df.columns]
+    if missing_result:
+        raise ValueError("Sales vs FCost summary gagal, kolom result tidak ditemukan: " + ", ".join(missing_result))
+    if missing_sales:
+        raise ValueError("Sales vs FCost summary gagal, kolom sales tidak ditemukan: " + ", ".join(missing_sales))
+
+    result_df[result_factory_column] = result_df[result_factory_column].fillna("").astype(str).str.strip()
+    sales_df[sales_factory_column] = sales_df[sales_factory_column].fillna("").astype(str).str.strip()
+
+    result_df["_fcost_amount"] = pd.to_numeric(result_df[fcost_amount_column], errors="coerce").fillna(0)
+    sales_df["_sales_amount"] = pd.to_numeric(sales_df[sales_amount_column], errors="coerce").fillna(0)
+
+    fcost_grouped = (
+        result_df.loc[result_df[result_factory_column].ne("")]
+        .groupby(result_factory_column, dropna=False, sort=False)
+        .agg(_amount=("_fcost_amount", "sum"))
+        .reset_index()
+        .rename(columns={result_factory_column: "Factory", "_amount": "FCost Amount"})
+    )
+    sales_grouped = (
+        sales_df.loc[sales_df[sales_factory_column].ne("")]
+        .groupby(sales_factory_column, dropna=False, sort=False)
+        .agg(_amount=("_sales_amount", "sum"))
+        .reset_index()
+        .rename(columns={sales_factory_column: "Factory", "_amount": "Sales Amount"})
+    )
+
+    fcost_order = fcost_grouped["Factory"].tolist()
+    sales_order = sales_grouped["Factory"].tolist()
+    factories = list(dict.fromkeys([*sales_order, *fcost_order]))
+
+    sales_map = sales_grouped.set_index("Factory")["Sales Amount"].to_dict()
+    fcost_map = fcost_grouped.set_index("Factory")["FCost Amount"].to_dict()
+    sales_total = float(sum(float(value) for value in sales_map.values()))
+    fcost_total = float(sum(float(value) for value in fcost_map.values()))
+
+    def _occupancy(value: float, grand_total: float) -> float:
+        return float(value / grand_total) if grand_total else 0.0
+
+    rows: list[list[object]] = []
+    for factory in factories:
+        sales_value = float(sales_map.get(factory, 0.0))
+        fcost_value = float(fcost_map.get(factory, 0.0))
+        rows.append([
+            factory,
+            sales_value,
+            _occupancy(sales_value, sales_total),
+            None,
+            factory,
+            fcost_value,
+            _occupancy(fcost_value, fcost_total),
+        ])
+
+    rows.append([
+        "Grand Total",
+        sales_total,
+        1.0 if sales_total else 0.0,
+        None,
+        "Grand Total",
+        fcost_total,
+        1.0 if fcost_total else 0.0,
+    ])
+
+    summary_df = pd.DataFrame(
+        rows,
+        columns=["Factory", "Sales Amount", "Occupancy", "", "Factory", "FCost Amount", "Occupancy"],
+    )
+    summary_df["_row_type"] = ["data"] * (len(summary_df) - 1) + ["grand_total"]
+    return summary_df
+
+
+def _build_summary_output_sheet(
+    data_df: pd.DataFrame,
+    item: dict,
+    datasets: dict[str, pd.DataFrame] | None = None,
+) -> tuple[pd.DataFrame, str]:
     summary_cfg = item["summary"]
     summary_type = str(summary_cfg["type"]).strip()
     layout_mode = str(summary_cfg.get("layout_mode", "standard"))
@@ -2194,6 +2369,16 @@ def _build_summary_output_sheet(data_df: pd.DataFrame, item: dict) -> tuple[pd.D
     if summary_type == "panel_symptom_inch_matrix":
         return _build_panel_symptom_inch_matrix(data_df, options if isinstance(options, dict) else None), layout_mode
 
+    if summary_type == "section_cost_summary":
+        return _build_section_cost_summary(data_df, options if isinstance(options, dict) else None), layout_mode
+
+    if summary_type == "sales_fcost_occupancy_summary":
+        return _build_sales_fcost_occupancy_summary(
+            data_df,
+            options if isinstance(options, dict) else None,
+            datasets,
+        ), layout_mode
+
     summary_row: dict[str, object] = {
         "summary_type": summary_type,
         "source_rows": len(data_df),
@@ -2217,7 +2402,7 @@ def _build_output_sheets(
         sheet_name = str(item["sheet_name"])
 
         if "summary" in item:
-            summary_df, layout_mode = _build_summary_output_sheet(data_df, item)
+            summary_df, layout_mode = _build_summary_output_sheet(data_df, item, datasets=datasets)
             output_sheets[sheet_name] = summary_df
             sheet_layouts[sheet_name] = layout_mode
             log(f"Output recipe summary '{sheet_name}' siap ({len(summary_df)} baris).")

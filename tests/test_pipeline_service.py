@@ -754,6 +754,182 @@ def test_run_pipeline_step_recipe_supports_sales_dataset_with_factory_lookup(app
     ]
 
 
+def test_run_pipeline_step_recipe_builds_job_summary_result_sales_and_new_summaries(app_paths):
+    source_path = app_paths.project_root / "job_summary_result_source.xlsx"
+    result_rows = [
+        {"notification": "N-001", "section": "GQS", "part_name": "PANEL", "factory": "Factory A", "labor_cost": 10, "transportation_cost": 5, "parts_cost": 85, "total_cost": 100},
+        {"notification": "N-002", "section": "GQS", "part_name": "MAIN_UNIT", "factory": "Factory A", "labor_cost": 5, "transportation_cost": 0, "parts_cost": 45, "total_cost": 50},
+        {"notification": "N-003", "section": "SASS", "part_name": "POWER_UNIT", "factory": "Factory B", "labor_cost": 20, "transportation_cost": 10, "parts_cost": 170, "total_cost": 200},
+        {"notification": "N-004", "section": "SASS", "part_name": "", "factory": "Factory B", "labor_cost": 2, "transportation_cost": 3, "parts_cost": 20, "total_cost": 25},
+    ]
+    sales_rows = [
+        {"Model": "M-A", "Category": "TV", "Sales Amount": 1000, "Sales (Qty)": 10, "Factory": "Factory A"},
+        {"Model": "M-B", "Category": "TV", "Sales Amount": 3000, "Sales (Qty)": 30, "Factory": "Factory B"},
+        {"Model": "M-C", "Category": "TV", "Sales Amount": 1000, "Sales (Qty)": 5, "Factory": "Factory C"},
+    ]
+    with pd.ExcelWriter(source_path) as writer:
+        pd.DataFrame(result_rows).to_excel(writer, index=False, sheet_name="result")
+        pd.DataFrame(sales_rows).to_excel(writer, index=False, sheet_name="sales")
+
+    config_path = app_paths.configs_dir / "job_summary_result_new_summaries.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Job Summary Result New Summaries"',
+                "datasets:",
+                '  working_dataset: "result"',
+                "  canonical_columns:",
+                '    - "notification"',
+                '    - "section"',
+                '    - "part_name"',
+                '    - "factory"',
+                '    - "labor_cost"',
+                '    - "transportation_cost"',
+                '    - "parts_cost"',
+                '    - "total_cost"',
+                "steps:",
+                '  - id: "extract_result"',
+                '    type: "extract_sheet"',
+                "    sheet_selector:",
+                '      contains: "result"',
+                '      case_sensitive: false',
+                "    header_locator:",
+                "      scan_rows: [1, 1]",
+                "      required:",
+                '        - "notification"',
+                '        - "section"',
+                '        - "part_name"',
+                '        - "factory"',
+                '        - "labor_cost"',
+                '        - "transportation_cost"',
+                '        - "parts_cost"',
+                '        - "total_cost"',
+                "    select:",
+                '      "notification": "notification"',
+                '      "section": "section"',
+                '      "part_name": "part_name"',
+                '      "factory": "factory"',
+                '      "labor_cost": "labor_cost"',
+                '      "transportation_cost": "transportation_cost"',
+                '      "parts_cost": "parts_cost"',
+                '      "total_cost": "total_cost"',
+                '    write_to: "result"',
+                '  - id: "extract_sales"',
+                '    type: "extract_sheet"',
+                "    sheet_selector:",
+                '      contains: "sales"',
+                '      case_sensitive: false',
+                "    header_locator:",
+                "      scan_rows: [1, 1]",
+                "      required:",
+                '        - "Model"',
+                '        - "Category"',
+                '        - "Sales Amount"',
+                '        - "Sales (Qty)"',
+                '        - "Factory"',
+                "    select:",
+                '      "Model": "Model"',
+                '      "Category": "Category"',
+                '      "Sales Amount": "Sales Amount"',
+                '      "Sales (Qty)": "Sales (Qty)"',
+                '      "Factory": "Factory"',
+                '    write_to: "sales"',
+                "outputs:",
+                '  - sheet_name: "result"',
+                "    columns:",
+                '      - "notification"',
+                '      - "section"',
+                '      - "part_name"',
+                '      - "factory"',
+                '      - "labor_cost"',
+                '      - "transportation_cost"',
+                '      - "parts_cost"',
+                '      - "total_cost"',
+                '  - sheet_name: "sales"',
+                '    dataset: "sales"',
+                "    columns:",
+                '      - "Model"',
+                '      - "Category"',
+                '      - "Sales Amount"',
+                '      - "Sales (Qty)"',
+                '      - "Factory"',
+                '  - sheet_name: "data8"',
+                "    summary:",
+                '      type: "section_cost_summary"',
+                '      layout_mode: "plain"',
+                "      options:",
+                "        column_labels:",
+                '          section: "Section"',
+                '          "Sum of labor_cost": "Labor"',
+                '          "Sum of transportation_cost": "Transportation"',
+                '          "Sum of parts_cost": "Parts"',
+                '          "Sum of total_cost": "Total"',
+                '          "Count of part_name": "Count"',
+                '  - sheet_name: "data9"',
+                "    summary:",
+                '      type: "sales_fcost_occupancy_summary"',
+                '      layout_mode: "plain"',
+                '  - sheet_name: "data10"',
+                "    summary:",
+                '      type: "part_pivot_summary"',
+                '      layout_mode: "plain"',
+                "      options:",
+                '        section_column: "factory"',
+                "        column_labels:",
+                '          section: "Factory"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _: None,
+    )
+
+    workbook = load_workbook(result.output_path, read_only=True)
+    assert {"result", "sales", "data8", "data9", "data10"}.issubset(workbook.sheetnames)
+
+    sales_df = pd.read_excel(result.output_path, sheet_name="sales", header=3, keep_default_na=False)
+    assert list(sales_df.columns) == ["Model", "Category", "Sales Amount", "Sales (Qty)", "Factory"]
+
+    data8_df = _read_summary_sheet(result.output_path, "data8")
+    gqs_total = data8_df[data8_df["Section"] == "GQS"].iloc[0]
+    sass_total = data8_df[data8_df["Section"] == "SASS"].iloc[0]
+    grand_total = data8_df[data8_df["Section"] == "Grand Total"].iloc[0]
+    assert gqs_total["Total"] == 150
+    assert gqs_total["Count"] == 2
+    assert sass_total["Total"] == 225
+    assert sass_total["Count"] == 1
+    assert grand_total["Total"] == 375
+    assert grand_total["Count"] == 3
+
+    data9_df = _read_summary_sheet(result.output_path, "data9")
+    sales_factory_a = data9_df[data9_df["Factory"] == "Factory A"].iloc[0]
+    fcost_factory_b = data9_df[data9_df["Factory.1"] == "Factory B"].iloc[0]
+    assert sales_factory_a["Sales Amount"] == 1000
+    assert sales_factory_a["Occupancy"] == pytest.approx(0.2)
+    assert fcost_factory_b["FCost Amount"] == 225
+    assert fcost_factory_b["Occupancy.1"] == pytest.approx(0.6)
+
+    data10_df = _read_summary_sheet(result.output_path, "data10", fill_forward=["Factory"])
+    factory_a_total = data10_df[data10_df["Factory"] == "Factory A Total"].iloc[0]
+    grand_total_data10 = data10_df[data10_df["Factory"] == "Grand Total"].iloc[0]
+    assert factory_a_total["Sum of total_cost"] == 150
+    assert factory_a_total["Count of part_name"] == 2
+    assert grand_total_data10["Sum of total_cost"] == 350
+    assert grand_total_data10["Count of part_name"] == 3
+
+    workbook = load_workbook(result.output_path, read_only=False, data_only=False)
+    assert workbook["data9"]["C5"].number_format != "#,##0"
+    assert workbook["data9"]["G5"].number_format != "#,##0"
+    assert workbook["data10"]["C5"].number_format == "#,##0"
+
+
+
+
 def test_run_pipeline_skips_copy_when_source_already_in_uploads_subfolder(app_paths):
     upload_subdir = app_paths.uploads_dir / "nested"
     upload_subdir.mkdir(parents=True, exist_ok=True)
@@ -2692,8 +2868,10 @@ def test_run_pipeline_step_recipe_static_part_pivot_summary_data1_forces_formula
 
     assert isinstance(sheet["C5"].value, str)
     assert sheet["C5"].value.startswith("=SUMIFS(")
+    assert sheet["C5"].number_format == "#,##0"
     assert isinstance(sheet["G5"].value, str)
     assert sheet["G5"].value.startswith("=COUNTIFS(")
+    assert sheet["G5"].number_format == "#,##0"
 
     other_row_idx = None
     current_section = ""
@@ -2938,6 +3116,7 @@ def test_run_pipeline_step_recipe_panel_summaries_data3a_data3b_data3c(app_paths
     assert data3a_sheet["B4"].fill.fgColor.rgb == "00BDD7EE"
     assert data3a_sheet["C4"].fill.fgColor.rgb == "00C6EFCE"
     assert data3a_sheet["D4"].fill.fgColor.rgb == "00E4DFEC"
+    assert data3a_sheet["B5"].number_format != "#,##0"
     assert data3a_sheet["D5"].number_format == "#,##0"
 
     symptom_rows = data3b_df[data3b_df["part_name"] == "PANEL"]["symptom"].tolist()
@@ -3250,6 +3429,4 @@ def test_run_pipeline_step_recipe_panel_symptom_inch_matrix_data6(app_paths):
     assert row_a["Grand Total"] == 3
 
     panel_total = data6_df[data6_df["Part Name"] == "PANEL Total"].iloc[0]
-    grand_total = data6_df[data6_df["Part Name"] == "Grand Total"].iloc[0]
-    assert panel_total["Grand Total"] == 6
-    assert grand_total["Grand Total"] == 6
+    grand_
