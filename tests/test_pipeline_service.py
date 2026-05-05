@@ -1930,6 +1930,22 @@ def test_run_pipeline_supports_monthly_step_recipe_end_to_end(app_paths):
         ).to_excel(writer, index=False, header=False, sheet_name="GQS vs SASS")
         gqs_df.to_excel(writer, index=False, sheet_name="GQS Mar26", startrow=1)
         sass_df.to_excel(writer, index=False, sheet_name="SASS Mar26", startrow=4)
+        pd.DataFrame(
+            [
+                {
+                    "Model": "ABC42ZZ",
+                    "Category": "LCD SEID",
+                    "Sales Amount": 150000,
+                    "Sales (Qty)": 10,
+                },
+                {
+                    "Model": "LX32ZZ",
+                    "Category": "LCD SEID",
+                    "Sales Amount": 200000,
+                    "Sales (Qty)": 15,
+                },
+            ]
+        ).to_excel(writer, index=False, sheet_name="Calculation Mar26")
 
     master_path = app_paths.masters_dir / "master_table.xlsx"
     with pd.ExcelWriter(master_path) as writer:
@@ -2398,6 +2414,62 @@ def test_run_pipeline_step_recipe_single_sheet_mode_rejects_multisheet_workbook(
             config_path=config_path,
             log=lambda _: None,
         )
+
+
+def test_run_pipeline_step_recipe_any_sheet_mode_scans_multisheet_workbook(app_paths):
+    source_path = app_paths.project_root / "any_sheet_source.xlsx"
+    with pd.ExcelWriter(source_path) as writer:
+        pd.DataFrame([{"Ignored": "x"}]).to_excel(
+            writer,
+            index=False,
+            sheet_name="calculation",
+        )
+        pd.DataFrame(
+            [
+                {"Notification": "A-001"},
+                {"Notification": "A-002"},
+            ]
+        ).to_excel(writer, index=False, sheet_name="result")
+
+    config_path = app_paths.configs_dir / "any_sheet_mode.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Any Sheet Mode"',
+                "datasets:",
+                '  working_dataset: "result"',
+                "  canonical_columns:",
+                '    - "notification"',
+                "steps:",
+                '  - id: "extract"',
+                '    type: "extract_sheet"',
+                "    sheet_selector:",
+                '      mode: "any_sheet_workbook"',
+                "    header_locator:",
+                "      scan_rows: [1, 1]",
+                "      required:",
+                '        - "Notification"',
+                "    select:",
+                '      "Notification": "notification"',
+                '    write_to: "result"',
+                "outputs:",
+                '  - sheet_name: "result"',
+                "    columns:",
+                '      - "notification"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _: None,
+    )
+
+    detail_df = pd.read_excel(result.output_path, sheet_name="result", skiprows=3, keep_default_na=False)
+    assert detail_df["notification"].tolist() == ["A-001", "A-002"]
 
 
 def test_run_pipeline_step_recipe_summary_plain_layout_writes_without_report_header(app_paths):

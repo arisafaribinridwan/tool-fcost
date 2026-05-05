@@ -45,7 +45,8 @@ steps:
   - id: "extract_result_like_source"
     type: "extract_sheet"
     sheet_selector:
-      mode: "single_sheet_workbook"
+      contains: "result"
+      case_sensitive: false
     header_locator:
       type: "required_columns"
       scan_rows: [1, 25]

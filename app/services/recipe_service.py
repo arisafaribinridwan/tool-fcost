@@ -414,12 +414,19 @@ def _resolve_sheet_names(source_path: Path, selector_cfg: dict) -> list[str]:
 
     workbook = pd.ExcelFile(source_path)
     selector_mode = selector_cfg.get("mode")
-    if selector_mode is not None and str(selector_mode) == "single_sheet_workbook":
-        if len(workbook.sheet_names) != 1:
-            raise ValueError(
-                "Mode sheet_selector.single_sheet_workbook membutuhkan tepat 1 sheet pada source workbook."
-            )
-        return [workbook.sheet_names[0]]
+    if selector_mode is not None:
+        selector_mode = str(selector_mode)
+        if selector_mode == "single_sheet_workbook":
+            if len(workbook.sheet_names) != 1:
+                raise ValueError(
+                    "Mode sheet_selector.single_sheet_workbook membutuhkan tepat 1 sheet pada source workbook."
+                )
+            return [workbook.sheet_names[0]]
+        if selector_mode == "any_sheet_workbook":
+            return list(workbook.sheet_names)
+        raise ValueError(
+            "sheet_selector.mode harus salah satu dari: any_sheet_workbook, single_sheet_workbook."
+        )
 
     contains = selector_cfg.get("contains")
     if not isinstance(contains, str) or not contains.strip():
