@@ -759,8 +759,12 @@ def test_run_pipeline_step_recipe_builds_job_summary_result_sales_and_new_summar
     result_rows = [
         {"notification": "N-001", "section": "GQS", "part_name": "PANEL", "factory": "Factory A", "labor_cost": 10, "transportation_cost": 5, "parts_cost": 85, "total_cost": 100},
         {"notification": "N-002", "section": "GQS", "part_name": "MAIN_UNIT", "factory": "Factory A", "labor_cost": 5, "transportation_cost": 0, "parts_cost": 45, "total_cost": 50},
-        {"notification": "N-003", "section": "SASS", "part_name": "POWER_UNIT", "factory": "Factory B", "labor_cost": 20, "transportation_cost": 10, "parts_cost": 170, "total_cost": 200},
-        {"notification": "N-004", "section": "SASS", "part_name": "", "factory": "Factory B", "labor_cost": 2, "transportation_cost": 3, "parts_cost": 20, "total_cost": 25},
+        {"notification": "N-003", "section": "GQS", "part_name": "POWER_UNIT", "factory": "Factory A", "labor_cost": 4, "transportation_cost": 1, "parts_cost": 35, "total_cost": 40},
+        {"notification": "N-004", "section": "GQS", "part_name": "TCON", "factory": "Factory A", "labor_cost": 3, "transportation_cost": 2, "parts_cost": 25, "total_cost": 30},
+        {"notification": "N-005", "section": "GQS", "part_name": "REMOTE", "factory": "Factory A", "labor_cost": 2, "transportation_cost": 1, "parts_cost": 17, "total_cost": 20},
+        {"notification": "N-006", "section": "GQS", "part_name": "", "factory": "Factory A", "labor_cost": 1, "transportation_cost": 1, "parts_cost": 8, "total_cost": 10},
+        {"notification": "N-007", "section": "SASS", "part_name": "POWER_UNIT", "factory": "Factory B", "labor_cost": 20, "transportation_cost": 10, "parts_cost": 170, "total_cost": 200},
+        {"notification": "N-008", "section": "SASS", "part_name": "", "factory": "Factory B", "labor_cost": 2, "transportation_cost": 3, "parts_cost": 20, "total_cost": 25},
     ]
     sales_rows = [
         {"Model": "M-A", "Category": "TV", "Sales Amount": 1000, "Sales (Qty)": 10, "Factory": "Factory A"},
@@ -876,6 +880,8 @@ def test_run_pipeline_step_recipe_builds_job_summary_result_sales_and_new_summar
                 '      layout_mode: "plain"',
                 "      options:",
                 '        section_column: "factory"',
+                "        top_n_part_names: 4",
+                '        other_label: "Other"',
                 "        column_labels:",
                 '          section: "Factory"',
             ]
@@ -899,32 +905,50 @@ def test_run_pipeline_step_recipe_builds_job_summary_result_sales_and_new_summar
     gqs_total = data8_df[data8_df["Section"] == "GQS"].iloc[0]
     sass_total = data8_df[data8_df["Section"] == "SASS"].iloc[0]
     grand_total = data8_df[data8_df["Section"] == "Grand Total"].iloc[0]
-    assert gqs_total["Total"] == 150
-    assert gqs_total["Count"] == 2
+    assert gqs_total["Total"] == 250
+    assert gqs_total["Count"] == 5
     assert sass_total["Total"] == 225
     assert sass_total["Count"] == 1
-    assert grand_total["Total"] == 375
-    assert grand_total["Count"] == 3
+    assert grand_total["Total"] == 475
+    assert grand_total["Count"] == 6
 
     data9_df = _read_summary_sheet(result.output_path, "data9")
+    assert data9_df["Factory"].tolist() == ["Factory B", "Factory A", "Factory C", "Grand Total"]
+    assert data9_df["Factory.1"].tolist() == ["Factory A", "Factory B", "", "Grand Total"]
     sales_factory_a = data9_df[data9_df["Factory"] == "Factory A"].iloc[0]
     fcost_factory_b = data9_df[data9_df["Factory.1"] == "Factory B"].iloc[0]
     assert sales_factory_a["Sales Amount"] == 1000
     assert sales_factory_a["Occupancy"] == pytest.approx(0.2)
     assert fcost_factory_b["FCost Amount"] == 225
-    assert fcost_factory_b["Occupancy.1"] == pytest.approx(0.6)
+    assert fcost_factory_b["Occupancy.1"] == pytest.approx(225 / 475)
 
     data10_df = _read_summary_sheet(result.output_path, "data10", fill_forward=["Factory"])
+    factory_a_rows = data10_df[data10_df["Factory"] == "Factory A"]
     factory_a_total = data10_df[data10_df["Factory"] == "Factory A Total"].iloc[0]
+    factory_b_other = data10_df[
+        (data10_df["Factory"] == "Factory B") & (data10_df["part_name"] == "Other")
+    ].iloc[0]
     grand_total_data10 = data10_df[data10_df["Factory"] == "Grand Total"].iloc[0]
-    assert factory_a_total["Sum of total_cost"] == 150
-    assert factory_a_total["Count of part_name"] == 2
-    assert grand_total_data10["Sum of total_cost"] == 350
-    assert grand_total_data10["Count of part_name"] == 3
+    assert factory_a_rows["part_name"].tolist() == ["PANEL", "MAIN_UNIT", "POWER_UNIT", "TCON", "Other"]
+    assert factory_a_rows["Sum of total_cost"].tolist() == [100, 50, 40, 30, 30]
+    assert factory_a_rows["Count of part_name"].tolist() == [1, 1, 1, 1, 2]
+    assert factory_a_total["Sum of total_cost"] == 250
+    assert factory_a_total["Count of part_name"] == 6
+    assert factory_b_other["Sum of total_cost"] == 25
+    assert factory_b_other["Count of part_name"] == 1
+    assert grand_total_data10["Sum of total_cost"] == 475
+    assert grand_total_data10["Count of part_name"] == 8
 
     workbook = load_workbook(result.output_path, read_only=False, data_only=False)
-    assert workbook["data9"]["C5"].number_format != "#,##0"
-    assert workbook["data9"]["G5"].number_format != "#,##0"
+    data9_sheet = workbook["data9"]
+    assert data9_sheet["B5"].number_format == "#,##0"
+    assert data9_sheet["C5"].number_format == "0.0%"
+    assert data9_sheet["F5"].number_format == "#,##0"
+    assert data9_sheet["G5"].number_format == "0.0%"
+    assert data9_sheet["B5"].alignment.horizontal == "right"
+    assert data9_sheet["C5"].alignment.horizontal == "right"
+    assert data9_sheet["F5"].alignment.horizontal == "right"
+    assert data9_sheet["G5"].alignment.horizontal == "right"
     assert workbook["data10"]["C5"].number_format == "#,##0"
 
 
@@ -3429,4 +3453,6 @@ def test_run_pipeline_step_recipe_panel_symptom_inch_matrix_data6(app_paths):
     assert row_a["Grand Total"] == 3
 
     panel_total = data6_df[data6_df["Part Name"] == "PANEL Total"].iloc[0]
-    grand_
+    grand_total = data6_df[data6_df["Part Name"] == "Grand Total"].iloc[0]
+    assert panel_total["Grand Total"] == 6
+    assert grand_total["Grand Total"] == 6

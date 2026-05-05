@@ -1430,10 +1430,21 @@ def _build_part_pivot_summary(data_df: pd.DataFrame, options: dict | None) -> pd
             "Part pivot summary gagal, kolom tidak ditemukan: " + ", ".join(missing)
         )
 
+    top_n_part_names = cfg.get("top_n_part_names")
+    if top_n_part_names is not None:
+        try:
+            top_n_part_names = int(top_n_part_names)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Part pivot summary option 'top_n_part_names' harus berupa angka.") from exc
+        if top_n_part_names < 1:
+            raise ValueError("Part pivot summary option 'top_n_part_names' minimal 1.")
+    other_label = str(cfg.get("other_label", "Other"))
+
     working_df = data_df.copy()
     part_series = working_df[part_column].fillna("").astype(str).str.strip()
-    working_df = working_df.loc[part_series.ne("")].copy()
-    part_series = working_df[part_column].fillna("").astype(str).str.strip()
+    if top_n_part_names is None:
+        working_df = working_df.loc[part_series.ne("")].copy()
+        part_series = working_df[part_column].fillna("").astype(str).str.strip()
     working_df[part_column] = part_series
 
     for target_col, source_col in cost_columns.items():
@@ -1477,6 +1488,17 @@ def _build_part_pivot_summary(data_df: pd.DataFrame, options: dict | None) -> pd
             ascending=[False, True],
             kind="stable",
         )
+
+        if top_n_part_names is not None:
+            top_rows = section_rows.loc[section_rows["part_name"].astype(str).str.strip().ne("")].head(top_n_part_names)
+            other_rows = section_rows.drop(index=top_rows.index)
+            section_rows = top_rows.copy()
+            if not other_rows.empty:
+                other_row = {"section": section_value, "part_name": other_label}
+                for key in cost_columns:
+                    other_row[key] = float(other_rows[key].sum())
+                other_row["Count of part_name"] = float(other_rows["Count of part_name"].sum())
+                section_rows = pd.concat([section_rows, pd.DataFrame([other_row])], ignore_index=True)
 
         section_total = {
             "Sum of labor_cost": 0.0,
@@ -2280,30 +2302,54 @@ def _build_sales_fcost_occupancy_summary(
         .rename(columns={sales_factory_column: "Factory", "_amount": "Sales Amount"})
     )
 
-    fcost_order = fcost_grouped["Factory"].tolist()
-    sales_order = sales_grouped["Factory"].tolist()
-    factories = list(dict.fromkeys([*sales_order, *fcost_order]))
+    sales_grouped = sales_grouped.sort_values(
+        by=["Sales Amount", "Factory"],
+        ascending=[False, True],
+        kind="stable",
+    ).reset_index(drop=True)
+    fcost_grouped = fcost_grouped.sort_values(
+        by=["FCost Amount", "Factory"],
+        ascending=[False, True],
+        kind="stable",
+    ).reset_index(drop=True)
 
-    sales_map = sales_grouped.set_index("Factory")["Sales Amount"].to_dict()
-    fcost_map = fcost_grouped.set_index("Factory")["FCost Amount"].to_dict()
-    sales_total = float(sum(float(value) for value in sales_map.values()))
-    fcost_total = float(sum(float(value) for value in fcost_map.values()))
+    sales_total = float(sales_grouped["Sales Amount"].sum()) if not sales_grouped.empty else 0.0
+    fcost_total = float(fcost_grouped["FCost Amount"].sum()) if not fcost_grouped.empty else 0.0
 
     def _occupancy(value: float, grand_total: float) -> float:
         return float(value / grand_total) if grand_total else 0.0
 
     rows: list[list[object]] = []
-    for factory in factories:
-        sales_value = float(sales_map.get(factory, 0.0))
-        fcost_value = float(fcost_map.get(factory, 0.0))
+    max_rows = max(len(sales_grouped), len(fcost_grouped))
+    for row_idx in range(max_rows):
+        if row_idx < len(sales_grouped):
+            sales_row = sales_grouped.iloc[row_idx]
+            sales_factory = str(sales_row["Factory"])
+            sales_value = float(sales_row["Sales Amount"])
+            sales_occupancy = _occupancy(sales_value, sales_total)
+        else:
+            sales_factory = ""
+            sales_value = None
+            sales_occupancy = None
+
+        if row_idx < len(fcost_grouped):
+            fcost_row = fcost_grouped.iloc[row_idx]
+            fcost_factory = str(fcost_row["Factory"])
+            fcost_value = float(fcost_row["FCost Amount"])
+            fcost_occupancy = _occupancy(fcost_value, fcost_total)
+        else:
+            fcost_factory = ""
+            fcost_value = None
+            fcost_occupancy = None
+
         rows.append([
-            factory,
+            sales_factory,
             sales_value,
-            _occupancy(sales_value, sales_total),
+            sales_occupancy,
             None,
-            factory,
+            fcost_factory,
             fcost_value,
-            _occupancy(fcost_value, fcost_total),
+            fcost_occupancy,
         ])
 
     rows.append([

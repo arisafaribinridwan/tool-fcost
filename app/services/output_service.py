@@ -160,13 +160,22 @@ def _fill_from_config(styling_cfg: dict, key: str, default: str) -> PatternFill:
     return PatternFill(fill_type="solid", fgColor=color)
 
 
+def _is_numeric_or_formula_cell_value(cell_value: object) -> bool:
+    if isinstance(cell_value, int | float) and not isinstance(cell_value, bool):
+        return True
+    return isinstance(cell_value, str) and cell_value.startswith("=")
+
+
 def _should_apply_summary_number_format(header_value: object, cell_value: object) -> bool:
     header_text = str(header_value).strip().casefold()
     if header_text in {"inch", "occupancy"}:
         return False
-    if isinstance(cell_value, int | float) and not isinstance(cell_value, bool):
-        return True
-    return isinstance(cell_value, str) and cell_value.startswith("=")
+    return _is_numeric_or_formula_cell_value(cell_value)
+
+
+def _should_apply_summary_percent_format(header_value: object, cell_value: object) -> bool:
+    header_text = str(header_value).strip().casefold()
+    return header_text == "occupancy" and _is_numeric_or_formula_cell_value(cell_value)
 
 
 def _apply_summary_sheet_style(
@@ -289,13 +298,17 @@ def _apply_summary_sheet_style(
             cell.fill = row_fill
             cell.border = border
             vertical = "top" if col_idx == 1 and row_type == "data" else "center"
-            horizontal = "right" if col_idx >= 3 else "left"
+            header_value = worksheet.cell(row=header_row, column=col_idx).value
+            number_format_needed = _should_apply_summary_number_format(header_value, cell.value)
+            percent_format_needed = _should_apply_summary_percent_format(header_value, cell.value)
+            horizontal = "right" if number_format_needed or percent_format_needed else "left"
             if row_type in {"subtotal", "grand_total"} and col_idx == 1:
                 horizontal = "center"
             cell.alignment = Alignment(horizontal=horizontal, vertical=vertical)
-            header_value = worksheet.cell(row=header_row, column=col_idx).value
-            if _should_apply_summary_number_format(header_value, cell.value):
+            if number_format_needed:
                 cell.number_format = str(styling_cfg.get("number_format", "#,##0"))
+            elif percent_format_needed:
+                cell.number_format = str(styling_cfg.get("percentage_format", "0.0%"))
 
     if data_last_row >= data_first_row:
         merge_start: int | None = None

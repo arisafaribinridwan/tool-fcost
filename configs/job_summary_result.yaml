@@ -370,6 +370,8 @@ outputs:
       column_width: 13.0
       options:
         section_column: "factory"
+        top_n_part_names: 4
+        other_label: "Other"
         column_labels:
           section: "Factory"
           part_name: "Part Name"
