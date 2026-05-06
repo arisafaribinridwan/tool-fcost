@@ -1094,6 +1094,63 @@ def _apply_duplicate_group_rewrite_step(data_df: pd.DataFrame, step_cfg: dict, l
     return result_df
 
 
+def _format_scale_factor(value: float) -> str:
+    return str(int(value)) if value.is_integer() else str(value)
+
+
+def _scale_summary_amount_value(value: object, scale_factor: float, scale_factor_text: str) -> object:
+    if isinstance(value, str):
+        formula = value.strip()
+        if formula.startswith("="):
+            return f"=({formula[1:]})/{scale_factor_text}"
+        if not formula:
+            return value
+
+    numeric_value = pd.to_numeric(value, errors="coerce")
+    if pd.isna(numeric_value):
+        return value
+    return float(numeric_value) / scale_factor
+
+
+def _apply_summary_amount_scale(
+    summary_df: pd.DataFrame,
+    cfg: dict,
+    default_columns: list[str],
+) -> pd.DataFrame:
+    scale_factor_raw = cfg.get("amount_scale_factor")
+    if scale_factor_raw is None:
+        return summary_df
+
+    try:
+        scale_factor = float(scale_factor_raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Summary option 'amount_scale_factor' harus berupa angka.") from exc
+    if scale_factor == 0:
+        raise ValueError("Summary option 'amount_scale_factor' tidak boleh 0.")
+    if scale_factor == 1:
+        return summary_df
+
+    configured_columns = cfg.get("amount_scale_columns")
+    if configured_columns is None:
+        target_columns = [str(column) for column in default_columns]
+    elif isinstance(configured_columns, list) and all(isinstance(column, str) for column in configured_columns):
+        target_columns = [str(column) for column in configured_columns]
+    else:
+        raise ValueError("Summary option 'amount_scale_columns' harus berupa list string jika diisi.")
+
+    target_columns = [column for column in target_columns if column in summary_df.columns]
+    if not target_columns:
+        return summary_df
+
+    scaled_df = summary_df.copy()
+    scale_factor_text = _format_scale_factor(scale_factor)
+    for column in target_columns:
+        scaled_df[column] = scaled_df[column].map(
+            lambda item: _scale_summary_amount_value(item, scale_factor, scale_factor_text)
+        )
+    return scaled_df
+
+
 def _apply_summary_column_labels(summary_df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     column_labels = cfg.get("column_labels") or {}
     if not isinstance(column_labels, dict) or not column_labels:
@@ -1345,6 +1402,7 @@ def _build_static_part_summary(data_df: pd.DataFrame, options: dict | None) -> p
                 ignore_index=True,
             )
 
+        summary_df = _apply_summary_amount_scale(summary_df, cfg, list(cost_columns.keys()))
         return _add_summary_metadata(summary_df, cfg)
 
     for section_value in section_order:
@@ -1408,6 +1466,7 @@ def _build_static_part_summary(data_df: pd.DataFrame, options: dict | None) -> p
             total_row[col] = float(summary_df.loc[~subtotal_mask, col].sum())
         summary_df = pd.concat([summary_df, pd.DataFrame([total_row])], ignore_index=True)
 
+    summary_df = _apply_summary_amount_scale(summary_df, cfg, list(cost_columns.keys()))
     return _add_summary_metadata(summary_df, cfg)
 
 
@@ -1547,6 +1606,7 @@ def _build_part_pivot_summary(data_df: pd.DataFrame, options: dict | None) -> pd
         }
         summary_df = pd.concat([summary_df, pd.DataFrame([total_row])], ignore_index=True)
 
+    summary_df = _apply_summary_amount_scale(summary_df, cfg, list(cost_columns.keys()))
     return _add_summary_metadata(summary_df, cfg)
 
 
@@ -1644,6 +1704,7 @@ def _build_panel_model_summary(data_df: pd.DataFrame, options: dict | None) -> p
         summary_df = summary_df.copy()
         summary_df["_row_type"] = row_types
 
+    summary_df = _apply_summary_amount_scale(summary_df, cfg, ["Total"])
     default_labels = {"part_name": "Part Name", "inch": "Inch", "model_name": "Model Name"}
     column_labels = cfg.get("column_labels")
     if isinstance(column_labels, dict):
@@ -1889,6 +1950,7 @@ def _build_panel_fcost_inch_summary(data_df: pd.DataFrame, options: dict | None)
 
     grand_total = {**panel_total, "part_name": "Grand Total"}
     summary_df = pd.concat([summary_df, pd.DataFrame([panel_total, grand_total])], ignore_index=True)
+    summary_df = _apply_summary_amount_scale(summary_df, cfg, list(cost_columns.keys()))
     return _apply_summary_column_labels(summary_df, cfg)
 
 
@@ -2016,6 +2078,7 @@ def _build_panel_top1_inch_model_summary(data_df: pd.DataFrame, options: dict | 
     }
     grand_total = {**panel_total, "part_name": "Grand Total"}
     summary_df = pd.concat([summary_df, pd.DataFrame([panel_total, grand_total])], ignore_index=True)
+    summary_df = _apply_summary_amount_scale(summary_df, cfg, list(cost_columns.keys()))
     return _apply_summary_column_labels(summary_df, cfg)
 
 
@@ -2233,8 +2296,8 @@ def _build_section_cost_summary(data_df: pd.DataFrame, options: dict | None) -> 
     )
     if summary_df.empty:
         summary_df = pd.DataFrame(columns=["section", "Sum of labor_cost", "Sum of transportation_cost", "Sum of parts_cost", "Sum of total_cost", "Count of part_name"])
-        summary_df = _apply_summary_column_labels(summary_df, cfg)
-        return summary_df
+        summary_df = _apply_summary_amount_scale(summary_df, cfg, list(cost_columns.keys()))
+        return _apply_summary_column_labels(summary_df, cfg)
 
     total_row = {
         "section": "Grand Total",
@@ -2245,6 +2308,7 @@ def _build_section_cost_summary(data_df: pd.DataFrame, options: dict | None) -> 
         "Count of part_name": float(summary_df["Count of part_name"].sum()),
     }
     summary_df = pd.concat([summary_df, pd.DataFrame([total_row])], ignore_index=True)
+    summary_df = _apply_summary_amount_scale(summary_df, cfg, list(cost_columns.keys()))
     summary_df["_row_type"] = ["data"] * (len(summary_df) - 1) + ["grand_total"]
     return _apply_summary_column_labels(summary_df, cfg)
 
@@ -2366,6 +2430,7 @@ def _build_sales_fcost_occupancy_summary(
         rows,
         columns=["Factory", "Sales Amount", "Occupancy", "", "Factory", "FCost Amount", "Occupancy"],
     )
+    summary_df = _apply_summary_amount_scale(summary_df, cfg, ["Sales Amount", "FCost Amount"])
     summary_df["_row_type"] = ["data"] * (len(summary_df) - 1) + ["grand_total"]
     return summary_df
 

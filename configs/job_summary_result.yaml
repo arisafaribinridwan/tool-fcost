@@ -178,9 +178,10 @@ outputs:
       type: "static_part_pivot_summary"
       layout_mode: "plain"
       title: "PART COST (3 Worst)"
-      subtitle: "Part Category: PANEL | MAIN_UNIT | POWER_UNIT | OTHER (all non-blank parts excluding the 3 main)"
+      subtitle: "Part Category: PANEL | MAIN_UNIT | POWER_UNIT | OTHER (all non-blank parts excluding the 3 main) - (K.IDR)"
       column_width: 13.0
       options:
+        amount_scale_factor: 1000
         formula_source_sheet: "result"
         formula_section_ref: "$W:$W"
         formula_part_ref: "$AB:$AB"
@@ -202,9 +203,10 @@ outputs:
       type: "part_pivot_summary"
       layout_mode: "plain"
       title: "PART COST SUMMARY"
-      subtitle: "Part cost summary by section and part name"
+      subtitle: "Part cost summary by section and part name - (K.IDR)"
       column_width: 13.0
       options:
+        amount_scale_factor: 1000
         column_labels:
           section: "Section"
           part_name: "Part Name"
@@ -219,9 +221,10 @@ outputs:
       type: "panel_model_summary"
       layout_mode: "plain"
       title: "PANEL MODEL SUMMARY"
-      subtitle: "Panel summary by inch and model"
+      subtitle: "Panel summary by inch and model - (K.IDR)"
       column_width: 13.0
       options:
+        amount_scale_factor: 1000
         column_labels:
           part_name: "Part Name"
           inch: "Inch"
@@ -272,9 +275,10 @@ outputs:
       type: "panel_fcost_inch_summary"
       layout_mode: "plain"
       title: "PANEL FCOST BY INCH"
-      subtitle: "Panel FCOST summary by inch"
+      subtitle: "Panel FCOST summary by inch - (K.IDR)"
       column_width: 13.0
       options:
+        amount_scale_factor: 1000
         column_labels:
           part_name: "Part Name"
           inch: "Inch"
@@ -289,9 +293,10 @@ outputs:
       type: "panel_top1_inch_model_summary"
       layout_mode: "plain"
       title: "PANEL TOP MODEL BY INCH"
-      subtitle: "Top panel model summary by inch"
+      subtitle: "Top panel model summary by inch - (K.IDR)"
       column_width: 13.0
       options:
+        amount_scale_factor: 1000
         column_labels:
           part_name: "Part Name"
           inch: "Inch"
@@ -339,9 +344,10 @@ outputs:
       type: "section_cost_summary"
       layout_mode: "plain"
       title: "SECTION COST SUMMARY"
-      subtitle: "FCost summary by section"
+      subtitle: "FCost summary by section - (K.IDR)"
       column_width: 13.0
       options:
+        amount_scale_factor: 1000
         column_labels:
           section: "Section"
           "Sum of labor_cost": "Labor"
@@ -355,9 +361,10 @@ outputs:
       type: "sales_fcost_occupancy_summary"
       layout_mode: "plain"
       title: "SALES VS FCOST OCCUPANCY BY FACTORY"
-      subtitle: "Sales amount and FCost amount occupancy by factory"
+      subtitle: "Sales amount and FCost amount occupancy by factory - (K.IDR)"
       column_width: 13.0
       options:
+        amount_scale_factor: 1000
         sales_dataset: "sales"
         result_dataset: "result"
 
@@ -366,9 +373,10 @@ outputs:
       type: "part_pivot_summary"
       layout_mode: "plain"
       title: "PART COST BY FACTORY"
-      subtitle: "Part cost summary by factory and part name"
+      subtitle: "Part cost summary by factory and part name - (K.IDR)"
       column_width: 13.0
       options:
+        amount_scale_factor: 1000
         section_column: "factory"
         top_n_part_names: 4
         other_label: "Other"

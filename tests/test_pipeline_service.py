@@ -863,6 +863,7 @@ def test_run_pipeline_step_recipe_builds_job_summary_result_sales_and_new_summar
                 '      type: "section_cost_summary"',
                 '      layout_mode: "plain"',
                 "      options:",
+                "        amount_scale_factor: 1000",
                 "        column_labels:",
                 '          section: "Section"',
                 '          "Sum of labor_cost": "Labor"',
@@ -874,11 +875,14 @@ def test_run_pipeline_step_recipe_builds_job_summary_result_sales_and_new_summar
                 "    summary:",
                 '      type: "sales_fcost_occupancy_summary"',
                 '      layout_mode: "plain"',
+                "      options:",
+                "        amount_scale_factor: 1000",
                 '  - sheet_name: "data10"',
                 "    summary:",
                 '      type: "part_pivot_summary"',
                 '      layout_mode: "plain"',
                 "      options:",
+                "        amount_scale_factor: 1000",
                 '        section_column: "factory"',
                 "        top_n_part_names: 4",
                 '        other_label: "Other"',
@@ -900,16 +904,17 @@ def test_run_pipeline_step_recipe_builds_job_summary_result_sales_and_new_summar
 
     sales_df = pd.read_excel(result.output_path, sheet_name="sales", header=3, keep_default_na=False)
     assert list(sales_df.columns) == ["Model", "Category", "Sales Amount", "Sales (Qty)", "Factory"]
+    assert sales_df["Sales Amount"].tolist() == [1000, 3000, 1000]
 
     data8_df = _read_summary_sheet(result.output_path, "data8")
     gqs_total = data8_df[data8_df["Section"] == "GQS"].iloc[0]
     sass_total = data8_df[data8_df["Section"] == "SASS"].iloc[0]
     grand_total = data8_df[data8_df["Section"] == "Grand Total"].iloc[0]
-    assert gqs_total["Total"] == 250
+    assert gqs_total["Total"] == pytest.approx(0.25)
     assert gqs_total["Count"] == 5
-    assert sass_total["Total"] == 225
+    assert sass_total["Total"] == pytest.approx(0.225)
     assert sass_total["Count"] == 1
-    assert grand_total["Total"] == 475
+    assert grand_total["Total"] == pytest.approx(0.475)
     assert grand_total["Count"] == 6
 
     data9_df = _read_summary_sheet(result.output_path, "data9")
@@ -917,9 +922,9 @@ def test_run_pipeline_step_recipe_builds_job_summary_result_sales_and_new_summar
     assert data9_df["Factory.1"].tolist() == ["Factory A", "Factory B", "", "Grand Total"]
     sales_factory_a = data9_df[data9_df["Factory"] == "Factory A"].iloc[0]
     fcost_factory_b = data9_df[data9_df["Factory.1"] == "Factory B"].iloc[0]
-    assert sales_factory_a["Sales Amount"] == 1000
+    assert sales_factory_a["Sales Amount"] == pytest.approx(1)
     assert sales_factory_a["Occupancy"] == pytest.approx(0.2)
-    assert fcost_factory_b["FCost Amount"] == 225
+    assert fcost_factory_b["FCost Amount"] == pytest.approx(0.225)
     assert fcost_factory_b["Occupancy.1"] == pytest.approx(225 / 475)
 
     data10_df = _read_summary_sheet(result.output_path, "data10", fill_forward=["Factory"])
@@ -930,13 +935,13 @@ def test_run_pipeline_step_recipe_builds_job_summary_result_sales_and_new_summar
     ].iloc[0]
     grand_total_data10 = data10_df[data10_df["Factory"] == "Grand Total"].iloc[0]
     assert factory_a_rows["part_name"].tolist() == ["PANEL", "MAIN_UNIT", "POWER_UNIT", "TCON", "Other"]
-    assert factory_a_rows["Sum of total_cost"].tolist() == [100, 50, 40, 30, 30]
+    assert factory_a_rows["Sum of total_cost"].tolist() == pytest.approx([0.1, 0.05, 0.04, 0.03, 0.03])
     assert factory_a_rows["Count of part_name"].tolist() == [1, 1, 1, 1, 2]
-    assert factory_a_total["Sum of total_cost"] == 250
+    assert factory_a_total["Sum of total_cost"] == pytest.approx(0.25)
     assert factory_a_total["Count of part_name"] == 6
-    assert factory_b_other["Sum of total_cost"] == 25
+    assert factory_b_other["Sum of total_cost"] == pytest.approx(0.025)
     assert factory_b_other["Count of part_name"] == 1
-    assert grand_total_data10["Sum of total_cost"] == 475
+    assert grand_total_data10["Sum of total_cost"] == pytest.approx(0.475)
     assert grand_total_data10["Count of part_name"] == 8
 
     workbook = load_workbook(result.output_path, read_only=False, data_only=False)
@@ -2875,6 +2880,7 @@ def test_run_pipeline_step_recipe_static_part_pivot_summary_data1_forces_formula
                 '      type: "static_part_pivot_summary"',
                 '      layout_mode: "plain"',
                 "      options:",
+                "        amount_scale_factor: 1000",
                 '        value_mode: "numeric"',
             ]
         ),
@@ -2891,10 +2897,12 @@ def test_run_pipeline_step_recipe_static_part_pivot_summary_data1_forces_formula
     sheet = workbook["data1"]
 
     assert isinstance(sheet["C5"].value, str)
-    assert sheet["C5"].value.startswith("=SUMIFS(")
+    assert sheet["C5"].value.startswith("=(SUMIFS(")
+    assert sheet["C5"].value.endswith(")/1000")
     assert sheet["C5"].number_format == "#,##0"
     assert isinstance(sheet["G5"].value, str)
     assert sheet["G5"].value.startswith("=COUNTIFS(")
+    assert "/1000" not in sheet["G5"].value
     assert sheet["G5"].number_format == "#,##0"
 
     other_row_idx = None
@@ -2909,9 +2917,11 @@ def test_run_pipeline_step_recipe_static_part_pivot_summary_data1_forces_formula
 
     assert other_row_idx is not None
     assert isinstance(sheet[f"F{other_row_idx}"].value, str)
-    assert sheet[f"F{other_row_idx}"].value.startswith("=SUMIFS(")
+    assert sheet[f"F{other_row_idx}"].value.startswith("=(SUMIFS(")
+    assert sheet[f"F{other_row_idx}"].value.endswith(")/1000")
     assert isinstance(sheet[f"G{other_row_idx}"].value, str)
     assert sheet[f"G{other_row_idx}"].value.startswith("=COUNTIFS(")
+    assert "/1000" not in sheet[f"G{other_row_idx}"].value
 
     grand_total_row_idx = None
     for row_idx in range(5, sheet.max_row + 1):
@@ -2921,9 +2931,11 @@ def test_run_pipeline_step_recipe_static_part_pivot_summary_data1_forces_formula
 
     assert grand_total_row_idx is not None
     assert isinstance(sheet[f"F{grand_total_row_idx}"].value, str)
-    assert sheet[f"F{grand_total_row_idx}"].value.startswith("=SUMIFS(")
+    assert sheet[f"F{grand_total_row_idx}"].value.startswith("=(SUMIFS(")
+    assert sheet[f"F{grand_total_row_idx}"].value.endswith(")/1000")
     assert isinstance(sheet[f"G{grand_total_row_idx}"].value, str)
     assert sheet[f"G{grand_total_row_idx}"].value.startswith("=COUNTIFS(")
+    assert "/1000" not in sheet[f"G{grand_total_row_idx}"].value
 
 
 def test_run_pipeline_step_recipe_part_pivot_summary_builds_data2_sorted_with_totals(app_paths):
@@ -2984,6 +2996,8 @@ def test_run_pipeline_step_recipe_part_pivot_summary_builds_data2_sorted_with_to
                 "    summary:",
                 '      type: "part_pivot_summary"',
                 '      layout_mode: "plain"',
+                "      options:",
+                "        amount_scale_factor: 1000",
             ]
         ),
     )
@@ -3004,15 +3018,15 @@ def test_run_pipeline_step_recipe_part_pivot_summary_builds_data2_sorted_with_to
     sass_total = data2_df[data2_df["section"] == "SASS Total"].iloc[0]
     grand_total = data2_df[data2_df["section"] == "Grand Total"].iloc[0]
 
-    assert gqs_total["Sum of total_cost"] == 430
+    assert gqs_total["Sum of total_cost"] == pytest.approx(0.43)
     assert gqs_total["Count of part_name"] == 4
-    assert sass_total["Sum of total_cost"] == 160
+    assert sass_total["Sum of total_cost"] == pytest.approx(0.16)
     assert sass_total["Count of part_name"] == 3
-    assert grand_total["Sum of total_cost"] == 623
+    assert grand_total["Sum of total_cost"] == pytest.approx(0.623)
     assert grand_total["Count of part_name"] == 8
 
     panel_gqs = data2_df[(data2_df["section"] == "GQS") & (data2_df["part_name"] == "PANEL")].iloc[0]
-    assert panel_gqs["Sum of total_cost"] == 120
+    assert panel_gqs["Sum of total_cost"] == pytest.approx(0.12)
     assert panel_gqs["Count of part_name"] == 2
 
 
@@ -3079,6 +3093,8 @@ def test_run_pipeline_step_recipe_panel_summaries_data3a_data3b_data3c(app_paths
                 '      title: "PANEL MODEL SUMMARY"',
                 '      subtitle: "Panel summary by inch and model"',
                 "      column_width: 13.0",
+                "      options:",
+                "        amount_scale_factor: 1000",
                 '  - sheet_name: "data3b"',
                 "    summary:",
                 '      type: "panel_symptom_summary"',
@@ -3121,9 +3137,9 @@ def test_run_pipeline_step_recipe_panel_summaries_data3a_data3b_data3c(app_paths
     inch32_total = data3a_df[data3a_df["Inch"] == "32 Total"].iloc[0]
     panel_total_a = data3a_df[data3a_df["Part Name"] == "PANEL Total"].iloc[0]
     grand_total_a = data3a_df[data3a_df["Part Name"] == "Grand Total"].iloc[0]
-    assert inch32_total["Total"] == 175
-    assert panel_total_a["Total"] == 595
-    assert grand_total_a["Total"] == 595
+    assert inch32_total["Total"] == pytest.approx(0.175)
+    assert panel_total_a["Total"] == pytest.approx(0.595)
+    assert grand_total_a["Total"] == pytest.approx(0.595)
 
     data3a_sheet = load_workbook(result.output_path)["data3a"]
     assert data3a_sheet["A1"].value == "PANEL MODEL SUMMARY"
@@ -3300,6 +3316,7 @@ def test_run_pipeline_step_recipe_panel_fcost_data5a_and_top1_model_data5b(app_p
                 '      type: "panel_fcost_inch_summary"',
                 '      layout_mode: "plain"',
                 "      options:",
+                "        amount_scale_factor: 1000",
                 "        column_labels:",
                 '          part_name: "Part Name"',
                 '          inch: "Inch"',
@@ -3313,6 +3330,7 @@ def test_run_pipeline_step_recipe_panel_fcost_data5a_and_top1_model_data5b(app_p
                 '      type: "panel_top1_inch_model_summary"',
                 '      layout_mode: "plain"',
                 "      options:",
+                "        amount_scale_factor: 1000",
                 "        column_labels:",
                 '          part_name: "Part Name"',
                 '          inch: "Inch"',
@@ -3361,8 +3379,9 @@ def test_run_pipeline_step_recipe_panel_fcost_data5a_and_top1_model_data5b(app_p
 
     panel_total_a = data5a_df[data5a_df["Part Name"] == "PANEL Total"].iloc[0]
     grand_total_a = data5a_df[data5a_df["Part Name"] == "Grand Total"].iloc[0]
-    assert panel_total_a["Total"] == 1240
-    assert grand_total_a["Total"] == 1240
+    assert panel_total_a["Labor"] == pytest.approx(0.027)
+    assert panel_total_a["Total"] == pytest.approx(1.24)
+    assert grand_total_a["Total"] == pytest.approx(1.24)
 
     model_rows = data5b_df[data5b_df["Part Name"] == "PANEL"]["Model Name"].tolist()
     assert model_rows == ["M1", "M2", "M3", "M4", "M5", "other"]
@@ -3371,8 +3390,9 @@ def test_run_pipeline_step_recipe_panel_fcost_data5a_and_top1_model_data5b(app_p
 
     panel_total_b = data5b_df[data5b_df["Part Name"] == "PANEL Total"].iloc[0]
     grand_total_b = data5b_df[data5b_df["Part Name"] == "Grand Total"].iloc[0]
-    assert panel_total_b["Total"] == 500
-    assert grand_total_b["Total"] == 500
+    assert panel_total_b["Labor"] == pytest.approx(0.019)
+    assert panel_total_b["Total"] == pytest.approx(0.5)
+    assert grand_total_b["Total"] == pytest.approx(0.5)
 
 
 def test_run_pipeline_step_recipe_panel_symptom_inch_matrix_data6(app_paths):
