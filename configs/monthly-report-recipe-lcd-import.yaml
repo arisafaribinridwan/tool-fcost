@@ -431,6 +431,33 @@ steps:
           - priority: 300
             parts_signature: ["LED_BAR", "TAPE"]
             winner_part_name: "LED_BAR"
+          - priority: 310
+            parts_signature: ["LVDS_WIRE", "PANEL", "TCON_UNIT"]
+            winner_part_name: "PANEL"
+          - priority: 320
+            parts_signature: ["MAIN_UNIT", "N/A"]
+            winner_part_name: "MAIN_UNIT"
+          - priority: 330
+            parts_signature: ["MAIN_UNIT", "WIFI_UNIT"]
+            winner_part_name: "MAIN_UNIT"
+          - priority: 340
+            parts_signature: ["IR_UNIT", "PANEL", "WIFI_UNIT"]
+            winner_part_name: "PANEL"
+          - priority: 350
+            parts_signature: ["LED_BAR", "LVDS_WIRE", "MAIN_UNIT"]
+            winner_part_name: "MAIN_UNIT"
+          - priority: 360
+            parts_signature: ["LED_BAR", "LVDS_WIRE"]
+            winner_part_name: "LED_BAR"
+          - priority: 370
+            parts_signature: ["MAIN_UNIT", "WIFI_UNIT", "WIFI_WIRE"]
+            winner_part_name: "MAIN_UNIT"
+          - priority: 380
+            parts_signature: ["PANEL", "WIFI_UNIT"]
+            winner_part_name: "PANEL"
+          - priority: 390
+            parts_signature: ["LVDS_WIRE", "MAIN_UNIT"]
+            winner_part_name: "MAIN_UNIT"
         winner_updates:
           "job_sheet_section":
             set: 1
