@@ -396,6 +396,9 @@ steps:
           - priority: 220
             parts_signature: ["LED_BAR", "MAIN_UNIT", "PANEL"]
             winner_part_name: "PANEL"
+          - priority: 230
+            parts_signature: ["TAPE", "LVDS_WIRE", "PANEL"]
+            winner_part_name: "PANEL"
         winner_updates:
           "job_sheet_section":
             set: 1
