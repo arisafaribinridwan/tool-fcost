@@ -189,6 +189,11 @@ outputs:
         formula_transportation_ref: "$T:$T"
         formula_parts_ref: "$U:$U"
         formula_total_ref: "$Z:$Z"
+        combined_sections:
+          - name: "ALL"
+            source_sections:
+              - "GQS"
+              - "SASS"
         column_labels:
           section: "Section"
           part_name: "Part Name"

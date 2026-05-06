@@ -1186,6 +1186,29 @@ def _build_static_part_summary(data_df: pd.DataFrame, options: dict | None) -> p
 
     static_parts = [str(item) for item in cfg.get("static_parts", ["PANEL", "MAIN_UNIT", "POWER_UNIT"])]
 
+    combined_sections_cfg = cfg.get("combined_sections", [])
+    if not isinstance(combined_sections_cfg, list):
+        raise ValueError("Static part summary option 'combined_sections' harus berupa list.")
+
+    combined_sections: list[tuple[str, list[str]]] = []
+    for index, item in enumerate(combined_sections_cfg):
+        if not isinstance(item, dict):
+            raise ValueError(f"Static part summary option 'combined_sections[{index}]' harus berupa object.")
+        name = str(item.get("name", "")).strip()
+        if not name:
+            raise ValueError(f"Static part summary option 'combined_sections[{index}].name' wajib diisi.")
+        source_sections_cfg = item.get("source_sections")
+        if not isinstance(source_sections_cfg, list):
+            raise ValueError(
+                f"Static part summary option 'combined_sections[{index}].source_sections' harus berupa list."
+            )
+        source_sections = [str(value).strip() for value in source_sections_cfg if str(value).strip()]
+        if not source_sections:
+            raise ValueError(
+                f"Static part summary option 'combined_sections[{index}].source_sections' minimal 1 nilai."
+            )
+        combined_sections.append((name, source_sections))
+
     cost_columns = {
         "Sum of labor_cost": str(cfg.get("labor_cost_column", "labor_cost")),
         "Sum of transportation_cost": str(cfg.get("transportation_cost_column", "transportation_cost")),
@@ -1226,6 +1249,7 @@ def _build_static_part_summary(data_df: pd.DataFrame, options: dict | None) -> p
         .reset_index()
         .rename(columns={"_grouped_part": "part_name", part_column: "Count of part_name"})
     )
+    base_grouped = grouped.copy()
 
     output_columns = [
         "section",
@@ -1238,6 +1262,29 @@ def _build_static_part_summary(data_df: pd.DataFrame, options: dict | None) -> p
     ]
 
     section_order = working_df[section_column].drop_duplicates().tolist()
+    for combined_name, source_sections in combined_sections:
+        source_rows = base_grouped[base_grouped[section_column].astype(str).isin(source_sections)].copy()
+        if source_rows.empty:
+            continue
+        combined_rows = (
+            source_rows.groupby("part_name", dropna=False, sort=False)
+            .agg(
+                {
+                    "Sum of labor_cost": "sum",
+                    "Sum of transportation_cost": "sum",
+                    "Sum of parts_cost": "sum",
+                    "Sum of total_cost": "sum",
+                    "Count of part_name": "sum",
+                }
+            )
+            .reset_index()
+        )
+        combined_rows[section_column] = combined_name
+        grouped = pd.concat([grouped, combined_rows], ignore_index=True)
+        if combined_name not in section_order:
+            section_order.append(combined_name)
+
+    combined_section_sources = {name: source_sections for name, source_sections in combined_sections}
     part_order = [*static_parts, "OTHER"]
     rows: list[dict[str, object]] = []
 
@@ -1258,64 +1305,111 @@ def _build_static_part_summary(data_df: pd.DataFrame, options: dict | None) -> p
         def _excel_literal(value: object) -> str:
             return '"' + str(value).replace('"', '""') + '"'
 
-        def _sumifs_formula(value_ref: str, section_value: str, part_value: str) -> str:
+        def _section_sources_for_formula(section_value: str) -> list[str]:
+            return combined_section_sources.get(section_value, [section_value])
+
+        def _formula_from_expressions(expressions: list[str]) -> str:
+            return "=" + "+".join(expressions) if expressions else "=0"
+
+        def _sumifs_expression(value_ref: str, section_value: str, part_value: str) -> str:
             return (
-                f"=SUMIFS('{formula_source_sheet}'!{value_ref},"
+                f"SUMIFS('{formula_source_sheet}'!{value_ref},"
                 f"'{formula_source_sheet}'!{formula_refs['section']},{_excel_literal(section_value)},"
                 f"'{formula_source_sheet}'!{formula_refs['part_name']},{_excel_literal(part_value)})"
             )
 
-        def _countifs_formula(section_value: str, part_value: str) -> str:
+        def _countifs_expression(section_value: str, part_value: str) -> str:
             return (
-                f"=COUNTIFS('{formula_source_sheet}'!{formula_refs['section']},{_excel_literal(section_value)},"
+                f"COUNTIFS('{formula_source_sheet}'!{formula_refs['section']},{_excel_literal(section_value)},"
                 f"'{formula_source_sheet}'!{formula_refs['part_name']},{_excel_literal(part_value)})"
             )
 
-        def _other_sum_formula(value_ref: str, section_value: str) -> str:
+        def _sumifs_formula(value_ref: str, section_value: str, part_value: str) -> str:
+            return _formula_from_expressions(
+                [
+                    _sumifs_expression(value_ref, source_section, part_value)
+                    for source_section in _section_sources_for_formula(section_value)
+                ]
+            )
+
+        def _countifs_formula(section_value: str, part_value: str) -> str:
+            return _formula_from_expressions(
+                [
+                    _countifs_expression(source_section, part_value)
+                    for source_section in _section_sources_for_formula(section_value)
+                ]
+            )
+
+        def _other_sum_expression(value_ref: str, section_value: str) -> str:
             base = (
                 f"SUMIFS('{formula_source_sheet}'!{value_ref},"
                 f"'{formula_source_sheet}'!{formula_refs['section']},{_excel_literal(section_value)},"
                 f"'{formula_source_sheet}'!{formula_refs['part_name']},\"<>\")"
             )
-            minus_parts = "-".join(
+            minus_parts = [
+                _sumifs_expression(value_ref, section_value, part_name)
+                for part_name in static_parts
+            ]
+            if not minus_parts:
+                return base
+            return f"{base}-{'-'.join(minus_parts)}"
+
+        def _other_sum_formula(value_ref: str, section_value: str) -> str:
+            return _formula_from_expressions(
                 [
-                    (
-                        f"SUMIFS('{formula_source_sheet}'!{value_ref},"
-                        f"'{formula_source_sheet}'!{formula_refs['section']},{_excel_literal(section_value)},"
-                        f"'{formula_source_sheet}'!{formula_refs['part_name']},{_excel_literal(part_name)})"
-                    )
-                    for part_name in static_parts
+                    _other_sum_expression(value_ref, source_section)
+                    for source_section in _section_sources_for_formula(section_value)
                 ]
             )
-            return f"={base}-{minus_parts}"
 
-        def _other_count_formula(section_value: str) -> str:
+        def _other_count_expression(section_value: str) -> str:
             base = (
                 f"COUNTIFS('{formula_source_sheet}'!{formula_refs['section']},{_excel_literal(section_value)},"
                 f"'{formula_source_sheet}'!{formula_refs['part_name']},\"<>\")"
             )
-            minus_parts = "-".join(
+            minus_parts = [
+                _countifs_expression(section_value, part_name)
+                for part_name in static_parts
+            ]
+            if not minus_parts:
+                return base
+            return f"{base}-{'-'.join(minus_parts)}"
+
+        def _other_count_formula(section_value: str) -> str:
+            return _formula_from_expressions(
                 [
-                    (
-                        f"COUNTIFS('{formula_source_sheet}'!{formula_refs['section']},{_excel_literal(section_value)},"
-                        f"'{formula_source_sheet}'!{formula_refs['part_name']},{_excel_literal(part_name)})"
-                    )
-                    for part_name in static_parts
+                    _other_count_expression(source_section)
+                    for source_section in _section_sources_for_formula(section_value)
                 ]
             )
-            return f"={base}-{minus_parts}"
 
-        def _section_total_sum_formula(value_ref: str, section_value: str) -> str:
+        def _section_total_sum_expression(value_ref: str, section_value: str) -> str:
             return (
-                f"=SUMIFS('{formula_source_sheet}'!{value_ref},"
+                f"SUMIFS('{formula_source_sheet}'!{value_ref},"
                 f"'{formula_source_sheet}'!{formula_refs['section']},{_excel_literal(section_value)},"
                 f"'{formula_source_sheet}'!{formula_refs['part_name']},\"<>\")"
             )
 
-        def _section_total_count_formula(section_value: str) -> str:
+        def _section_total_sum_formula(value_ref: str, section_value: str) -> str:
+            return _formula_from_expressions(
+                [
+                    _section_total_sum_expression(value_ref, source_section)
+                    for source_section in _section_sources_for_formula(section_value)
+                ]
+            )
+
+        def _section_total_count_expression(section_value: str) -> str:
             return (
-                f"=COUNTIFS('{formula_source_sheet}'!{formula_refs['section']},{_excel_literal(section_value)},"
+                f"COUNTIFS('{formula_source_sheet}'!{formula_refs['section']},{_excel_literal(section_value)},"
                 f"'{formula_source_sheet}'!{formula_refs['part_name']},\"<>\")"
+            )
+
+        def _section_total_count_formula(section_value: str) -> str:
+            return _formula_from_expressions(
+                [
+                    _section_total_count_expression(source_section)
+                    for source_section in _section_sources_for_formula(section_value)
+                ]
             )
 
         def _grand_total_sum_formula(value_ref: str) -> str:
@@ -1449,13 +1543,7 @@ def _build_static_part_summary(data_df: pd.DataFrame, options: dict | None) -> p
         total_row = {
             "section": "Grand Total",
             "part_name": "",
-            "Sum of labor_cost": float(summary_df["Sum of labor_cost"].sum()),
-            "Sum of transportation_cost": float(summary_df["Sum of transportation_cost"].sum()),
-            "Sum of parts_cost": float(summary_df["Sum of parts_cost"].sum()),
-            "Sum of total_cost": float(summary_df["Sum of total_cost"].sum()),
-            "Count of part_name": float(summary_df["Count of part_name"].sum()),
         }
-        subtotal_mask = summary_df["section"].astype(str).str.endswith(" Total")
         for col in [
             "Sum of labor_cost",
             "Sum of transportation_cost",
@@ -1463,7 +1551,7 @@ def _build_static_part_summary(data_df: pd.DataFrame, options: dict | None) -> p
             "Sum of total_cost",
             "Count of part_name",
         ]:
-            total_row[col] = float(summary_df.loc[~subtotal_mask, col].sum())
+            total_row[col] = float(base_grouped[col].sum())
         summary_df = pd.concat([summary_df, pd.DataFrame([total_row])], ignore_index=True)
 
     summary_df = _apply_summary_amount_scale(summary_df, cfg, list(cost_columns.keys()))

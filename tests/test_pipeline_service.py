@@ -2785,6 +2785,12 @@ def test_run_pipeline_step_recipe_static_part_summary_builds_data1_totals(app_pa
                 "    summary:",
                 '      type: "static_part_summary"',
                 '      layout_mode: "plain"',
+                "      options:",
+                "        combined_sections:",
+                '          - name: "ALL"',
+                "            source_sections:",
+                '              - "GQS"',
+                '              - "SASS"',
             ]
         ),
     )
@@ -2800,12 +2806,15 @@ def test_run_pipeline_step_recipe_static_part_summary_builds_data1_totals(app_pa
 
     gqs_total = data1_df[data1_df["section"] == "GQS Total"].iloc[0]
     sass_total = data1_df[data1_df["section"] == "SASS Total"].iloc[0]
+    all_total = data1_df[data1_df["section"] == "ALL Total"].iloc[0]
     grand_total = data1_df[data1_df["section"] == "Grand Total"].iloc[0]
 
     assert gqs_total["Sum of total_cost"] == 200
     assert gqs_total["Count of part_name"] == 3
     assert sass_total["Sum of total_cost"] == 112
     assert sass_total["Count of part_name"] == 3
+    assert all_total["Sum of total_cost"] == 312
+    assert all_total["Count of part_name"] == 6
     assert grand_total["Sum of total_cost"] == 357
     assert grand_total["Count of part_name"] == 7
 
@@ -2882,6 +2891,11 @@ def test_run_pipeline_step_recipe_static_part_pivot_summary_data1_forces_formula
                 "      options:",
                 "        amount_scale_factor: 1000",
                 '        value_mode: "numeric"',
+                "        combined_sections:",
+                '          - name: "ALL"',
+                "            source_sections:",
+                '              - "GQS"',
+                '              - "SASS"',
             ]
         ),
     )
@@ -2922,6 +2936,30 @@ def test_run_pipeline_step_recipe_static_part_pivot_summary_data1_forces_formula
     assert isinstance(sheet[f"G{other_row_idx}"].value, str)
     assert sheet[f"G{other_row_idx}"].value.startswith("=COUNTIFS(")
     assert "/1000" not in sheet[f"G{other_row_idx}"].value
+
+    all_panel_row_idx = None
+    current_section = ""
+    for row_idx in range(5, sheet.max_row + 1):
+        section_value = sheet[f"A{row_idx}"].value
+        if section_value:
+            current_section = str(section_value)
+        if current_section == "ALL" and sheet[f"B{row_idx}"].value == "PANEL":
+            all_panel_row_idx = row_idx
+            break
+
+    assert all_panel_row_idx is not None
+    all_panel_total_formula = sheet[f"F{all_panel_row_idx}"].value
+    assert isinstance(all_panel_total_formula, str)
+    assert '"GQS"' in all_panel_total_formula
+    assert '"SASS"' in all_panel_total_formula
+    assert '"ALL"' not in all_panel_total_formula
+    assert all_panel_total_formula.endswith(")/1000")
+    all_panel_count_formula = sheet[f"G{all_panel_row_idx}"].value
+    assert isinstance(all_panel_count_formula, str)
+    assert '"GQS"' in all_panel_count_formula
+    assert '"SASS"' in all_panel_count_formula
+    assert '"ALL"' not in all_panel_count_formula
+    assert "/1000" not in all_panel_count_formula
 
     grand_total_row_idx = None
     for row_idx in range(5, sheet.max_row + 1):
