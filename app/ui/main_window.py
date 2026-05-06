@@ -27,6 +27,7 @@ from app.utils import (
     sanitize_exception_message,
     sanitize_log_message,
     select_source_file,
+    select_target_folder,
 )
 
 
@@ -63,6 +64,7 @@ class DesktopApp(ctk.CTk):
         self.asset_dir = Path(__file__).resolve().parents[1] / "assets" / "icons"
 
         self.selected_source_path: Path | None = None
+        self.selected_target_folder_path: Path | None = None
         self.job_records: dict[str, JobProfileSummary] = {}
         self._worker_queue: Queue[tuple[str, object]] | None = None
         self._worker_thread: Thread | None = None
@@ -451,6 +453,12 @@ class DesktopApp(ctk.CTk):
             self._set_execute_ready(False)
             return
         self.config_value_label.configure(text=selected.config_file)
+        if selected.config_path is not None:
+            try:
+                if not self._requires_target_folder(selected.config_path):
+                    self.selected_target_folder_path = None
+            except ValueError:
+                self.selected_target_folder_path = None
         self._run_preflight()
 
     def open_job_menu(self) -> None:
@@ -546,6 +554,7 @@ class DesktopApp(ctk.CTk):
 
         clear_session_state(self.paths.project_root)
         self.selected_source_path = None
+        self.selected_target_folder_path = None
         self.source_btn.configure(text="Klik untuk Pilih Source")
         self._preflight_result = None
         self._set_execute_ready(False)
@@ -572,6 +581,32 @@ class DesktopApp(ctk.CTk):
             return False
         period_prompt_cfg = ui_cfg.get("period_prompt")
         return isinstance(period_prompt_cfg, dict) and period_prompt_cfg.get("enabled") is True
+
+    def _requires_target_folder(self, config_path: Path) -> bool:
+        try:
+            config = load_config_payload(config_path)
+        except ValueError:
+            return False
+        ui_cfg = config.get("ui")
+        if not isinstance(ui_cfg, dict):
+            return False
+        target_folder_cfg = ui_cfg.get("target_folder_prompt")
+        return isinstance(target_folder_cfg, dict) and target_folder_cfg.get("enabled") is True
+
+    def select_target_folder(self) -> Path | None:
+        selected_path = select_target_folder(self.paths.project_root)
+        if not selected_path:
+            self.add_log("Pemilihan folder tujuan dibatalkan.")
+            return None
+
+        folder_path = Path(selected_path)
+        if not folder_path.exists() or not folder_path.is_dir():
+            messagebox.showerror("Folder tujuan tidak valid", "Folder tujuan tidak ditemukan atau bukan folder.")
+            return None
+
+        self.selected_target_folder_path = folder_path
+        self.add_log(f"Folder tujuan dipilih: {folder_path}")
+        return folder_path
 
     @staticmethod
     def _parse_period_text_override(raw_value: str | None) -> str | None:
@@ -629,7 +664,15 @@ class DesktopApp(ctk.CTk):
 
         period_text_override = None
         period_keydate_override = None
+        target_folder_path = None
         try:
+            if self._requires_target_folder(job.config_path):
+                target_folder_path = self.selected_target_folder_path
+                if target_folder_path is None:
+                    target_folder_path = self.select_target_folder()
+                if target_folder_path is None:
+                    messagebox.showwarning("Input belum lengkap", "Pilih folder tujuan terlebih dahulu.")
+                    return
             if self._should_prompt_period(job.config_path):
                 period_text_override, period_keydate_override = self._prompt_period_override()
         except ValueError as exc:
@@ -650,6 +693,7 @@ class DesktopApp(ctk.CTk):
                 job.config_path,
                 job_label,
                 self._worker_queue,
+                target_folder_path,
                 period_text_override,
                 period_keydate_override,
             ),
@@ -664,6 +708,7 @@ class DesktopApp(ctk.CTk):
         config_path: Path,
         job_label: str,
         event_queue: Queue[tuple[str, object]],
+        target_folder_path: Path | None = None,
         period_text_override: str | None = None,
         period_keydate_override: str | None = None,
     ) -> None:
@@ -679,6 +724,7 @@ class DesktopApp(ctk.CTk):
                 period_text_override=period_text_override,
                 period_keydate_override=period_keydate_override,
                 output_name_override=job_label,
+                target_folder_path=target_folder_path,
             )
             event_queue.put(("success", result))
         except Exception as exc:

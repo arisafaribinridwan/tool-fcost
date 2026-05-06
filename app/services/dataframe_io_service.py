@@ -36,11 +36,16 @@ def read_tabular_file(
     sheet_name: str | None = None,
     *,
     keep_default_na: bool = True,
+    header_row: int | None = None,
 ) -> pd.DataFrame:
     suffix = path.suffix.lower()
     if suffix == ".csv":
         try:
-            return pd.read_csv(path, keep_default_na=keep_default_na)
+            return pd.read_csv(
+                path,
+                keep_default_na=keep_default_na,
+                header=(header_row - 1) if header_row is not None else "infer",
+            )
         except EmptyDataError as exc:
             raise ValueError(
                 f"File '{path.name}' kosong atau tidak memiliki data yang bisa dibaca."
@@ -60,6 +65,7 @@ def read_tabular_file(
                     workbook,
                     sheet_name=resolved_sheet,
                     keep_default_na=keep_default_na,
+                    header=(header_row - 1) if header_row is not None else 0,
                 )
         except ValueError as exc:
             if str(exc).startswith("Sheet '") or str(exc).startswith("Nama sheet '"):

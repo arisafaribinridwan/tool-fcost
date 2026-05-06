@@ -11,6 +11,7 @@ from app.services.config_service import is_step_recipe_payload, load_config_payl
 from app.services.output_service import write_output_workbook
 from app.services.pipeline_types import PipelineError, PipelineResult, PipelineStepStatus
 from app.services.recipe_service import execute_step_recipe
+from app.services.target_workbook_update_service import update_target_workbooks_by_model_series
 from app.services.source_service import (
     copy_source_to_uploads,
     load_source_dataframe,
@@ -60,6 +61,15 @@ def _safe_filename(raw_name: str) -> str:
     return normalized or "report"
 
 
+def _get_target_update_config(config: dict) -> dict | None:
+    target_cfg = config.get("target_update")
+    if not isinstance(target_cfg, dict):
+        return None
+    if target_cfg.get("enabled") is not True:
+        return None
+    return target_cfg
+
+
 def run_pipeline(
     *,
     paths: AppPaths,
@@ -70,6 +80,7 @@ def run_pipeline(
     period_text_override: str | None = None,
     period_keydate_override: str | None = None,
     output_name_override: str | None = None,
+    target_folder_path: Path | None = None,
 ) -> PipelineResult:
     started_at = perf_counter()
 
@@ -141,9 +152,12 @@ def run_pipeline(
         emit_progress("read_source", "Read source", "running", source_path.name)
         log(f"Read source: {source_path.name}")
         try:
+            raw_header_row = config.get("source_header_row")
+            header_row = raw_header_row if isinstance(raw_header_row, int) and raw_header_row > 0 else None
             source_df = load_source_dataframe(
                 source_path,
                 source_sheet=str(source_sheet) if source_path.suffix.lower() == ".xlsx" else None,
+                header_row=header_row,
             )
         except ValueError as exc:
             raise PipelineError(str(exc)) from exc
@@ -195,6 +209,60 @@ def run_pipeline(
         except ValueError as exc:
             raise PipelineError(str(exc)) from exc
         emit_progress("build_output", "Build output", "done", f"{len(output_sheets)} sheet")
+
+    target_update_cfg = _get_target_update_config(config)
+    if target_update_cfg is not None:
+        if target_folder_path is None:
+            raise PipelineError("Folder tujuan wajib diisi untuk job ini.")
+
+        match_column = str(target_update_cfg.get("match_column", "model_series"))
+        target_sheet_name = str(target_update_cfg.get("sheet_name", "raw"))
+        source_filter_cfg = target_update_cfg.get("source_filter")
+        filter_column = None
+        filter_value = None
+        if isinstance(source_filter_cfg, dict):
+            raw_filter_column = source_filter_cfg.get("column")
+            if isinstance(raw_filter_column, str) and raw_filter_column.strip():
+                filter_column = raw_filter_column.strip()
+                filter_value = source_filter_cfg.get("equals")
+
+        emit_progress("update_targets", "Update targets", "running", target_folder_path.name)
+        log(f"Scan folder tujuan: {target_folder_path}")
+        try:
+            update_results = update_target_workbooks_by_model_series(
+                data_df=source_df,
+                target_dir=target_folder_path,
+                match_column=match_column,
+                target_sheet_name=target_sheet_name,
+                filter_column=filter_column,
+                filter_value=filter_value,
+            )
+        except ValueError as exc:
+            raise PipelineError(str(exc)) from exc
+
+        updated_count = 0
+        skipped_count = 0
+        failed_count = 0
+        for item in update_results:
+            if item.status == "updated":
+                updated_count += 1
+            elif item.status == "failed":
+                failed_count += 1
+            else:
+                skipped_count += 1
+            detail = f"[{item.status}] {item.file_name}"
+            if item.rows_written > 0:
+                detail += f" ({item.rows_written} baris)"
+            if item.reason:
+                detail += f" - {item.reason}"
+            log(detail)
+
+        emit_progress(
+            "update_targets",
+            "Update targets",
+            "done",
+            f"updated={updated_count}, skipped={skipped_count}, failed={failed_count}",
+        )
 
     config_name = str(config.get("name", config_path.stem))
     output_base_name = output_name_override or config_name

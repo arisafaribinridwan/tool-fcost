@@ -42,6 +42,19 @@ def select_source_file(initialdir: Path) -> str:
     )
 
 
+def select_target_folder(initialdir: Path) -> str:
+    if platform.system().lower() == "linux":
+        linux_selection = _select_folder_linux(initialdir, title="Pilih folder tujuan")
+        if linux_selection:
+            return linux_selection
+
+    return filedialog.askdirectory(
+        title="Pilih folder tujuan",
+        initialdir=str(initialdir),
+        mustexist=True,
+    )
+
+
 def _select_source_file_linux(initialdir: Path) -> str:
     selection = _select_with_kdialog(initialdir)
     if selection:
@@ -85,6 +98,49 @@ def _select_with_zenity(initialdir: Path) -> str:
             "--file-filter=Excel files | *.xlsx",
             "--file-filter=CSV files | *.csv",
             "--file-filter=All files | *",
+        ]
+    )
+
+
+def _select_folder_linux(initialdir: Path, *, title: str) -> str:
+    selection = _select_folder_with_kdialog(initialdir, title=title)
+    if selection:
+        return selection
+
+    selection = _select_folder_with_zenity(initialdir, title=title)
+    if selection:
+        return selection
+
+    return ""
+
+
+def _select_folder_with_kdialog(initialdir: Path, *, title: str) -> str:
+    if not _is_command_available("kdialog"):
+        return ""
+
+    return _run_dialog_command(
+        [
+            "kdialog",
+            "--title",
+            title,
+            "--getexistingdirectory",
+            str(initialdir),
+        ]
+    )
+
+
+def _select_folder_with_zenity(initialdir: Path, *, title: str) -> str:
+    if not _is_command_available("zenity"):
+        return ""
+
+    initialdir_with_sep = f"{initialdir}/"
+    return _run_dialog_command(
+        [
+            "zenity",
+            "--file-selection",
+            "--directory",
+            f"--title={title}",
+            f"--filename={initialdir_with_sep}",
         ]
     )
 

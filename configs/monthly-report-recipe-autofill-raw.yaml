@@ -1,0 +1,25 @@
+name: "FCOST Autofill RAW"
+source_sheet: "result"
+source_header_row: 4
+
+ui:
+  target_folder_prompt:
+    enabled: true
+
+target_update:
+  enabled: true
+  match_column: "model_series"
+  sheet_name: "raw"
+  source_filter:
+    column: "job_sheet_section"
+    equals: 1
+
+required_source_columns:
+  - "model_series"
+  - "job_sheet_section"
+
+header:
+  title: "FCOST Autofill RAW"
+
+outputs:
+  - sheet_name: "autof

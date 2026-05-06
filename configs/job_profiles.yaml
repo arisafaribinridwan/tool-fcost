@@ -7,6 +7,10 @@ jobs:
   label: FCOST LCD SEID
   config_file: monthly-report-recipe.yaml
   enabled: true
+- id: fcost-autofill-raw
+  label: FCOST AUTOFILL RAW
+  config_file: monthly-report-recipe-autofill-raw.yaml
+  enabled: true
 - id: job-summary-result
   label: Job Summary Result
   config_file: job_summary_result.yaml
