@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 from openpyxl import load_workbook
+from openpyxl.styles import PatternFill
 from openpyxl.worksheet.worksheet import Worksheet
 
 
@@ -111,6 +112,29 @@ def _filter_new_rows(
     return matched_df.loc[new_row_indexes].copy()
 
 
+_NO_FILL = PatternFill(fill_type=None)
+
+
+def _clear_data_row_fills(worksheet: Worksheet) -> None:
+    if worksheet.max_row < 2:
+        return
+    for row in worksheet.iter_rows(min_row=2, max_row=worksheet.max_row):
+        for cell in row:
+            cell.fill = _NO_FILL
+
+
+def _apply_row_fill(
+    worksheet: Worksheet,
+    *,
+    row_index: int,
+    column_count: int,
+    color: str,
+) -> None:
+    fill = PatternFill(fill_type="solid", fgColor=color.upper())
+    for column_index in range(1, column_count + 1):
+        worksheet.cell(row=row_index, column=column_index).fill = fill
+
+
 def update_target_workbooks_by_model_series(
     *,
     data_df: pd.DataFrame,
@@ -120,6 +144,7 @@ def update_target_workbooks_by_model_series(
     filter_column: str | None = None,
     filter_value: object | None = None,
     duplicate_key_columns: tuple[str, ...] = (),
+    new_row_color: str | None = None,
 ) -> list[TargetFileUpdateResult]:
     if not target_dir.exists() or not target_dir.is_dir():
         raise ValueError("Folder tujuan tidak ditemukan atau bukan folder.")
@@ -222,6 +247,9 @@ def update_target_workbooks_by_model_series(
                     )
                     continue
 
+            if new_row_color:
+                _clear_data_row_fills(worksheet)
+
             for _, row in matched_df.iterrows():
                 row_values: list[object] = []
                 for target_column in target_columns:
@@ -231,6 +259,13 @@ def update_target_workbooks_by_model_series(
                     else:
                         row_values.append(None)
                 worksheet.append(row_values)
+                if new_row_color:
+                    _apply_row_fill(
+                        worksheet,
+                        row_index=worksheet.max_row,
+                        column_count=len(target_columns),
+                        color=new_row_color,
+                    )
 
             workbook.save(target_file)
             workbook.close()

@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 from openpyxl import Workbook, load_workbook
+from openpyxl.styles import PatternFill
 
 from app.services.target_workbook_update_service import (
     update_target_workbooks_by_model_series,
@@ -83,6 +84,59 @@ def test_update_target_appends_filtered_matching_rows(tmp_path):
     assert ws.cell(row=3, column=2).value == "N1"
     assert ws.cell(row=4, column=2).value == "N2"
     assert ws.max_row == 4
+    wb.close()
+
+
+def test_update_target_highlights_new_rows_and_clears_existing_data_fills(tmp_path):
+    target_file = tmp_path / "X100.xlsx"
+    _create_target_file(
+        target_file,
+        ["model_series", "notification", "part_used", "total_cost"],
+        rows=[["old", "old", "old", "old"]],
+    )
+
+    wb = load_workbook(target_file)
+    ws = wb["raw"]
+    ws.cell(row=2, column=1).fill = PatternFill(fill_type="solid", fgColor="FFF2CC")
+    wb.save(target_file)
+    wb.close()
+
+    data_df = pd.DataFrame(
+        [
+            {
+                "model_series": "x100",
+                "notification": "N1",
+                "part_used": "P1",
+                "total_cost": 10,
+            },
+            {
+                "model_series": "x100",
+                "notification": "N2",
+                "part_used": "P2",
+                "total_cost": 20,
+            },
+        ]
+    )
+
+    results = update_target_workbooks_by_model_series(
+        data_df=data_df,
+        target_dir=tmp_path,
+        match_column="model_series",
+        target_sheet_name="raw",
+        new_row_color="E2EFDA",
+    )
+
+    assert results[0].status == "updated"
+    assert results[0].rows_written == 2
+
+    wb = load_workbook(target_file)
+    ws = wb["raw"]
+    assert ws.cell(row=2, column=1).fill.fill_type is None
+    for row_index in (3, 4):
+        for column_index in range(1, 5):
+            cell_fill = ws.cell(row=row_index, column=column_index).fill
+            assert cell_fill.fill_type == "solid"
+            assert cell_fill.fgColor.rgb.endswith("E2EFDA")
     wb.close()
 
 

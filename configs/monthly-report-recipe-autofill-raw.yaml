@@ -10,6 +10,7 @@ target_update:
   enabled: true
   match_column: "model_series"
   sheet_name: "raw"
+  new_row_color: "E2EFDA"
   source_filter:
     column: "job_sheet_section"
     equals: 1

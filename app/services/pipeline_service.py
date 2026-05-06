@@ -258,6 +258,11 @@ def run_pipeline(
                 if isinstance(column, str) and column.strip()
             )
 
+        new_row_color: str | None = None
+        raw_new_row_color = target_update_cfg.get("new_row_color")
+        if isinstance(raw_new_row_color, str) and raw_new_row_color.strip():
+            new_row_color = raw_new_row_color.strip()
+
         emit_progress("update_targets", "Update targets", "running", target_folder_path.name)
         log(f"Scan folder tujuan: {target_folder_path}")
         try:
@@ -269,6 +274,7 @@ def run_pipeline(
                 filter_column=filter_column,
                 filter_value=filter_value,
                 duplicate_key_columns=duplicate_key_columns,
+                new_row_color=new_row_color,
             )
         except ValueError as exc:
             raise PipelineError(str(exc)) from exc
