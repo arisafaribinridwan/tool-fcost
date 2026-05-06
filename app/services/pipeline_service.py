@@ -153,7 +153,11 @@ def run_pipeline(
         log(f"Read source: {source_path.name}")
         try:
             raw_header_row = config.get("source_header_row")
-            header_row = raw_header_row if isinstance(raw_header_row, int) and raw_header_row > 0 else None
+            header_row = (
+                raw_header_row
+                if isinstance(raw_header_row, int) and raw_header_row > 0
+                else None
+            )
             source_df = load_source_dataframe(
                 source_path,
                 source_sheet=str(source_sheet) if source_path.suffix.lower() == ".xlsx" else None,
@@ -226,6 +230,15 @@ def run_pipeline(
                 filter_column = raw_filter_column.strip()
                 filter_value = source_filter_cfg.get("equals")
 
+        duplicate_key_columns: tuple[str, ...] = ()
+        raw_duplicate_key_columns = target_update_cfg.get("duplicate_key_columns")
+        if isinstance(raw_duplicate_key_columns, list):
+            duplicate_key_columns = tuple(
+                str(column).strip()
+                for column in raw_duplicate_key_columns
+                if isinstance(column, str) and column.strip()
+            )
+
         emit_progress("update_targets", "Update targets", "running", target_folder_path.name)
         log(f"Scan folder tujuan: {target_folder_path}")
         try:
@@ -236,6 +249,7 @@ def run_pipeline(
                 target_sheet_name=target_sheet_name,
                 filter_column=filter_column,
                 filter_value=filter_value,
+                duplicate_key_columns=duplicate_key_columns,
             )
         except ValueError as exc:
             raise PipelineError(str(exc)) from exc

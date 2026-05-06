@@ -13,6 +13,10 @@ target_update:
   source_filter:
     column: "job_sheet_section"
     equals: 1
+  duplicate_key_columns:
+    - "notification"
+    - "model_series"
+    - "part_used"
 
 datasets:
   working_dataset: "result"
