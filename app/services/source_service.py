@@ -39,8 +39,9 @@ def load_source_dataframe(
     source_path: Path,
     *,
     source_sheet: str | None = None,
+    header_row: int | None = None,
 ) -> pd.DataFrame:
-    data_df = read_tabular_file(source_path, sheet_name=source_sheet)
+    data_df = read_tabular_file(source_path, sheet_name=source_sheet, header_row=header_row)
     if len(data_df.columns) == 0:
         raise ValueError(
             f"File source '{source_path.name}' kosong atau tidak memiliki kolom yang bisa dibaca."

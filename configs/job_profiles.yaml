@@ -1,4 +1,8 @@
 jobs:
+- id: autofill-raw
+  label: AUTOFILL RAW
+  config_file: monthly-report-recipe-autofill-raw.yaml
+  enabled: true
 - id: fcost-lcd-import
   label: FCOST LCD IMPORT
   config_file: monthly-report-recipe-lcd-import.yaml
@@ -6,10 +10,6 @@ jobs:
 - id: fcost-lcd-seid
   label: FCOST LCD SEID
   config_file: monthly-report-recipe.yaml
-  enabled: true
-- id: fcost-autofill-raw
-  label: FCOST AUTOFILL RAW
-  config_file: monthly-report-recipe-autofill-raw.yaml
   enabled: true
 - id: job-summary-result
   label: Job Summary Result
