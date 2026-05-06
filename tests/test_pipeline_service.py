@@ -2165,8 +2165,8 @@ def test_run_pipeline_supports_monthly_step_recipe_end_to_end(app_paths):
         pd.DataFrame([{"unused": "x"}]).to_excel(writer, index=False, sheet_name="panel_usage")
         pd.DataFrame(
             [
-                {"model_name": "ABC42ZZ", "factory": "Factory A"},
-                {"model_name": "LX32ZZ", "factory": "Factory B"},
+                {"model_name": "ABC42ZZ", "factory": "Factory A", "series": "ABC42 Series"},
+                {"model_name": "LX32ZZ", "factory": "Factory B", "series": "LX32 Series"},
             ]
         ).to_excel(writer, index=False, sheet_name="factory")
         pd.DataFrame(
@@ -2317,6 +2317,7 @@ def test_run_pipeline_supports_monthly_step_recipe_end_to_end(app_paths):
     assert detail_df["inch"].astype(str).tolist() == ["42", "42", "32", "32"]
     assert detail_df["panel_usage"].tolist() == ["< 1 Year", "< 1 Year", "2 - 3 Years", "2 - 3 Years"]
     assert detail_df["factory"].tolist() == ["Factory A", "Factory A", "Factory B", "Factory B"]
+    assert detail_df["model_series"].tolist() == ["ABC42 Series", "ABC42 Series", "LX32 Series", "LX32 Series"]
     assert detail_df["symptom"].tolist() == ["LINE", "TAPE_GENERIC", "BOOT", "POWER"]
     assert detail_df["branch"].tolist() == ["Jakarta", "Jakarta", "Jakarta", "Jakarta"]
     assert detail_df["action"].tolist() == [

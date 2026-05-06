@@ -1,2 +1,0 @@
-tolong tambahkan di job dan hasil kerja dari @job_summary untuk :
-- ubah hasil angka amount untuk labor cost, transportation cost, parts cost, dan total cost, fcost amount, sales amount, semua nilai tersebut /1000

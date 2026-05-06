@@ -58,6 +58,7 @@ datasets:
     - "part_name"
     - "panel_usage"
     - "factory"
+    - "model_series"
     - "symptom"
     - "action"
     - "defect_category"
@@ -507,6 +508,20 @@ steps:
       case_sensitive: true
     on_missing_match: "N/A"
 
+  - id: "sub_12a_add_model_series"
+    type: "lookup_exact"
+    source_column: "model_name"
+    target_column: "model_series"
+    master:
+      file: "masters/master_table.xlsx"
+      sheet: "factory"
+      key: "model_name"
+      value: "series"
+    matching:
+      trim: true
+      case_sensitive: true
+    on_missing_match: "N/A"
+
   - id: "sub_13_add_symptom"
     type: "lookup_rules"
     inputs:
@@ -707,6 +722,7 @@ outputs:
       - "part_name"
       - "panel_usage"
       - "factory"
+      - "model_series"
       - "symptom"
       - "action"
       - "defect_category"
