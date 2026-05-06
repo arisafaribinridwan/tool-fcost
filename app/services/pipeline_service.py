@@ -6,6 +6,8 @@ from pathlib import Path
 import re
 from time import perf_counter
 
+import pandas as pd
+
 from app import AppPaths
 from app.services.config_service import is_step_recipe_payload, load_config_payload
 from app.services.output_service import write_output_workbook
@@ -68,6 +70,23 @@ def _get_target_update_config(config: dict) -> dict | None:
     if target_cfg.get("enabled") is not True:
         return None
     return target_cfg
+
+
+def _build_update_summary_df(update_results: list) -> pd.DataFrame:
+    columns = ["file_name", "model_series", "status", "rows_written", "reason"]
+    return pd.DataFrame(
+        [
+            {
+                "file_name": item.file_name,
+                "model_series": item.model_series_key,
+                "status": item.status,
+                "rows_written": item.rows_written,
+                "reason": item.reason,
+            }
+            for item in update_results
+        ],
+        columns=columns,
+    )
 
 
 def run_pipeline(
@@ -277,6 +296,7 @@ def run_pipeline(
             "done",
             f"updated={updated_count}, skipped={skipped_count}, failed={failed_count}",
         )
+        output_sheets["update_summary"] = _build_update_summary_df(update_results)
 
     config_name = str(config.get("name", config_path.stem))
     output_base_name = output_name_override or config_name

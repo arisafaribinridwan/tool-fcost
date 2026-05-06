@@ -117,8 +117,16 @@ steps:
 outputs:
   - sheet_name: "autofill_preview"
     columns:
+      - "notification"
       - "model_series"
       - "job_sheet_section"
+      - "serial_number"
+      - "part_used"
+      - "part_name"
+      - "total_cost"
+      - "keydate"
+      - "branch"
+      - "warranty"
 
 styling:
   date_format: "YYYY-MM-DD"
