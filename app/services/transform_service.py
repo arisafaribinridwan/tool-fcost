@@ -159,6 +159,11 @@ def _matcher_matches(source_value: object, master_value: object, matcher_cfg: di
     raise ValueError(f"Mode matcher tidak didukung: '{mode}'.")
 
 
+def _get_legacy_symptom_source_columns(merged_df: pd.DataFrame) -> list[str]:
+    preferred_columns = ["symptom_comment", "repair_comment", "symptom_code_description"]
+    return [column for column in preferred_columns if column in merged_df.columns]
+
+
 def prepare_symptom_rule_table(master_df: pd.DataFrame, *, context: str) -> pd.DataFrame:
     required_columns = ["priority", "part_name", "match_type", "pattern", "symptom", "notes"]
     missing_columns = [column for column in required_columns if column not in master_df.columns]
@@ -616,7 +621,8 @@ def _apply_lookup_rules_master(
             master_df,
             context=f"Sheet symptom '{master_path.name}'",
         )
-        if "part_name" not in merged_df.columns or "symptom_comment" not in merged_df.columns:
+        source_columns = _get_legacy_symptom_source_columns(merged_df)
+        if "part_name" not in merged_df.columns or not source_columns:
             raise ValueError(
                 "Kolom source untuk symptom rules tidak ditemukan: part_name, symptom_comment"
             )
@@ -625,14 +631,19 @@ def _apply_lookup_rules_master(
         for _, source_row in merged_df.iterrows():
             resolved_value = on_missing_match
             source_part = _normalize_text_with_case(source_row["part_name"], case_sensitive=True)
-            for _, rule_row in symptom_rules.iterrows():
-                rule_part = _normalize_text_with_case(rule_row["part_name"], case_sensitive=True)
-                if source_part != rule_part:
-                    continue
-                if match_symptom_rule(source_row["symptom_comment"], rule_row):
-                    resolved_value = rule_row["symptom"]
-                    if first_match_wins:
-                        break
+            matched = False
+            for source_column in source_columns:
+                for _, rule_row in symptom_rules.iterrows():
+                    rule_part = _normalize_text_with_case(rule_row["part_name"], case_sensitive=True)
+                    if source_part != rule_part:
+                        continue
+                    if match_symptom_rule(source_row[source_column], rule_row):
+                        resolved_value = rule_row["symptom"]
+                        matched = True
+                        if first_match_wins:
+                            break
+                if matched:
+                    break
             output_values.append("" if pd.isna(resolved_value) else resolved_value)
 
         merged_df = merged_df.copy()

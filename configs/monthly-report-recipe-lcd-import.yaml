@@ -553,6 +553,8 @@ steps:
     inputs:
       - "part_name"
       - "symptom_comment"
+      - "repair_comment"
+      - "symptom_code_description"
     target_column: "symptom"
     master:
       file: "masters/master_table.xlsx"

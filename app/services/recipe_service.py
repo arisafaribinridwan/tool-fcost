@@ -886,6 +886,29 @@ def _validate_and_sort_lookup_rules_master(master_df: pd.DataFrame, step_cfg: di
     return result_df.drop(columns=["_row_order"]).reset_index(drop=True)
 
 
+def _get_symptom_source_columns(step_cfg: dict) -> list[str]:
+    inputs = step_cfg.get("inputs", [])
+    columns = [str(column) for column in inputs if str(column) != "part_name"]
+    return columns or ["symptom_comment"]
+
+
+def _resolve_symptom_from_sources(
+    source_row: pd.Series,
+    symptom_rules: pd.DataFrame,
+    source_columns: list[str],
+    on_missing: object,
+) -> object:
+    source_part = _normalize_text(source_row["part_name"], case_sensitive=True)
+    for source_column in source_columns:
+        for _, master_row in symptom_rules.iterrows():
+            rule_part = _normalize_text(master_row["part_name"], case_sensitive=True)
+            if source_part != rule_part:
+                continue
+            if match_symptom_rule(source_row[source_column], master_row):
+                return master_row["symptom"]
+    return on_missing
+
+
 def _apply_lookup_rules_step(data_df: pd.DataFrame, step_cfg: dict, context: _RecipeContext, log: LogFn) -> pd.DataFrame:
     master_cfg = step_cfg["master"]
     master_df = context.load_master_sheet(str(master_cfg["file"]), str(master_cfg["sheet"]))
@@ -914,24 +937,26 @@ def _apply_lookup_rules_step(data_df: pd.DataFrame, step_cfg: dict, context: _Re
             master_df,
             context=f"Sheet symptom '{master_cfg['sheet']}' pada step '{step_cfg['id']}'",
         )
-        if "part_name" not in data_df.columns or "symptom_comment" not in data_df.columns:
+        source_columns = _get_symptom_source_columns(step_cfg)
+        required_columns = ["part_name", *source_columns]
+        missing_columns = [column for column in required_columns if column not in data_df.columns]
+        if missing_columns:
             raise ValueError(
-                f"Step '{step_cfg['id']}' gagal, kolom source untuk symptom rules tidak lengkap."
+                f"Step '{step_cfg['id']}' gagal, kolom source untuk symptom rules tidak ditemukan: "
+                + ", ".join(missing_columns)
             )
 
         results: list[object] = []
         on_missing = step_cfg.get("on_missing_match")
         for _, source_row in data_df.iterrows():
-            resolved = on_missing
-            source_part = _normalize_text(source_row["part_name"], case_sensitive=True)
-            for _, master_row in symptom_rules.iterrows():
-                rule_part = _normalize_text(master_row["part_name"], case_sensitive=True)
-                if source_part != rule_part:
-                    continue
-                if match_symptom_rule(source_row["symptom_comment"], master_row):
-                    resolved = master_row["symptom"]
-                    break
-            results.append(resolved)
+            results.append(
+                _resolve_symptom_from_sources(
+                    source_row=source_row,
+                    symptom_rules=symptom_rules,
+                    source_columns=source_columns,
+                    on_missing=on_missing,
+                )
+            )
 
         result_df = data_df.copy()
         result_df[target_column] = results
