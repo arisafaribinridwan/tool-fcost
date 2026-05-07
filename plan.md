@@ -185,3 +185,420 @@ target_update:
 - **Kolom header (baris 1) tidak disentuh** — clear dimulai dari `min_row=2`.
 - **Performa**: untuk file target dengan ratusan ribu baris, iterasi seluruh baris untuk reset fill bisa lambat. Jika jadi masalah, bisa diganti dengan hanya reset baris-baris yang sebelumnya punya fill (openpyxl track ini via `cell.fill.fill_type`).
 - **Tidak ada perubahan pada `output_service.py`** — highlight ini di file *target*, bukan di file output preview.
+
+---
+
+# Plan: Upgrade Pembacaan Symptom dengan Fallback Source Columns
+
+## Ide
+
+Saat ini kolom `symptom` hanya ditentukan dari kombinasi:
+
+1. `part_name`
+2. `symptom_comment`
+
+Akibatnya, rule master `symptom` seperti `PANEL + regex blank` tidak akan match jika kata `blank` hanya muncul di kolom lain, misalnya `repair_comment` atau `symptom_code_description`.
+
+Upgrade yang diinginkan adalah membuat pembacaan symptom mencoba beberapa kolom secara berurutan:
+
+1. `symptom_comment`
+2. `repair_comment`
+3. `symptom_code_description`
+
+Dengan urutan ini, behavior lama tetap diprioritaskan. `repair_comment` menjadi fallback kedua karena sering memuat kata kunci hasil perbaikan seperti `BLANK`, sedangkan `symptom_code_description` menjadi fallback terakhir.
+
+---
+
+## Prinsip Matching yang Direkomendasikan
+
+Urutan fallback harus memakai pola **kolom dulu, rule priority kemudian**:
+
+```text
+Untuk setiap baris source:
+  cocokkan part_name dengan rule master symptom
+  coba semua rule berdasarkan priority terhadap symptom_comment
+  kalau belum ada hasil, coba semua rule berdasarkan priority terhadap repair_comment
+  kalau belum ada hasil, coba semua rule berdasarkan priority terhadap symptom_code_description
+  kalau tetap belum ada hasil, pakai on_missing_match
+```
+
+Dengan pola ini:
+
+- Match dari `symptom_comment` selalu menang atas match dari `repair_comment` atau `symptom_code_description`.
+- Match dari `repair_comment` selalu menang atas match dari `symptom_code_description`.
+- Priority master tetap berlaku, tetapi hanya di dalam kolom fallback yang sedang dicoba.
+- Risiko false positive tetap dikontrol karena `repair_comment` hanya dipakai jika `symptom_comment` belum menghasilkan match.
+
+Contoh penting:
+
+```text
+part_name = PANEL
+symptom_comment = vertical line
+repair_comment = UNIT-PANEL-GANTI-BLANK
+```
+
+Jika `symptom_comment` match rule `LINE`, hasil tetap `LINE`, bukan `BLANK`, walaupun `repair_comment` mengandung `BLANK`.
+
+---
+
+## File yang Diubah
+
+| File | Perubahan |
+|------|-----------|
+| `app/services/recipe_service.py` | Ubah special handling symptom rules supaya bisa membaca fallback columns dari `inputs`. |
+| `app/services/transform_service.py` | Update jalur legacy `lookup_rules` symptom supaya behavior konsisten dengan recipe. |
+| `configs/monthly-report-recipe.yaml` | Tambah `repair_comment` dan `symptom_code_description` ke `inputs` step `sub_13_add_symptom`. |
+| `configs/monthly-report-recipe-lcd-import.yaml` | Tambah input fallback yang sama untuk job LCD import. |
+| `docs/monthly-report-recipe.yaml` dan/atau `docs/done/monthly-report-recipe.yaml` | Opsional, sinkronisasi dokumentasi recipe jika masih dipakai sebagai referensi. |
+| `tests/test_symptom_rules.py` | Tambah test fallback dari `repair_comment` dan `symptom_code_description`, plus test prioritas fallback. |
+| `tests/test_pipeline_service.py` | Opsional, tambah coverage end-to-end pada recipe monthly report jika perlu. |
+
+---
+
+## Langkah Implementasi
+
+### 1. Update YAML recipe runtime
+
+Di step `sub_13_add_symptom`, ubah `inputs` dari:
+
+```yaml
+inputs:
+  - "part_name"
+  - "symptom_comment"
+```
+
+menjadi:
+
+```yaml
+inputs:
+  - "part_name"
+  - "symptom_comment"
+  - "repair_comment"
+  - "symptom_code_description"
+```
+
+File yang perlu diubah:
+
+- `configs/monthly-report-recipe.yaml`
+- `configs/monthly-report-recipe-lcd-import.yaml`
+
+Catatan:
+
+- Tidak perlu mengubah struktur sheet master `symptom`.
+- Tidak perlu menambah kolom baru di master `symptom`.
+- Matcher YAML existing boleh tetap seperti sekarang karena jalur special symptom rules memakai `priority`, `part_name`, `match_type`, `pattern`, dan `symptom` dari master.
+
+---
+
+### 2. Tambah helper untuk mengambil fallback columns di `recipe_service.py`
+
+Tambahkan helper kecil, misalnya dekat fungsi `_apply_lookup_rules_step`:
+
+```python
+def _get_symptom_source_columns(step_cfg: dict) -> list[str]:
+    inputs = [str(column) for column in step_cfg.get("inputs", [])]
+    columns = [column for column in inputs if column != "part_name"]
+    return columns or ["symptom_comment"]
+```
+
+Tujuannya:
+
+- `inputs` menjadi sumber konfigurasi urutan fallback.
+- Jika config lama hanya punya `symptom_comment`, behavior tetap sama.
+- Jika karena alasan tertentu `inputs` tidak berisi kolom selain `part_name`, fallback default tetap `symptom_comment`.
+
+---
+
+### 3. Tambah helper matching fallback di `recipe_service.py`
+
+Tambahkan helper agar logic utama tetap pendek:
+
+```python
+def _resolve_symptom_from_sources(
+    source_row: pd.Series,
+    symptom_rules: pd.DataFrame,
+    source_columns: list[str],
+    on_missing: object,
+) -> object:
+    source_part = _normalize_text(source_row["part_name"], case_sensitive=True)
+
+    for source_column in source_columns:
+        source_value = source_row[source_column]
+        for _, master_row in symptom_rules.iterrows():
+            rule_part = _normalize_text(master_row["part_name"], case_sensitive=True)
+            if source_part != rule_part:
+                continue
+            if match_symptom_rule(source_value, master_row):
+                return master_row["symptom"]
+
+    return on_missing
+```
+
+Poin penting:
+
+- Loop luar adalah `source_columns`, bukan `symptom_rules`.
+- Ini menjaga fallback order tetap lebih kuat daripada priority lintas-kolom.
+- Priority tetap berlaku karena `symptom_rules` sudah disortir oleh `prepare_symptom_rule_table`.
+
+---
+
+### 4. Ubah blok special symptom rules di `_apply_lookup_rules_step`
+
+Blok saat ini hardcoded membutuhkan dan membaca `symptom_comment`.
+
+Ubah validasi dari konsep:
+
+```python
+if "part_name" not in data_df.columns or "symptom_comment" not in data_df.columns:
+    raise ValueError(...)
+```
+
+menjadi:
+
+```python
+source_columns = _get_symptom_source_columns(step_cfg)
+required_columns = ["part_name", *source_columns]
+missing_columns = [column for column in required_columns if column not in data_df.columns]
+if missing_columns:
+    raise ValueError(
+        f"Step '{step_cfg['id']}' gagal, kolom source untuk symptom rules tidak ditemukan: "
+        + ", ".join(missing_columns)
+    )
+```
+
+Lalu ubah loop resolve dari:
+
+```python
+for _, source_row in data_df.iterrows():
+    resolved = on_missing
+    source_part = _normalize_text(source_row["part_name"], case_sensitive=True)
+    for _, master_row in symptom_rules.iterrows():
+        ...
+        if match_symptom_rule(source_row["symptom_comment"], master_row):
+            resolved = master_row["symptom"]
+            break
+    results.append(resolved)
+```
+
+menjadi:
+
+```python
+for _, source_row in data_df.iterrows():
+    results.append(
+        _resolve_symptom_from_sources(
+            source_row=source_row,
+            symptom_rules=symptom_rules,
+            source_columns=source_columns,
+            on_missing=on_missing,
+        )
+    )
+```
+
+---
+
+### 5. Update jalur legacy di `transform_service.py`
+
+Ada logic legacy `lookup_rules` untuk sheet `symptom` yang juga hardcoded ke `symptom_comment`.
+
+Agar konsisten, tambahkan helper serupa atau helper lokal di `transform_service.py`:
+
+```python
+def _get_legacy_symptom_source_columns(merged_df: pd.DataFrame) -> list[str]:
+    preferred_columns = ["symptom_comment", "repair_comment", "symptom_code_description"]
+    return [column for column in preferred_columns if column in merged_df.columns]
+```
+
+Lalu update validasi:
+
+```python
+source_columns = _get_legacy_symptom_source_columns(merged_df)
+if "part_name" not in merged_df.columns or not source_columns:
+    raise ValueError(
+        "Kolom source untuk symptom rules tidak ditemukan: part_name, symptom_comment"
+    )
+```
+
+Dan gunakan fallback order yang sama:
+
+```python
+for _, source_row in merged_df.iterrows():
+    resolved_value = on_missing_match
+    source_part = _normalize_text_with_case(source_row["part_name"], case_sensitive=True)
+
+    for source_column in source_columns:
+        for _, rule_row in symptom_rules.iterrows():
+            rule_part = _normalize_text_with_case(rule_row["part_name"], case_sensitive=True)
+            if source_part != rule_part:
+                continue
+            if match_symptom_rule(source_row[source_column], rule_row):
+                resolved_value = rule_row["symptom"]
+                break
+        if resolved_value != on_missing_match:
+            break
+
+    output_values.append("" if pd.isna(resolved_value) else resolved_value)
+```
+
+Catatan:
+
+- Jika legacy config/source hanya punya `symptom_comment`, hasil tetap sama seperti sebelumnya.
+- Kalau `repair_comment` dan `symptom_code_description` tersedia, otomatis dipakai sebagai fallback sesuai urutan tersebut.
+
+---
+
+## Test Plan
+
+### 1. Test fallback dari `repair_comment`
+
+Tambahkan test di `tests/test_symptom_rules.py` atau pipeline-level test:
+
+```text
+Source:
+part_name = PANEL
+symptom_comment = ""
+symptom_code_description = ""
+repair_comment = "UNIT-PANEL-GANTI-BLANK"
+
+Master symptom:
+priority = 10
+part_name = PANEL
+match_type = regex
+pattern = blank
+symptom = BLANK
+
+Expected:
+symptom = BLANK
+```
+
+Tujuan: memastikan case awal yang dibahas sudah ter-cover.
+
+---
+
+### 2. Test fallback dari `symptom_code_description`
+
+```text
+Source:
+part_name = PANEL
+symptom_comment = ""
+repair_comment = ""
+symptom_code_description = "no picture"
+
+Master symptom:
+pattern = no picture|blank
+symptom = BLANK
+
+Expected:
+symptom = BLANK
+```
+
+Tujuan: memastikan kolom `symptom_code_description` tetap dipakai sebagai fallback terakhir.
+
+---
+
+### 3. Test `symptom_comment` tetap menang atas `repair_comment`
+
+```text
+Source:
+part_name = PANEL
+symptom_comment = "vertical line"
+repair_comment = "UNIT-PANEL-GANTI-BLANK"
+symptom_code_description = "no picture"
+
+Master symptom:
+priority 10: pattern = blank, symptom = BLANK
+priority 20: pattern = line, symptom = LINE
+priority 30: pattern = no picture, symptom = NO_PICTURE
+
+Expected:
+symptom = LINE
+```
+
+Tujuan: membuktikan `symptom_comment` tetap menjadi sumber paling prioritas walaupun kolom fallback lain juga match.
+
+---
+
+### 4. Test priority tetap berlaku di dalam kolom yang sama
+
+```text
+Source:
+part_name = PANEL
+symptom_comment = "vertical line"
+
+Master symptom:
+priority 10: pattern = vertical line, symptom = VERTICAL_LINE
+priority 20: pattern = line, symptom = LINE
+
+Expected:
+symptom = VERTICAL_LINE
+```
+
+Tujuan: memastikan behavior priority existing tidak rusak.
+
+---
+
+### 5. Test backward compatibility
+
+```text
+Config inputs hanya:
+- part_name
+- symptom_comment
+
+Source hanya punya:
+- part_name
+- symptom_comment
+
+Expected:
+matching tetap berjalan seperti behavior lama.
+```
+
+Tujuan: memastikan config lama tidak wajib langsung diubah.
+
+---
+
+## Acceptance Criteria
+
+Implementasi dianggap selesai jika:
+
+- Data `part_name=PANEL` dengan `repair_comment=UNIT-PANEL-GANTI-BLANK` menghasilkan `symptom=BLANK` saat `symptom_comment` tidak menghasilkan match.
+- Data `part_name=PANEL` dengan `symptom_code_description` berisi `no picture` atau `blank` menghasilkan `symptom=BLANK` jika `symptom_comment` dan `repair_comment` tidak match.
+- Jika `symptom_comment` sudah match rule tertentu, hasil dari `repair_comment` atau `symptom_code_description` tidak boleh menimpa hasil tersebut.
+- Jika `repair_comment` sudah match rule tertentu, hasil dari `symptom_code_description` tidak boleh menimpa hasil tersebut.
+- Priority master symptom tetap berjalan di dalam masing-masing kolom fallback.
+- Config lama yang hanya memakai `symptom_comment` tetap valid.
+- `python -m pytest tests/test_symptom_rules.py -q` berhasil.
+- Jika memungkinkan, `python -m pytest -q` berhasil.
+
+---
+
+## Risiko dan Mitigasi
+
+| Risiko | Mitigasi |
+|--------|----------|
+| `repair_comment` mengandung kata action/part yang bisa false positive. | Pakai `repair_comment` hanya setelah `symptom_comment` gagal match, dan tambah test agar tidak menimpa hasil dari `symptom_comment`. |
+| Priority master mengalahkan fallback order jika loop salah. | Pastikan loop luar adalah source column, loop dalam adalah sorted rules. |
+| Config lama rusak karena input tambahan belum ada. | Helper fallback default tetap `symptom_comment`. |
+| Legacy config dan recipe config berbeda behavior. | Update `recipe_service.py` dan `transform_service.py` secara konsisten. |
+| Test existing berubah karena fallback membaca kolom ekstra. | Tambahkan test eksplisit untuk fallback order dan backward compatibility. |
+
+---
+
+## Out of Scope untuk Implementasi Awal
+
+- Mengubah struktur sheet master `symptom`.
+- Menambahkan kolom khusus seperti `source_column` di master symptom.
+- Membuat UI setting untuk mengatur fallback order.
+- Mengubah rule master existing selain jika nanti ditemukan rule yang terlalu luas.
+- Menggabungkan semua kolom source menjadi satu string karena itu lebih berisiko membuat false positive.
+
+---
+
+## Estimasi Perubahan
+
+Perubahan ini termasuk **minor-to-medium**:
+
+- Minor dari sisi arsitektur karena tidak mengubah pipeline besar, format output, atau master schema.
+- Medium dari sisi kehati-hatian karena matching symptom mempengaruhi hasil bisnis dan perlu test fallback order yang jelas.
+
+Estimasi file kode inti yang berubah: 2 file.
+Estimasi config runtime yang berubah: 2 file.
+Estimasi test baru: 3-5 test.
