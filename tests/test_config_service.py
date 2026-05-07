@@ -145,6 +145,7 @@ def test_validate_config_payload_accepts_lookup_rules_master():
                             "normalize": {
                                 "trim": True,
                                 "case_sensitive": False,
+                                "wildcard_value": ".*",
                                 "blank_as_wildcard": True,
                             },
                         },
@@ -212,7 +213,7 @@ def test_validate_config_payload_rejects_invalid_lookup_rules_master_matching():
                             "source": "part_name",
                             "master": "part_name",
                             "mode": "equals",
-                            "normalize": {"trim": "yes"},
+                            "normalize": {"trim": "yes", "wildcard_value": ""},
                         }
                     ],
                 },
@@ -225,6 +226,11 @@ def test_validate_config_payload_rejects_invalid_lookup_rules_master_matching():
     assert any("masters[0].matching.order harus salah satu" in item for item in errors)
     assert any(
         "masters[0].matching.matchers[0].normalize.trim harus berupa boolean." in item
+        for item in errors
+    )
+    assert any(
+        "masters[0].matching.matchers[0].normalize.wildcard_value harus berupa string non-kosong."
+        in item
         for item in errors
     )
 

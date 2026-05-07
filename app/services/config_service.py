@@ -287,6 +287,7 @@ def _validate_matching_config(
                         "trim",
                         "case_sensitive",
                         "wildcard",
+                        "wildcard_value",
                         "blank_as_wildcard",
                         "alternative_separator",
                     }
@@ -309,6 +310,13 @@ def _validate_matching_config(
                             errors.append(
                                 f"{matcher_path}.normalize.{str_key} harus berupa string."
                             )
+                    if "wildcard_value" in normalize_cfg and (
+                        not isinstance(normalize_cfg.get("wildcard_value"), str)
+                        or not normalize_cfg.get("wildcard_value", "").strip()
+                    ):
+                        errors.append(
+                            f"{matcher_path}.normalize.wildcard_value harus berupa string non-kosong."
+                        )
 
     if "order" in matching:
         order = matching.get("order")

@@ -828,6 +828,11 @@ def _matcher_matches(source_value: object, master_value: object, matcher_cfg: di
 
     mode = str(matcher_cfg["mode"])
     if mode == "equals":
+        wildcard_value = normalize_cfg.get("wildcard_value")
+        if isinstance(wildcard_value, str):
+            wildcard_normalized = _normalize_with_options(wildcard_value, normalize_cfg)
+            if wildcard_normalized and master_normalized == wildcard_normalized:
+                return True
         return source_normalized == master_normalized
     if mode == "contains":
         wildcard = str(normalize_cfg.get("wildcard", "*"))

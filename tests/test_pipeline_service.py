@@ -79,6 +79,7 @@ def _write_action_lookup_rules_step_recipe(path: Path, *, priority_column: str |
         "          normalize:",
         "            trim: true",
         "            case_sensitive: false",
+        '            wildcard_value: ".*"',
         '        - source: "symptom_comment"',
         '          master: "symptom_comment"',
         '          mode: "regex"',
@@ -1550,6 +1551,7 @@ def test_run_pipeline_supports_lookup_rules_master_for_action(app_paths):
             {"part_name": "panel", "repair_comment": "replace unit"},
             {"part_name": "MAIN_UNIT", "repair_comment": "UPGRADE firmware"},
             {"part_name": "Other", "repair_comment": "dibawa customer"},
+            {"part_name": "speaker", "repair_comment": "other repair"},
             {"part_name": "Other", "repair_comment": "unknown"},
         ]
     ).to_csv(source_path, index=False)
@@ -1567,6 +1569,7 @@ def test_run_pipeline_supports_lookup_rules_master_for_action(app_paths):
                 },
                 {"part_name": None, "repair_comment": "*bawa", "action": "ZY"},
                 {"part_name": None, "repair_comment": "UPGRADE", "action": "upgrade"},
+                {"part_name": ".*", "repair_comment": "*other", "action": "generic"},
             ]
         ).to_excel(writer, index=False, sheet_name="action")
 
@@ -1595,6 +1598,7 @@ def test_run_pipeline_supports_lookup_rules_master_for_action(app_paths):
                 "          normalize:",
                 "            trim: true",
                 "            case_sensitive: false",
+                '            wildcard_value: ".*"',
                 "            blank_as_wildcard: true",
                 '        - source: "repair_comment"',
                 '          master: "repair_comment"',
@@ -1628,6 +1632,7 @@ def test_run_pipeline_supports_lookup_rules_master_for_action(app_paths):
         "replace_panel",
         "replace_main_unit",
         "ZY",
+        "generic",
         "",
     ]
 
@@ -2406,6 +2411,68 @@ def test_run_pipeline_lookup_rules_step_recipe_supports_regex_and_priority_order
 
     detail_df = pd.read_excel(result.output_path, sheet_name="result", skiprows=3, keep_default_na=False)
     assert detail_df["action"].tolist() == ["PRIORITY_WINNER", "REPAIR_PANEL", "", ""]
+
+
+def test_run_pipeline_lookup_rules_step_recipe_supports_equals_wildcard_value(app_paths):
+    source_path = app_paths.project_root / "source.xlsx"
+    pd.DataFrame(
+        [
+            {
+                "job_sheet_section": 1,
+                "part_name": "MAIN_UNIT",
+                "symptom_comment": "any symptom",
+                "repair_comment": "any repair",
+            },
+            {
+                "job_sheet_section": 1,
+                "part_name": "",
+                "symptom_comment": "any symptom",
+                "repair_comment": "any repair",
+            },
+            {
+                "job_sheet_section": 0,
+                "part_name": "PANEL",
+                "symptom_comment": "any symptom",
+                "repair_comment": "any repair",
+            },
+        ]
+    ).to_excel(source_path, index=False, sheet_name="Data")
+
+    master_path = app_paths.masters_dir / "master_table.xlsx"
+    with pd.ExcelWriter(master_path) as writer:
+        pd.DataFrame(
+            [
+                {
+                    "priority": 10,
+                    "job_sheet_section": 1,
+                    "part_name": None,
+                    "symptom_comment": ".*",
+                    "repair_comment": ".*",
+                    "action": "BLANK_ONLY",
+                },
+                {
+                    "priority": 20,
+                    "job_sheet_section": 1,
+                    "part_name": ".*",
+                    "symptom_comment": ".*",
+                    "repair_comment": ".*",
+                    "action": "ANY_PART",
+                },
+            ]
+        ).to_excel(writer, index=False, sheet_name="action")
+
+    config_path = app_paths.configs_dir / "action_step_recipe_wildcard_value.yaml"
+    _write_action_lookup_rules_step_recipe(config_path)
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _: None,
+    )
+
+    detail_df = pd.read_excel(result.output_path, sheet_name="result", skiprows=3, keep_default_na=False)
+    assert detail_df["action"].tolist() == ["ANY_PART", "BLANK_ONLY", ""]
 
 
 def test_run_pipeline_lookup_rules_step_recipe_raises_for_invalid_regex(app_paths):

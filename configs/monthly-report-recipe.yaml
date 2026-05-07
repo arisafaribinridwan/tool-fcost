@@ -592,6 +592,7 @@ steps:
           normalize:
             trim: true
             case_sensitive: false
+            wildcard_value: ".*"
         - source: "symptom_comment"
           master: "symptom_comment"
           mode: "regex"
