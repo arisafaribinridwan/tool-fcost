@@ -445,6 +445,9 @@ steps:
           - priority: 380
             parts_signature: ["HARNESS", "MAIN_UNIT", "POWER_UNIT"]
             winner_part_name: "MAIN_UNIT"
+          - priority: 390
+            parts_signature: ["IC", "PANEL", "TAPE"]
+            winner_part_name: "PANEL"
         winner_updates:
           "job_sheet_section":
             set: 1
