@@ -459,6 +459,18 @@ steps:
           - priority: 390
             parts_signature: ["LVDS_WIRE", "MAIN_UNIT"]
             winner_part_name: "MAIN_UNIT"
+          - priority: 400
+            parts_signature: ["LED_BAR", "PANEL", "TAPE"]
+            winner_part_name: "PANEL"
+          - priority: 410
+            parts_signature: ["LED_BAR", "REFLECTOR_SHEET", "TAPE"]
+            winner_part_name: "LED_BAR"
+          - priority: 420
+            parts_signature: ["MAIN_UNIT", "TAPE", "TCON_UNIT"]
+            winner_part_name: "MAIN_UNIT"
+          - priority: 430
+            parts_signature: ["HARNESS", "MAIN_UNIT", "POWER_UNIT"]
+            winner_part_name: "MAIN_UNIT"
         winner_updates:
           "job_sheet_section":
             set: 1

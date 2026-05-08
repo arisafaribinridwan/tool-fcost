@@ -190,11 +190,11 @@ outputs:
         amount_scale_factor: 1000
         formula_source_sheet: "result"
         formula_section_ref: "$W:$W"
-        formula_part_ref: "$AB:$AB"
+        formula_part_ref: "$AC:$AC"
         formula_labor_ref: "$S:$S"
         formula_transportation_ref: "$T:$T"
         formula_parts_ref: "$U:$U"
-        formula_total_ref: "$Z:$Z"
+        formula_total_ref: "$AA:$AA"
         combined_sections:
           - name: "ALL"
             source_sections:
