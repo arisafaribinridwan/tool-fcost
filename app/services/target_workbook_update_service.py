@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 
 import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
+from openpyxl.worksheet.table import Table, TableStyleInfo
+from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
 
@@ -27,15 +30,47 @@ def _normalize_key(value: object) -> str:
     return text.casefold()
 
 
-def _get_target_excel_files(target_dir: Path) -> list[Path]:
-    return sorted(
-        [
-            path
-            for path in target_dir.iterdir()
-            if path.is_file() and path.suffix.lower() == ".xlsx"
-        ],
-        key=lambda item: item.name.casefold(),
-    )
+_ORDER_PREFIX_PATTERN = re.compile(r"^\s*(\d+)\s*[-_]\s*(.+?)\s*$")
+
+
+def _split_order_prefix(stem: str) -> tuple[int | None, str]:
+    match = _ORDER_PREFIX_PATTERN.match(stem)
+    if match is None:
+        return None, stem
+    return int(match.group(1)), match.group(2).strip()
+
+
+def _get_target_excel_files(
+    target_dir: Path,
+    *,
+    strip_order_prefix: bool = False,
+) -> list[Path]:
+    target_files = [
+        path
+        for path in target_dir.iterdir()
+        if path.is_file() and path.suffix.lower() == ".xlsx"
+    ]
+    if not strip_order_prefix:
+        return sorted(target_files, key=lambda item: item.name.casefold())
+
+    def sort_key(path: Path) -> tuple[int, int, str]:
+        order_number, model_stem = _split_order_prefix(path.stem)
+        if order_number is None:
+            return (1, 0, path.name.casefold())
+        return (0, order_number, model_stem.casefold())
+
+    return sorted(target_files, key=sort_key)
+
+
+def _get_target_model_series_key(
+    target_file: Path,
+    *,
+    strip_order_prefix: bool,
+) -> str:
+    stem = target_file.stem
+    if strip_order_prefix:
+        _, stem = _split_order_prefix(stem)
+    return _normalize_key(stem)
 
 
 def _normalize_filter_value(value: object) -> str:
@@ -135,6 +170,63 @@ def _apply_row_fill(
         worksheet.cell(row=row_index, column=column_index).fill = fill
 
 
+def _get_worksheet_table_by_name(worksheet: Worksheet, table_name: str) -> Table | None:
+    table = worksheet.tables.get(table_name)
+    return table if isinstance(table, Table) else None
+
+
+def _workbook_has_table_name_outside_sheet(
+    worksheet: Worksheet,
+    *,
+    table_name: str,
+) -> bool:
+    workbook = worksheet.parent
+    for other_worksheet in workbook.worksheets:
+        if other_worksheet is worksheet:
+            continue
+        if table_name in other_worksheet.tables:
+            return True
+    return False
+
+
+def _ensure_excel_table(
+    worksheet: Worksheet,
+    *,
+    table_name: str,
+    column_count: int,
+    create_if_missing: bool,
+) -> None:
+    if not table_name:
+        return
+    if column_count < 1 or worksheet.max_row < 2:
+        return
+
+    last_column_letter = get_column_letter(column_count)
+    table_ref = f"A1:{last_column_letter}{worksheet.max_row}"
+    table = _get_worksheet_table_by_name(worksheet, table_name)
+    if table is not None:
+        table.ref = table_ref
+        return
+
+    if not create_if_missing:
+        return
+
+    if _workbook_has_table_name_outside_sheet(worksheet, table_name=table_name):
+        raise ValueError(
+            f"Nama table '{table_name}' sudah dipakai di sheet lain pada workbook target."
+        )
+
+    table = Table(displayName=table_name, ref=table_ref)
+    table.tableStyleInfo = TableStyleInfo(
+        name="TableStyleMedium2",
+        showFirstColumn=False,
+        showLastColumn=False,
+        showRowStripes=True,
+        showColumnStripes=False,
+    )
+    worksheet.add_table(table)
+
+
 def update_target_workbooks_by_model_series(
     *,
     data_df: pd.DataFrame,
@@ -145,6 +237,9 @@ def update_target_workbooks_by_model_series(
     filter_value: object | None = None,
     duplicate_key_columns: tuple[str, ...] = (),
     new_row_color: str | None = None,
+    strip_order_prefix: bool = False,
+    table_name: str | None = None,
+    create_table_if_missing: bool = False,
 ) -> list[TargetFileUpdateResult]:
     if not target_dir.exists() or not target_dir.is_dir():
         raise ValueError("Folder tujuan tidak ditemukan atau bukan folder.")
@@ -166,7 +261,10 @@ def update_target_workbooks_by_model_series(
         )
         data_df = data_df.loc[filter_mask].copy()
 
-    target_files = _get_target_excel_files(target_dir)
+    target_files = _get_target_excel_files(
+        target_dir,
+        strip_order_prefix=strip_order_prefix,
+    )
     if not target_files:
         raise ValueError("Folder tujuan tidak memiliki file .xlsx untuk diproses.")
 
@@ -174,7 +272,10 @@ def update_target_workbooks_by_model_series(
     normalized_series = data_df[match_column].map(_normalize_key)
 
     for target_file in target_files:
-        key = _normalize_key(target_file.stem)
+        key = _get_target_model_series_key(
+            target_file,
+            strip_order_prefix=strip_order_prefix,
+        )
         if not key:
             results.append(
                 TargetFileUpdateResult(
@@ -235,6 +336,14 @@ def update_target_workbooks_by_model_series(
                     duplicate_key_columns=duplicate_key_columns,
                 )
                 if matched_df.empty:
+                    if table_name:
+                        _ensure_excel_table(
+                            worksheet,
+                            table_name=table_name,
+                            column_count=len(target_columns),
+                            create_if_missing=create_table_if_missing,
+                        )
+                        workbook.save(target_file)
                     workbook.close()
                     results.append(
                         TargetFileUpdateResult(
@@ -266,6 +375,14 @@ def update_target_workbooks_by_model_series(
                         column_count=len(target_columns),
                         color=new_row_color,
                     )
+
+            if table_name:
+                _ensure_excel_table(
+                    worksheet,
+                    table_name=table_name,
+                    column_count=len(target_columns),
+                    create_if_missing=create_table_if_missing,
+                )
 
             workbook.save(target_file)
             workbook.close()
