@@ -474,6 +474,42 @@ steps:
           - priority: 440
             parts_signature: ["IC", "PANEL", "TAPE"]
             winner_part_name: "PANEL"
+          - priority: 450
+            parts_signature: ["LVDS_WIRE", "TCON_UNIT"]
+            winner_part_name: "TCON_UNIT"
+          - priority: 470
+            parts_signature: ["LED_BAR", "LIGHT_GUIDE_PLATE"]
+            winner_part_name: "LIGHT_GUIDE_PLATE"
+          - priority: 480
+            parts_signature: ["MAIN_UNIT", "TCON_UNIT"]
+            winner_part_name: "MAIN_UNIT"
+          - priority: 490
+            parts_signature: ["FFC_WIRE", "PANEL", "TAPE", "TCON_UNIT"]
+            winner_part_name: "PANEL"
+          - priority: 500
+            parts_signature: ["LVDS_WIRE", "PANEL", "TAPE"]
+            winner_part_name: "PANEL"
+          - priority: 510
+            parts_signature: ["FFC_WIRE", "PANEL", "TAPE", "TCON_UNIT"]
+            winner_part_name: "PANEL"
+          - priority: 520
+            parts_signature: ["PANEL", "REFLECTOR_SHEET", "TAPE"]
+            winner_part_name: "PANEL"
+          - priority: 530
+            parts_signature: ["IC", "MAIN_UNIT"]
+            winner_part_name: "MAIN_UNIT"
+          - priority: 540
+            parts_signature: ["LVDS_WIRE", "TCON_UNIT"]
+            winner_part_name: "TCON_UNIT"
+          - priority: 550
+            parts_signature: ["LIGHT_GUIDE_PLATE", "MAIN_UNIT"]
+            winner_part_name: "MAIN_UNIT"
+          - priority: 560
+            parts_signature: ["FFC_WIRE", "PANEL"]
+            winner_part_name: "PANEL"
+          - priority: 570
+            parts_signature: ["MAIN_UNIT", "TCON_UNIT"]
+            winner_part_name: "MAIN_UNIT"
         winner_updates:
           "job_sheet_section":
             set: 1
