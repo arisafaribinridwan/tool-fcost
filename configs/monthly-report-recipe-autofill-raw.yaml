@@ -10,6 +10,12 @@ target_update:
   enabled: true
   match_column: "model_series"
   sheet_name: "raw"
+  filename_order_prefix:
+    enabled: true
+  excel_table:
+    enabled: true
+    name: "RawData"
+    create_if_missing: true
   new_row_color: "E2EFDA"
   source_filter:
     column: "job_sheet_section"

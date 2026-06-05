@@ -263,6 +263,23 @@ def run_pipeline(
         if isinstance(raw_new_row_color, str) and raw_new_row_color.strip():
             new_row_color = raw_new_row_color.strip()
 
+        filename_order_prefix_cfg = target_update_cfg.get("filename_order_prefix")
+        strip_order_prefix = (
+            isinstance(filename_order_prefix_cfg, dict)
+            and filename_order_prefix_cfg.get("enabled") is True
+        )
+
+        table_name: str | None = None
+        create_table_if_missing = False
+        excel_table_cfg = target_update_cfg.get("excel_table")
+        if isinstance(excel_table_cfg, dict) and excel_table_cfg.get("enabled") is True:
+            raw_table_name = excel_table_cfg.get("name", "RawData")
+            if isinstance(raw_table_name, str) and raw_table_name.strip():
+                table_name = raw_table_name.strip()
+            else:
+                table_name = "RawData"
+            create_table_if_missing = excel_table_cfg.get("create_if_missing") is True
+
         emit_progress("update_targets", "Update targets", "running", target_folder_path.name)
         log(f"Scan folder tujuan: {target_folder_path}")
         try:
@@ -275,6 +292,9 @@ def run_pipeline(
                 filter_value=filter_value,
                 duplicate_key_columns=duplicate_key_columns,
                 new_row_color=new_row_color,
+                strip_order_prefix=strip_order_prefix,
+                table_name=table_name,
+                create_table_if_missing=create_table_if_missing,
             )
         except ValueError as exc:
             raise PipelineError(str(exc)) from exc
