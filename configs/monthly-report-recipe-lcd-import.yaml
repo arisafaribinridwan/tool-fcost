@@ -510,6 +510,24 @@ steps:
           - priority: 570
             parts_signature: ["MAIN_UNIT", "TCON_UNIT"]
             winner_part_name: "MAIN_UNIT"
+          - priority: 580
+            parts_signature: ["FFC_WIRE", "TCON_UNIT"]
+            winner_part_name: "TCON_UNIT"
+          - priority: 590
+            parts_signature: ["LED_BAR", "POWER_UNIT", "TAPE"]
+            winner_part_name: "POWER_UNIT"
+          - priority: 600
+            parts_signature: ["FFC_WIRE", "IC", "PANEL", "TAPE", "TCON_UNIT"]
+            winner_part_name: "PANEL"
+          - priority: 610
+            parts_signature: ["LVDS_WIRE", "MAIN_UNIT", "PANEL", "TAPE", "TCON_UNIT"]
+            winner_part_name: "PANEL"
+          - priority: 620
+            parts_signature: ["FFC_WIRE", "WIFI_UNIT"]
+            winner_part_name: "WIFI_UNIT"
+          - priority: 630
+            parts_signature: ["LED_BAR", "REFLECTOR_SHEET", "TAPE"]
+            winner_part_name: "LED_BAR"
         winner_updates:
           "job_sheet_section":
             set: 1
