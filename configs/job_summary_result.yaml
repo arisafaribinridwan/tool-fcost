@@ -359,6 +359,7 @@ outputs:
       column_width: 13.0
       options:
         amount_scale_factor: 1000
+        count_column: "section"
         column_labels:
           section: "Section"
           "Sum of labor_cost": "Labor"

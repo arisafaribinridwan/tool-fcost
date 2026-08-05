@@ -502,6 +502,33 @@ steps:
           - priority: 570
             parts_signature: ["SPEAKER"]
             winner_part_name: "SPEAKER"
+          - priority: 580
+            parts_signature: ["AC_CORD", "LVDS_WIRE", "MAIN_UNIT", "PANEL", "PART_KIT", "TCON_UNIT"]
+            winner_part_name: "PANEL"
+          - priority: 590
+            parts_signature: ["FFC_WIRE", "LVDS_WIRE", "PANEL", "PART_KIT", "TCON_UNIT"]
+            winner_part_name: "PANEL"
+          - priority: 600
+            parts_signature: ["FFC_WIRE", "PANEL", "PART_KIT", "TCON_UNIT"]
+            winner_part_name: "PANEL"
+          - priority: 610
+            parts_signature: ["MAIN_UNIT", "PANEL", "PART_KIT", "TCON_UNIT"]
+            winner_part_name: "PANEL"
+          - priority: 620
+            parts_signature: ["MAIN_UNIT", "PANEL", "TAPE", "TCON_UNIT"]
+            winner_part_name: "PANEL"
+          - priority: 630
+            parts_signature: ["MAIN_UNIT", "POWER_UNIT", "WIFI_UNIT"]
+            winner_part_name: "MAIN_UNIT"
+          - priority: 640
+            parts_signature: ["MAIN_UNIT", "SPEAKER", "WIRE_SPEAKER"]
+            winner_part_name: "MAIN_UNIT"
+          - priority: 650
+            parts_signature: ["MAIN_UNIT", "SPEAKER", "WIRE_SPEAKER"]
+            winner_part_name: "MAIN_UNIT"
+          - priority: 660
+            parts_signature: ["PANEL", "TCON_UNIT", "TCON_WIRE"]
+            winner_part_name: "PANEL"
         winner_updates:
           "job_sheet_section":
             set: 1

@@ -865,6 +865,7 @@ def test_run_pipeline_step_recipe_builds_job_summary_result_sales_and_new_summar
                 '      layout_mode: "plain"',
                 "      options:",
                 "        amount_scale_factor: 1000",
+                '        count_column: "section"',
                 "        column_labels:",
                 '          section: "Section"',
                 '          "Sum of labor_cost": "Labor"',
@@ -912,11 +913,11 @@ def test_run_pipeline_step_recipe_builds_job_summary_result_sales_and_new_summar
     sass_total = data8_df[data8_df["Section"] == "SASS"].iloc[0]
     grand_total = data8_df[data8_df["Section"] == "Grand Total"].iloc[0]
     assert gqs_total["Total"] == pytest.approx(0.25)
-    assert gqs_total["Count"] == 5
+    assert gqs_total["Count"] == 6
     assert sass_total["Total"] == pytest.approx(0.225)
-    assert sass_total["Count"] == 1
+    assert sass_total["Count"] == 2
     assert grand_total["Total"] == pytest.approx(0.475)
-    assert grand_total["Count"] == 6
+    assert grand_total["Count"] == 8
 
     data9_df = _read_summary_sheet(result.output_path, "data9")
     assert data9_df["Factory"].tolist() == ["Factory B", "Factory A", "Factory C", "Grand Total"]

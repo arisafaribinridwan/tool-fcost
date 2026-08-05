@@ -2360,6 +2360,7 @@ def _build_section_cost_summary(data_df: pd.DataFrame, options: dict | None) -> 
     cfg = options or {}
     section_column = str(cfg.get("section_column", "section"))
     part_column = str(cfg.get("part_column", "part_name"))
+    count_column = str(cfg.get("count_column", part_column))
     cost_columns = {
         "Sum of labor_cost": str(cfg.get("labor_cost_column", "labor_cost")),
         "Sum of transportation_cost": str(cfg.get("transportation_cost_column", "transportation_cost")),
@@ -2367,14 +2368,15 @@ def _build_section_cost_summary(data_df: pd.DataFrame, options: dict | None) -> 
         "Sum of total_cost": str(cfg.get("total_cost_column", "total_cost")),
     }
 
-    required_columns = [section_column, part_column, *cost_columns.values()]
+    required_columns = list(dict.fromkeys([section_column, count_column, *cost_columns.values()]))
     missing = [column for column in required_columns if column not in data_df.columns]
     if missing:
         raise ValueError("Section cost summary gagal, kolom tidak ditemukan: " + ", ".join(missing))
 
     working_df = data_df.copy()
     working_df[section_column] = working_df[section_column].fillna("").astype(str).str.strip()
-    working_df[part_column] = working_df[part_column].fillna("").astype(str).str.strip()
+    if count_column != section_column:
+        working_df[count_column] = working_df[count_column].fillna("").astype(str).str.strip()
     working_df = working_df.loc[working_df[section_column].ne("")].copy()
 
     for target_col, source_col in cost_columns.items():
@@ -2388,7 +2390,7 @@ def _build_section_cost_summary(data_df: pd.DataFrame, options: dict | None) -> 
                 "Sum of transportation_cost": ("Sum of transportation_cost", "sum"),
                 "Sum of parts_cost": ("Sum of parts_cost", "sum"),
                 "Sum of total_cost": ("Sum of total_cost", "sum"),
-                "Count of part_name": (part_column, lambda series: series.astype(str).str.strip().ne("").sum()),
+                "Count of part_name": (count_column, lambda series: series.astype(str).str.strip().ne("").sum()),
             }
         )
         .reset_index()
