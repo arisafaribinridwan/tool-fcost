@@ -465,14 +465,23 @@ steps:
           - priority: 410
             parts_signature: ["LED_BAR", "REFLECTOR_SHEET", "TAPE"]
             winner_part_name: "LED_BAR"
+          - priority: 411
+            parts_signature: ["LED_BAR"]
+            winner_part_name: "LED_BAR"
           - priority: 420
             parts_signature: ["MAIN_UNIT", "TAPE", "TCON_UNIT"]
+            winner_part_name: "MAIN_UNIT"
+          - priority: 421
+            parts_signature: ["MAIN_UNIT", "POWER_UNIT", "TCON_UNIT"]
             winner_part_name: "MAIN_UNIT"
           - priority: 430
             parts_signature: ["HARNESS", "MAIN_UNIT", "POWER_UNIT"]
             winner_part_name: "MAIN_UNIT"
           - priority: 440
             parts_signature: ["IC", "PANEL", "TAPE"]
+            winner_part_name: "PANEL"
+          - priority: 441
+            parts_signature: ["IC", "PANEL"]
             winner_part_name: "PANEL"
           - priority: 450
             parts_signature: ["LVDS_WIRE", "TCON_UNIT"]
@@ -485,6 +494,9 @@ steps:
             winner_part_name: "MAIN_UNIT"
           - priority: 490
             parts_signature: ["FFC_WIRE", "PANEL", "TAPE", "TCON_UNIT"]
+            winner_part_name: "PANEL"
+          - priority: 491
+            parts_signature: ["FFC_WIRE", "LED_BAR", "LVDS_WIRE", "PANEL", "TAPE", "TCON_UNIT"]
             winner_part_name: "PANEL"
           - priority: 500
             parts_signature: ["LVDS_WIRE", "PANEL", "TAPE"]
