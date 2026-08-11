@@ -1,604 +1,682 @@
-# Plan: Rekomendasi 3 — Highlight Sementara Baris Baru di File Target - DONE
+# Rencana Fitur: Append Data dari Banyak Excel ke Satu Excel Target
+
+## 1. Tujuan fitur
+
+Membuat fitur baru pada aplikasi XLS-Flow Automator untuk membantu user menggabungkan data dari banyak file Excel `.xlsx` di satu folder sumber ke satu file Excel target yang dipilih user.
+
+Fitur ini tidak membuat output workbook baru sebagai hasil utama. Fitur ini akan membuka file target yang dipilih, lalu menambahkan baris baru ke bawah data yang sudah ada pada sheet target.
+
+Konsep utama:
+
+- File target menjadi acuan struktur data.
+- Header kolom yang digunakan untuk append mengikuti header pada file target.
+- User memilih filter berdasarkan salah satu header di file target.
+- Nilai filter diambil dari data yang sudah ada di file target.
+- File sumber berada dalam satu folder dan semuanya `.xlsx`.
+- Nama sheet dan format kolom file sumber diasumsikan sama dengan file target.
+- Data duplikat dicegah berdasarkan gabungan kolom `notification`, `model name`, dan `keydate`.
 
-## Ide
+## 2. Ringkasan workflow user
 
-Setiap baris yang baru di-append ke sheet `raw` di file target diberi fill warna (misal hijau muda).
-Sebelum append dimulai, fill di semua baris data yang sudah ada direset ke putih terlebih dahulu.
-Hasilnya: setiap kali job dijalankan, warna selalu menunjuk tepat ke batch terbaru saja — tidak menumpuk.
+Alur penggunaan yang diinginkan:
 
----
-
-## File yang Diubah
-
-| File | Perubahan |
-|------|-----------|
-| `app/services/target_workbook_update_service.py` | Tambah 2 helper, tambah param `new_row_color`, apply fill di loop append |
-| `app/services/pipeline_service.py` | Baca `new_row_color` dari config, teruskan ke service |
-| `configs/monthly-report-recipe-autofill-raw.yaml` | Tambah key `new_row_color` di `target_update` (opsional) |
-
----
-
-## Langkah Implementasi
-
-### 1. `target_workbook_update_service.py` — Tambah import
-
-```python
-# Tambahkan di baris 8, setelah import Worksheet
-from openpyxl.styles import PatternFill
-```
-
----
-
-### 2. `target_workbook_update_service.py` — Tambah 2 helper function
-
-Tambahkan setelah fungsi `_filter_new_rows` (sekitar baris 111):
-
-```python
-_NO_FILL = PatternFill(fill_type=None)
-
-
-def _clear_data_row_fills(worksheet: Worksheet) -> None:
-    """Reset fill semua baris data (baris 2 ke bawah) ke tanpa warna."""
-    if worksheet.max_row < 2:
-        return
-    for row in worksheet.iter_rows(min_row=2, max_row=worksheet.max_row):
-        for cell in row:
-            cell.fill = _NO_FILL
-
-
-def _apply_row_fill(worksheet: Worksheet, row_idx: int, col_count: int, color: str) -> None:
-    """Beri fill warna ke seluruh sel pada baris tertentu."""
-    fill = PatternFill(fill_type="solid", fgColor=color.upper())
-    for col_idx in range(1, col_count + 1):
-        worksheet.cell(row=row_idx, column=col_idx).fill = fill
-```
-
----
-
-### 3. `target_workbook_update_service.py` — Tambah parameter `new_row_color`
-
-Ubah signature fungsi `update_target_workbooks_by_model_series` (baris 114):
-
-```python
-# SEBELUM
-def update_target_workbooks_by_model_series(
-    *,
-    data_df: pd.DataFrame,
-    target_dir: Path,
-    match_column: str,
-    target_sheet_name: str,
-    filter_column: str | None = None,
-    filter_value: object | None = None,
-    duplicate_key_columns: tuple[str, ...] = (),
-) -> list[TargetFileUpdateResult]:
-
-# SESUDAH — tambahkan 1 parameter baru di akhir
-def update_target_workbooks_by_model_series(
-    *,
-    data_df: pd.DataFrame,
-    target_dir: Path,
-    match_column: str,
-    target_sheet_name: str,
-    filter_column: str | None = None,
-    filter_value: object | None = None,
-    duplicate_key_columns: tuple[str, ...] = (),
-    new_row_color: str | None = None,   # ← TAMBAH INI
-) -> list[TargetFileUpdateResult]:
-```
-
----
-
-### 4. `target_workbook_update_service.py` — Apply highlight di loop append
-
-Cari blok append rows (sekitar baris 225–233). Ganti:
-
-```python
-# SEBELUM
-for _, row in matched_df.iterrows():
-    row_values: list[object] = []
-    for target_column in target_columns:
-        if target_column in matched_df.columns:
-            value = row.get(target_column)
-            row_values.append(None if pd.isna(value) else value)
-        else:
-            row_values.append(None)
-    worksheet.append(row_values)
-```
-
-```python
-# SESUDAH
-if new_row_color:
-    _clear_data_row_fills(worksheet)
-
-for _, row in matched_df.iterrows():
-    row_values: list[object] = []
-    for target_column in target_columns:
-        if target_column in matched_df.columns:
-            value = row.get(target_column)
-            row_values.append(None if pd.isna(value) else value)
-        else:
-            row_values.append(None)
-    worksheet.append(row_values)
-    if new_row_color:
-        _apply_row_fill(worksheet, worksheet.max_row, len(target_columns), new_row_color)
-```
-
-> `_clear_data_row_fills` dipanggil **hanya jika ada baris baru yang akan ditulis** (karena blok ini sudah berada setelah pengecekan `matched_df.empty`). Aman — tidak akan menghapus highlight jika tidak ada data baru.
-
----
-
-### 5. `pipeline_service.py` — Baca dan teruskan `new_row_color`
-
-Cari blok `target_update_cfg` (sekitar baris 252–259). Tambahkan pembacaan `new_row_color`:
-
-```python
-# Tambahkan setelah baris pembacaan duplicate_key_columns
-new_row_color: str | None = None
-raw_new_row_color = target_update_cfg.get("new_row_color")
-if isinstance(raw_new_row_color, str) and raw_new_row_color.strip():
-    new_row_color = raw_new_row_color.strip()
-```
-
-Lalu teruskan ke function call (sekitar baris 264):
-
-```python
-update_results = update_target_workbooks_by_model_series(
-    data_df=source_df,
-    target_dir=target_folder_path,
-    match_column=match_column,
-    target_sheet_name=target_sheet_name,
-    filter_column=filter_column,
-    filter_value=filter_value,
-    duplicate_key_columns=duplicate_key_columns,
-    new_row_color=new_row_color,   # ← TAMBAH INI
-)
-```
-
----
-
-### 6. YAML Config — Tambah key `new_row_color` (opsional)
+1. User membuka mode fitur baru, misalnya menu `Append Folder Excel`.
+2. User memilih file Excel target.
+3. Tool membaca daftar sheet dari file target.
+4. User memilih sheet target.
+5. Tool membaca header pada sheet target.
+6. Tool menampilkan daftar header tersebut.
+7. User memilih satu header sebagai kolom filter.
+8. Tool membaca nilai unik dari kolom filter di sheet target.
+9. Tool menampilkan nilai unik tersebut dalam daftar checklist.
+10. User mencentang nilai filter yang ingin digunakan.
+11. User memilih folder sumber yang berisi banyak file `.xlsx`.
+12. User menekan tombol proses.
+13. Tool membaca semua file `.xlsx` dari folder sumber.
+14. Untuk setiap file sumber, tool membaca sheet dengan nama yang sama seperti sheet target.
+15. Tool mengambil baris yang nilai kolom filternya termasuk pilihan user.
+16. Tool menyusun data mengikuti urutan header file target.
+17. Tool mengosongkan kolom target yang tidak ditemukan di file sumber.
+18. Tool mengecek duplikasi berdasarkan `notification + model name + keydate`.
+19. Tool hanya menambahkan baris yang belum ada ke file target.
+20. Tool menyimpan file target.
+21. Tool menampilkan ringkasan hasil proses.
 
-```yaml
-# configs/monthly-report-recipe-autofill-raw.yaml
-target_update:
-  enabled: true
-  match_column: "model_series"
-  sheet_name: "raw"
-  new_row_color: "E2EFDA"   # ← TAMBAH INI (hijau muda). Hapus baris ini untuk nonaktifkan.
-  source_filter:
-    column: "job_sheet_section"
-    equals: 1
-  duplicate_key_columns:
-    - "notification"
-    - "model_series"
-    - "part_used"
-```
+## 3. Definisi input dan output
 
-> Warna menggunakan hex 6 karakter tanpa `#`. Contoh lain: `"FFF2CC"` (kuning), `"DDEEFF"` (biru muda).
-> Jika key tidak ada di YAML, fitur highlight tidak aktif — backward compatible dengan job lain.
-
----
+### Input dari user
 
-## Catatan Penting
+- File Excel target.
+- Sheet target.
+- Header yang dijadikan filter.
+- Nilai filter yang dicentang.
+- Folder sumber berisi file `.xlsx`.
 
-- **`_clear_data_row_fills` hanya dipanggil jika ada baris baru** — tidak akan menghapus highlight pada file yang di-skip.
-- **Kolom header (baris 1) tidak disentuh** — clear dimulai dari `min_row=2`.
-- **Performa**: untuk file target dengan ratusan ribu baris, iterasi seluruh baris untuk reset fill bisa lambat. Jika jadi masalah, bisa diganti dengan hanya reset baris-baris yang sebelumnya punya fill (openpyxl track ini via `cell.fill.fill_type`).
-- **Tidak ada perubahan pada `output_service.py`** — highlight ini di file *target*, bukan di file output preview.
+### Input implisit dari file target
 
----
+- Daftar sheet.
+- Header pada sheet terpilih.
+- Daftar nilai unik pada kolom filter.
+- Data existing untuk pengecekan duplikat.
 
-# Plan: Upgrade Pembacaan Symptom dengan Fallback Source Columns
+### Input dari folder sumber
 
-## Ide
+- Semua file dengan ekstensi `.xlsx`.
+- Untuk tahap awal, file temporary Excel seperti `~$nama_file.xlsx` sebaiknya diabaikan.
+- Subfolder tidak perlu diproses pada versi awal kecuali nanti diminta.
 
-Saat ini kolom `symptom` hanya ditentukan dari kombinasi:
+### Output utama
 
-1. `part_name`
-2. `symptom_comment`
+- File target yang sama, dengan data baru ditambahkan di bawah data lama.
 
-Akibatnya, rule master `symptom` seperti `PANEL + regex blank` tidak akan match jika kata `blank` hanya muncul di kolom lain, misalnya `repair_comment` atau `symptom_code_description`.
+### Output pendukung
 
-Upgrade yang diinginkan adalah membuat pembacaan symptom mencoba beberapa kolom secara berurutan:
+- Ringkasan proses di UI/log:
+  - jumlah file ditemukan,
+  - jumlah file berhasil dibaca,
+  - jumlah file dilewati,
+  - jumlah file gagal,
+  - jumlah baris cocok filter,
+  - jumlah baris baru ditambahkan,
+  - jumlah baris dilewati karena duplikat,
+  - daftar error per file.
 
-1. `symptom_comment`
-2. `repair_comment`
-3. `symptom_code_description`
+## 4. Aturan pembacaan workbook
 
-Dengan urutan ini, behavior lama tetap diprioritaskan. `repair_comment` menjadi fallback kedua karena sering memuat kata kunci hasil perbaikan seperti `BLANK`, sedangkan `symptom_code_description` menjadi fallback terakhir.
+### Sheet
 
----
+- User memilih nama sheet dari file target.
+- File sumber diproses memakai nama sheet yang sama.
+- Jika file sumber tidak memiliki sheet tersebut:
+  - file tersebut dilewati,
+  - status dicatat sebagai gagal atau skipped dengan alasan `Sheet target tidak ditemukan`.
 
-## Prinsip Matching yang Direkomendasikan
+### Header
 
-Urutan fallback harus memakai pola **kolom dulu, rule priority kemudian**:
+- Header target menjadi acuan utama.
+- Pada versi awal, header diasumsikan berada di baris pertama.
+- Semua kolom output mengikuti urutan header pada file target.
+- Header kosong di target diabaikan sebagai kolom data.
+- Matching header sebaiknya dibuat toleran:
+  - trim spasi di awal/akhir,
+  - case-insensitive untuk pencocokan,
+  - tetapi nama asli header target tetap dipertahankan untuk penulisan.
 
-```text
-Untuk setiap baris source:
-  cocokkan part_name dengan rule master symptom
-  coba semua rule berdasarkan priority terhadap symptom_comment
-  kalau belum ada hasil, coba semua rule berdasarkan priority terhadap repair_comment
-  kalau belum ada hasil, coba semua rule berdasarkan priority terhadap symptom_code_description
-  kalau tetap belum ada hasil, pakai on_missing_match
-```
+Contoh:
 
-Dengan pola ini:
+- Header target: `Notification`
+- Header source: `notification`
+- Dianggap cocok.
 
-- Match dari `symptom_comment` selalu menang atas match dari `repair_comment` atau `symptom_code_description`.
-- Match dari `repair_comment` selalu menang atas match dari `symptom_code_description`.
-- Priority master tetap berlaku, tetapi hanya di dalam kolom fallback yang sedang dicoba.
-- Risiko false positive tetap dikontrol karena `repair_comment` hanya dipakai jika `symptom_comment` belum menghasilkan match.
+Catatan penting:
 
-Contoh penting:
+- Jika ada dua header yang menjadi sama setelah normalisasi, misalnya `Model Name` dan `model name`, tool perlu menolak proses dengan pesan validasi karena mapping kolom menjadi ambigu.
 
-```text
-part_name = PANEL
-symptom_comment = vertical line
-repair_comment = UNIT-PANEL-GANTI-BLANK
-```
+### Kolom yang ditulis
 
-Jika `symptom_comment` match rule `LINE`, hasil tetap `LINE`, bukan `BLANK`, walaupun `repair_comment` mengandung `BLANK`.
+- Tool menulis seluruh kolom sesuai header target.
+- Jika kolom target ditemukan di source, isi diambil dari source.
+- Jika kolom target tidak ditemukan di source, nilai ditulis kosong.
+- Kolom tambahan di source yang tidak ada di target diabaikan.
 
----
+## 5. Aturan filter
 
-## File yang Diubah
+### Sumber nilai filter
 
-| File | Perubahan |
-|------|-----------|
-| `app/services/recipe_service.py` | Ubah special handling symptom rules supaya bisa membaca fallback columns dari `inputs`. |
-| `app/services/transform_service.py` | Update jalur legacy `lookup_rules` symptom supaya behavior konsisten dengan recipe. |
-| `configs/monthly-report-recipe.yaml` | Tambah `repair_comment` dan `symptom_code_description` ke `inputs` step `sub_13_add_symptom`. |
-| `configs/monthly-report-recipe-lcd-import.yaml` | Tambah input fallback yang sama untuk job LCD import. |
-| `docs/monthly-report-recipe.yaml` dan/atau `docs/done/monthly-report-recipe.yaml` | Opsional, sinkronisasi dokumentasi recipe jika masih dipakai sebagai referensi. |
-| `tests/test_symptom_rules.py` | Tambah test fallback dari `repair_comment` dan `symptom_code_description`, plus test prioritas fallback. |
-| `tests/test_pipeline_service.py` | Opsional, tambah coverage end-to-end pada recipe monthly report jika perlu. |
+Nilai filter diambil dari kolom filter pada file target, bukan dari folder sumber.
 
----
+Alasannya:
 
-## Langkah Implementasi
+- File target berperan sebagai template dan daftar acuan.
+- User ingin memilih kriteria dari nilai yang sudah ada di target.
+- Folder sumber tidak perlu discan lebih awal hanya untuk membangun daftar filter.
 
-### 1. Update YAML recipe runtime
+### Pemilihan kolom filter
 
-Di step `sub_13_add_symptom`, ubah `inputs` dari:
+- Tool menampilkan semua header target.
+- User memilih satu header sebagai kolom filter.
+- Setelah kolom dipilih, tool membaca nilai unik pada kolom tersebut.
 
-```yaml
-inputs:
-  - "part_name"
-  - "symptom_comment"
-```
+### Pemilihan nilai filter
 
-menjadi:
+- Tool menampilkan nilai unik dalam bentuk checklist.
+- User bisa mencentang satu atau banyak nilai.
+- Nilai kosong sebaiknya ditampilkan sebagai label khusus, misalnya `(kosong)`.
+- Perlu tersedia kontrol pencarian/filter daftar checklist jika jumlah nilai unik banyak.
+- Perlu tersedia tombol `Pilih Semua` dan `Kosongkan Pilihan`.
 
-```yaml
-inputs:
-  - "part_name"
-  - "symptom_comment"
-  - "repair_comment"
-  - "symptom_code_description"
-```
+### Matching nilai filter
 
-File yang perlu diubah:
+Rekomendasi awal:
 
-- `configs/monthly-report-recipe.yaml`
-- `configs/monthly-report-recipe-lcd-import.yaml`
+- Matching nilai filter dilakukan dengan normalisasi:
+  - trim spasi,
+  - case-insensitive,
+  - nilai numerik seperti `123.0` dan `123` dianggap sama jika aman.
+
+Untuk tanggal:
+
+- Jika kolom filter berisi tanggal, nilai yang ditampilkan ke user harus stabil dan mudah dibaca.
+- Matching tanggal perlu dinormalisasi agar tanggal Excel, `datetime`, dan string tanggal yang sama tidak dianggap berbeda.
+- Format tampilan yang disarankan: `YYYY-MM-DD` untuk tanggal murni.
+
+## 6. Aturan anti-duplikasi
+
+Duplikasi dicegah dengan gabungan tiga kolom:
+
+- `notification`
+- `model name`
+- `keydate`
+
+Baris dari source dianggap duplikat jika kombinasi tiga nilai tersebut sudah ada di target, atau sudah muncul lebih dulu dalam batch source yang sedang diproses.
+
+### Normalisasi duplicate key
+
+Untuk mengurangi false duplicate dan false new row:
+
+- Nama kolom key dicocokkan case-insensitive dan trim spasi.
+- Nilai key dinormalisasi dengan trim spasi.
+- Text dibandingkan case-insensitive.
+- Angka dengan akhiran `.0` dapat disamakan dengan bentuk integer text.
+- Tanggal pada `keydate` perlu dinormalisasi ke bentuk stabil, misalnya `YYYY-MM-DD`, jika memungkinkan.
+
+### Validasi duplicate key
+
+Jika salah satu dari tiga kolom key tidak ada di file target:
+
+- proses tidak boleh dilanjutkan,
+- tampilkan pesan bahwa kolom duplicate key wajib ada di target.
+
+Jika salah satu dari tiga kolom key tidak ada di file source:
+
+- ada dua opsi, tetapi rekomendasi untuk versi awal adalah proses file tersebut gagal/skipped.
+- Alasannya, tanpa key lengkap, anti-duplikasi tidak bisa dipercaya.
 
 Catatan:
 
-- Tidak perlu mengubah struktur sheet master `symptom`.
-- Tidak perlu menambah kolom baru di master `symptom`.
-- Matcher YAML existing boleh tetap seperti sekarang karena jalur special symptom rules memakai `priority`, `part_name`, `match_type`, `pattern`, dan `symptom` dari master.
-
----
-
-### 2. Tambah helper untuk mengambil fallback columns di `recipe_service.py`
-
-Tambahkan helper kecil, misalnya dekat fungsi `_apply_lookup_rules_step`:
-
-```python
-def _get_symptom_source_columns(step_cfg: dict) -> list[str]:
-    inputs = [str(column) for column in step_cfg.get("inputs", [])]
-    columns = [column for column in inputs if column != "part_name"]
-    return columns or ["symptom_comment"]
-```
+- Ini berbeda dari aturan kolom target lain yang boleh kosong jika tidak ada di source.
+- Khusus duplicate key, kolom wajib ada agar proses aman.
 
-Tujuannya:
+### Baris dengan key kosong
 
-- `inputs` menjadi sumber konfigurasi urutan fallback.
-- Jika config lama hanya punya `symptom_comment`, behavior tetap sama.
-- Jika karena alasan tertentu `inputs` tidak berisi kolom selain `part_name`, fallback default tetap `symptom_comment`.
-
----
+Perlu diputuskan sebelum implementasi final.
 
-### 3. Tambah helper matching fallback di `recipe_service.py`
+Rekomendasi awal:
 
-Tambahkan helper agar logic utama tetap pendek:
+- Jika ketiga nilai key kosong, baris dianggap tidak valid dan dilewati.
+- Jika sebagian key kosong, baris tetap diproses tetapi dicatat sebagai warning, atau dilewati agar anti-duplikasi lebih aman.
 
-```python
-def _resolve_symptom_from_sources(
-    source_row: pd.Series,
-    symptom_rules: pd.DataFrame,
-    source_columns: list[str],
-    on_missing: object,
-) -> object:
-    source_part = _normalize_text(source_row["part_name"], case_sensitive=True)
-
-    for source_column in source_columns:
-        source_value = source_row[source_column]
-        for _, master_row in symptom_rules.iterrows():
-            rule_part = _normalize_text(master_row["part_name"], case_sensitive=True)
-            if source_part != rule_part:
-                continue
-            if match_symptom_rule(source_value, master_row):
-                return master_row["symptom"]
-
-    return on_missing
-```
-
-Poin penting:
-
-- Loop luar adalah `source_columns`, bukan `symptom_rules`.
-- Ini menjaga fallback order tetap lebih kuat daripada priority lintas-kolom.
-- Priority tetap berlaku karena `symptom_rules` sudah disortir oleh `prepare_symptom_rule_table`.
-
----
-
-### 4. Ubah blok special symptom rules di `_apply_lookup_rules_step`
-
-Blok saat ini hardcoded membutuhkan dan membaca `symptom_comment`.
-
-Ubah validasi dari konsep:
-
-```python
-if "part_name" not in data_df.columns or "symptom_comment" not in data_df.columns:
-    raise ValueError(...)
-```
+Rekomendasi paling aman:
 
-menjadi:
+- Lewati baris jika salah satu dari `notification`, `model name`, atau `keydate` kosong.
+- Tampilkan jumlah baris yang dilewati karena duplicate key tidak lengkap.
 
-```python
-source_columns = _get_symptom_source_columns(step_cfg)
-required_columns = ["part_name", *source_columns]
-missing_columns = [column for column in required_columns if column not in data_df.columns]
-if missing_columns:
-    raise ValueError(
-        f"Step '{step_cfg['id']}' gagal, kolom source untuk symptom rules tidak ditemukan: "
-        + ", ".join(missing_columns)
-    )
-```
-
-Lalu ubah loop resolve dari:
-
-```python
-for _, source_row in data_df.iterrows():
-    resolved = on_missing
-    source_part = _normalize_text(source_row["part_name"], case_sensitive=True)
-    for _, master_row in symptom_rules.iterrows():
-        ...
-        if match_symptom_rule(source_row["symptom_comment"], master_row):
-            resolved = master_row["symptom"]
-            break
-    results.append(resolved)
-```
+## 7. Perilaku append ke target
 
-menjadi:
-
-```python
-for _, source_row in data_df.iterrows():
-    results.append(
-        _resolve_symptom_from_sources(
-            source_row=source_row,
-            symptom_rules=symptom_rules,
-            source_columns=source_columns,
-            on_missing=on_missing,
-        )
-    )
-```
+### Lokasi append
 
----
+- Data baru ditambahkan mulai dari baris setelah data terakhir di sheet target.
+- Header tidak ditulis ulang.
+- Urutan kolom mengikuti header target.
 
-### 5. Update jalur legacy di `transform_service.py`
+### Format dan style
 
-Ada logic legacy `lookup_rules` untuk sheet `symptom` yang juga hardcoded ke `symptom_comment`.
+Pilihan awal yang sederhana:
 
-Agar konsisten, tambahkan helper serupa atau helper lokal di `transform_service.py`:
+- Append value saja.
+- Tidak memaksakan style baru.
 
-```python
-def _get_legacy_symptom_source_columns(merged_df: pd.DataFrame) -> list[str]:
-    preferred_columns = ["symptom_comment", "repair_comment", "symptom_code_description"]
-    return [column for column in preferred_columns if column in merged_df.columns]
-```
+Opsional yang bisa ditambahkan:
 
-Lalu update validasi:
+- Copy style dari baris data terakhir di target ke baris baru.
+- Highlight baris baru dengan warna tertentu.
+- Resize Excel Table jika sheet target memakai tabel Excel.
 
-```python
-source_columns = _get_legacy_symptom_source_columns(merged_df)
-if "part_name" not in merged_df.columns or not source_columns:
-    raise ValueError(
-        "Kolom source untuk symptom rules tidak ditemukan: part_name, symptom_comment"
-    )
-```
+Catatan arsitektur:
 
-Dan gunakan fallback order yang sama:
+- Repo sudah memiliki `app/services/target_workbook_update_service.py` yang punya kemampuan append, anti-duplikasi, highlight baris baru, dan resize table untuk use case lain.
+- Fitur baru bisa mengambil pola atau helper dari service tersebut, tetapi use case ini sebaiknya dibuat sebagai service baru karena arahnya berbeda: banyak source ke satu target.
 
-```python
-for _, source_row in merged_df.iterrows():
-    resolved_value = on_missing_match
-    source_part = _normalize_text_with_case(source_row["part_name"], case_sensitive=True)
+## 8. Rencana UI
 
-    for source_column in source_columns:
-        for _, rule_row in symptom_rules.iterrows():
-            rule_part = _normalize_text_with_case(rule_row["part_name"], case_sensitive=True)
-            if source_part != rule_part:
-                continue
-            if match_symptom_rule(source_row[source_column], rule_row):
-                resolved_value = rule_row["symptom"]
-                break
-        if resolved_value != on_missing_match:
-            break
+### Lokasi fitur
 
-    output_values.append("" if pd.isna(resolved_value) else resolved_value)
-```
+Ada dua pendekatan:
 
-Catatan:
+1. Tambah mode baru di main window.
+2. Buat window/tool terpisah dari main workflow.
 
-- Jika legacy config/source hanya punya `symptom_comment`, hasil tetap sama seperti sebelumnya.
-- Kalau `repair_comment` dan `symptom_code_description` tersedia, otomatis dipakai sebagai fallback sesuai urutan tersebut.
+Rekomendasi:
 
----
+- Buat mode/window terpisah, misalnya `Append Folder Excel`.
+- Alasannya, workflow ini tidak memakai job profile/config pipeline utama.
+- Ini menghindari main workflow yang sekarang menjadi terlalu padat.
 
-## Test Plan
+### Komponen UI yang dibutuhkan
 
-### 1. Test fallback dari `repair_comment`
+- Tombol pilih file target.
+- Label path file target terpilih.
+- Dropdown sheet target.
+- Dropdown header filter.
+- Kotak pencarian nilai filter.
+- Scrollable checklist nilai filter.
+- Tombol `Pilih Semua`.
+- Tombol `Kosongkan`.
+- Tombol pilih folder sumber.
+- Label path folder sumber terpilih.
+- Tombol `Precheck`.
+- Tombol `Proses Append`.
+- Progress/status area.
+- Log area.
+- Summary area setelah proses selesai.
 
-Tambahkan test di `tests/test_symptom_rules.py` atau pipeline-level test:
+### State tombol
 
-```text
-Source:
-part_name = PANEL
-symptom_comment = ""
-symptom_code_description = ""
-repair_comment = "UNIT-PANEL-GANTI-BLANK"
+- `Pilih sheet` aktif setelah target berhasil dibaca.
+- `Pilih header filter` aktif setelah sheet dipilih dan header valid.
+- Checklist aktif setelah header filter dipilih.
+- `Proses Append` aktif hanya jika:
+  - target valid,
+  - sheet dipilih,
+  - header filter dipilih,
+  - minimal satu nilai filter dicentang,
+  - folder sumber valid,
+  - duplicate key columns tersedia di target.
 
-Master symptom:
-priority = 10
-part_name = PANEL
-match_type = regex
-pattern = blank
-symptom = BLANK
+### Precheck
 
-Expected:
-symptom = BLANK
-```
+Precheck sebaiknya tersedia sebelum proses write.
 
-Tujuan: memastikan case awal yang dibahas sudah ter-cover.
+Precheck memvalidasi:
 
----
+- file target ada dan `.xlsx`,
+- file target bisa dibuka,
+- sheet target ada,
+- header target tidak kosong,
+- kolom filter ada,
+- duplicate key columns ada di target,
+- folder sumber ada,
+- ada file `.xlsx` yang bisa diproses,
+- minimal beberapa file source memiliki sheet target,
+- minimal beberapa file source memiliki kolom filter,
+- duplicate key columns ada di source.
 
-### 2. Test fallback dari `symptom_code_description`
+Precheck sebaiknya tidak menulis apapun ke target.
 
-```text
-Source:
-part_name = PANEL
-symptom_comment = ""
-repair_comment = ""
-symptom_code_description = "no picture"
+## 9. Rencana service layer
 
-Master symptom:
-pattern = no picture|blank
-symptom = BLANK
+Disarankan membuat service baru:
 
-Expected:
-symptom = BLANK
-```
+`app/services/folder_excel_append_service.py`
 
-Tujuan: memastikan kolom `symptom_code_description` tetap dipakai sebagai fallback terakhir.
+Service ini bertanggung jawab untuk:
 
----
+- membaca metadata file target,
+- membaca daftar sheet,
+- membaca header target,
+- membaca nilai unik filter dari target,
+- melakukan precheck folder source,
+- membaca dan memfilter data source,
+- menyusun row sesuai header target,
+- mengecek duplikasi,
+- append data ke target,
+- menghasilkan result object untuk UI.
 
-### 3. Test `symptom_comment` tetap menang atas `repair_comment`
+### Dataclass yang disarankan
 
-```text
-Source:
-part_name = PANEL
-symptom_comment = "vertical line"
-repair_comment = "UNIT-PANEL-GANTI-BLANK"
-symptom_code_description = "no picture"
+`TargetWorkbookMetadata`
 
-Master symptom:
-priority 10: pattern = blank, symptom = BLANK
-priority 20: pattern = line, symptom = LINE
-priority 30: pattern = no picture, symptom = NO_PICTURE
+- `path: Path`
+- `sheet_names: list[str]`
 
-Expected:
-symptom = LINE
-```
+`TargetSheetMetadata`
 
-Tujuan: membuktikan `symptom_comment` tetap menjadi sumber paling prioritas walaupun kolom fallback lain juga match.
+- `sheet_name: str`
+- `headers: list[str]`
+- `duplicate_key_columns_present: bool`
+- `warnings: list[str]`
 
----
+`FilterValueOption`
 
-### 4. Test priority tetap berlaku di dalam kolom yang sama
+- `raw_value: object`
+- `display_value: str`
+- `normalized_value: str`
+- `count: int`
 
-```text
-Source:
-part_name = PANEL
-symptom_comment = "vertical line"
+`SourceFileAppendResult`
 
-Master symptom:
-priority 10: pattern = vertical line, symptom = VERTICAL_LINE
-priority 20: pattern = line, symptom = LINE
+- `file_name: str`
+- `status: str`
+- `matched_rows: int`
+- `appended_rows: int`
+- `duplicate_rows: int`
+- `invalid_key_rows: int`
+- `reason: str`
 
-Expected:
-symptom = VERTICAL_LINE
-```
+`FolderAppendResult`
 
-Tujuan: memastikan behavior priority existing tidak rusak.
+- `target_file: Path`
+- `target_sheet_name: str`
+- `source_folder: Path`
+- `files_found: int`
+- `files_processed: int`
+- `files_skipped: int`
+- `files_failed: int`
+- `matched_rows: int`
+- `appended_rows: int`
+- `duplicate_rows: int`
+- `invalid_key_rows: int`
+- `file_results: list[SourceFileAppendResult]`
 
----
+### Fungsi service yang disarankan
 
-### 5. Test backward compatibility
+`load_target_workbook_metadata(target_file: Path) -> TargetWorkbookMetadata`
 
-```text
-Config inputs hanya:
-- part_name
-- symptom_comment
+- Membuka workbook target.
+- Mengembalikan daftar sheet.
+- Tidak membaca semua data.
 
-Source hanya punya:
-- part_name
-- symptom_comment
+`load_target_sheet_metadata(target_file: Path, sheet_name: str) -> TargetSheetMetadata`
 
-Expected:
-matching tetap berjalan seperti behavior lama.
-```
+- Membaca header.
+- Memvalidasi duplicate key columns.
 
-Tujuan: memastikan config lama tidak wajib langsung diubah.
+`load_filter_value_options(target_file: Path, sheet_name: str, filter_column: str) -> list[FilterValueOption]`
 
----
+- Membaca nilai unik filter dari target.
+- Mengembalikan display value dan count.
 
-## Acceptance Criteria
+`precheck_folder_append_request(...) -> FolderAppendPrecheckResult`
 
-Implementasi dianggap selesai jika:
+- Validasi semua input.
+- Scan file source.
+- Baca metadata ringan dari source.
+- Menghasilkan warning/error tanpa menulis file.
 
-- Data `part_name=PANEL` dengan `repair_comment=UNIT-PANEL-GANTI-BLANK` menghasilkan `symptom=BLANK` saat `symptom_comment` tidak menghasilkan match.
-- Data `part_name=PANEL` dengan `symptom_code_description` berisi `no picture` atau `blank` menghasilkan `symptom=BLANK` jika `symptom_comment` dan `repair_comment` tidak match.
-- Jika `symptom_comment` sudah match rule tertentu, hasil dari `repair_comment` atau `symptom_code_description` tidak boleh menimpa hasil tersebut.
-- Jika `repair_comment` sudah match rule tertentu, hasil dari `symptom_code_description` tidak boleh menimpa hasil tersebut.
-- Priority master symptom tetap berjalan di dalam masing-masing kolom fallback.
-- Config lama yang hanya memakai `symptom_comment` tetap valid.
-- `python -m pytest tests/test_symptom_rules.py -q` berhasil.
-- Jika memungkinkan, `python -m pytest -q` berhasil.
+`append_folder_excels_to_target(...) -> FolderAppendResult`
 
----
+- Menjalankan proses utama.
+- Membuka target workbook.
+- Mengumpulkan existing duplicate keys.
+- Membaca tiap source workbook.
+- Filter data.
+- Append row baru.
+- Save target.
+- Mengembalikan ringkasan detail.
 
-## Risiko dan Mitigasi
+## 10. Rencana integrasi dengan UI
 
-| Risiko | Mitigasi |
-|--------|----------|
-| `repair_comment` mengandung kata action/part yang bisa false positive. | Pakai `repair_comment` hanya setelah `symptom_comment` gagal match, dan tambah test agar tidak menimpa hasil dari `symptom_comment`. |
-| Priority master mengalahkan fallback order jika loop salah. | Pastikan loop luar adalah source column, loop dalam adalah sorted rules. |
-| Config lama rusak karena input tambahan belum ada. | Helper fallback default tetap `symptom_comment`. |
-| Legacy config dan recipe config berbeda behavior. | Update `recipe_service.py` dan `transform_service.py` secara konsisten. |
-| Test existing berubah karena fallback membaca kolom ekstra. | Tambahkan test eksplisit untuk fallback order dan backward compatibility. |
+### File UI baru
 
----
+Kemungkinan file:
 
-## Out of Scope untuk Implementasi Awal
+- `app/ui/folder_append_window.py`
 
-- Mengubah struktur sheet master `symptom`.
-- Menambahkan kolom khusus seperti `source_column` di master symptom.
-- Membuat UI setting untuk mengatur fallback order.
-- Mengubah rule master existing selain jika nanti ditemukan rule yang terlalu luas.
-- Menggabungkan semua kolom source menjadi satu string karena itu lebih berisiko membuat false positive.
+Atau jika ingin tetap di main app:
 
----
+- Tambahkan tombol di `app/ui/main_window.py` untuk membuka window baru.
 
-## Estimasi Perubahan
+Rekomendasi:
 
-Perubahan ini termasuk **minor-to-medium**:
+- Tambahkan tombol kecil di sidebar atau area bawah main window: `Append Folder Excel`.
+- Tombol ini membuka window terpisah agar workflow utama tetap fokus ke job pipeline.
 
-- Minor dari sisi arsitektur karena tidak mengubah pipeline besar, format output, atau master schema.
-- Medium dari sisi kehati-hatian karena matching symptom mempengaruhi hasil bisnis dan perlu test fallback order yang jelas.
+### Threading
 
-Estimasi file kode inti yang berubah: 2 file.
-Estimasi config runtime yang berubah: 2 file.
-Estimasi test baru: 3-5 test.
+Proses append harus berjalan di worker thread seperti pipeline utama, karena:
+
+- membaca banyak workbook bisa lama,
+- menulis target bisa lama,
+- UI tidak boleh freeze.
+
+Pola yang bisa diikuti:
+
+- gunakan `Queue`,
+- worker mengirim event log/progress,
+- UI polling queue dengan `after`.
+
+### Logging
+
+Contoh log:
+
+- `Target dipilih: file_target.xlsx`
+- `Sheet dipilih: Raw Data`
+- `Header target ditemukan: 42 kolom`
+- `Filter: Model Name, nilai dipilih: 5`
+- `Folder sumber: D:/Data/Source`
+- `File sumber ditemukan: 128`
+- `[updated] source_001.xlsx - matched=20, appended=18, duplicate=2`
+- `[skipped] source_002.xlsx - sheet tidak ditemukan`
+- `Selesai: appended=430, duplicate=88, failed=3`
+
+## 11. Rencana validasi dan error handling
+
+### Error yang menghentikan seluruh proses
+
+- Target file tidak ditemukan.
+- Target file bukan `.xlsx`.
+- Target file tidak bisa dibuka.
+- Sheet target tidak ditemukan.
+- Header target kosong.
+- Kolom filter tidak ada di target.
+- Duplicate key columns tidak lengkap di target.
+- Folder source tidak ditemukan.
+- Tidak ada file `.xlsx` di folder source.
+- User belum memilih nilai filter.
+- Target file sedang terkunci oleh Excel sehingga tidak bisa disimpan.
+
+### Error per file source
+
+Error ini tidak harus menghentikan seluruh proses:
+
+- file source tidak bisa dibuka,
+- sheet target tidak ada di source,
+- header source kosong,
+- kolom filter tidak ada di source,
+- duplicate key columns tidak lengkap di source.
+
+Setiap error per source dicatat di result dan log.
+
+### File target termasuk di folder source
+
+Jika file target ada di dalam folder source:
+
+- file target harus di-skip saat scan source.
+- Alasannya agar data target tidak dibaca sebagai source dan menimbulkan duplikasi aneh.
+
+## 12. Rencana normalisasi data
+
+Normalisasi perlu dibuat konsisten untuk:
+
+- header matching,
+- filter matching,
+- duplicate key matching.
+
+### Header normalization
+
+Fungsi helper:
+
+`normalize_header(value: object) -> str`
+
+Aturan:
+
+- convert ke string,
+- trim,
+- collapse spasi berulang menjadi satu spasi,
+- casefold.
+
+### Value normalization
+
+Fungsi helper:
+
+`normalize_cell_value(value: object) -> str`
+
+Aturan:
+
+- `None` dan NaN menjadi string kosong,
+- trim text,
+- casefold untuk matching,
+- angka integer-like tidak ditampilkan sebagai `123.0`,
+- tanggal dinormalisasi jika tipe datanya date/datetime/pandas Timestamp.
+
+### Display value
+
+Fungsi helper:
+
+`format_filter_display_value(value: object) -> str`
+
+Aturan:
+
+- kosong menjadi `(kosong)`,
+- tanggal menjadi `YYYY-MM-DD`,
+- angka integer-like menjadi tanpa `.0`,
+- text ditampilkan dengan trim.
+
+## 13. Rencana testing
+
+Tambahkan test service baru, misalnya:
+
+`tests/test_folder_excel_append_service.py`
+
+Test minimum:
+
+1. Membaca sheet names dari target.
+2. Membaca header target.
+3. Membaca nilai unik filter dari target.
+4. Append data dari satu source ke target.
+5. Append data dari banyak source ke target.
+6. Hanya baris dengan nilai filter terpilih yang diappend.
+7. Urutan kolom hasil mengikuti header target.
+8. Kolom target yang tidak ada di source diisi kosong.
+9. Kolom tambahan di source diabaikan.
+10. Duplicate existing di target tidak diappend.
+11. Duplicate antar source dalam batch yang sama tidak diappend.
+12. Duplicate key memakai `notification + model name + keydate`.
+13. Proses gagal jika duplicate key columns tidak ada di target.
+14. Source file dilewati jika sheet target tidak ditemukan.
+15. Source file dilewati jika kolom filter tidak ditemukan.
+16. File temporary `~$...xlsx` diabaikan.
+17. Target file di dalam source folder tidak ikut diproses sebagai source.
+18. Tanggal `keydate` yang sama tidak dianggap berbeda hanya karena format cell berbeda.
+19. Proses mengembalikan summary jumlah file/baris yang benar.
+20. Target workbook tetap bisa dibuka setelah proses save.
+
+Test UI bisa ditambahkan lebih ringan:
+
+- tombol proses disabled sampai input lengkap,
+- daftar sheet berubah setelah target dipilih,
+- daftar header berubah setelah sheet dipilih,
+- daftar checklist muncul setelah filter dipilih.
+
+## 14. Tahapan implementasi yang disarankan
+
+### Tahap 1: Finalisasi aturan
+
+- Konfirmasi posisi header selalu baris pertama.
+- Konfirmasi source folder tidak recursive.
+- Konfirmasi baris dengan duplicate key tidak lengkap dilewati.
+- Konfirmasi apakah style baris baru perlu dicopy atau cukup value saja.
+
+### Tahap 2: Service metadata target
+
+- Buat service baru untuk membaca workbook target.
+- Implementasi baca sheet names.
+- Implementasi baca header sheet.
+- Implementasi baca nilai unik filter.
+- Tambahkan unit test metadata.
+
+### Tahap 3: Service append core
+
+- Implementasi scan source folder.
+- Implementasi mapping header source ke header target.
+- Implementasi filter row.
+- Implementasi duplicate key detection.
+- Implementasi append ke target.
+- Tambahkan unit test proses utama.
+
+### Tahap 4: Precheck
+
+- Implementasi precheck tanpa write.
+- Tambahkan ringkasan warning/error.
+- Pastikan UI bisa menampilkan precheck result.
+
+### Tahap 5: UI window
+
+- Buat window `Append Folder Excel`.
+- Tambahkan pilih target, sheet, header filter, checklist nilai filter, pilih source folder.
+- Tambahkan tombol precheck dan proses.
+- Tambahkan log dan summary.
+- Jalankan proses di worker thread.
+
+### Tahap 6: Integrasi ke aplikasi utama
+
+- Tambahkan entry point dari main window.
+- Pastikan packaging tetap menyertakan module baru.
+- Pastikan tidak mengganggu workflow job profile yang sudah ada.
+
+### Tahap 7: Polishing
+
+- Tambahkan search pada checklist filter.
+- Tambahkan pilih semua/kosongkan.
+- Tambahkan progress per file.
+- Tambahkan pesan error yang ramah.
+- Tambahkan opsi highlight baris baru jika dibutuhkan.
+
+## 15. Keputusan desain sementara
+
+Keputusan yang sudah disepakati:
+
+- File source hanya `.xlsx`.
+- Folder source berisi file dengan format kolom dan nama sheet yang sama.
+- User tetap bisa memilih sheet target.
+- Header target menjadi acuan kolom yang dicopy.
+- Nilai filter diambil dari Excel target.
+- Data hasil copy ditambahkan ke bawah data target yang sudah ada.
+- Jika kolom target tidak ditemukan di source, isi dikosongkan.
+- Duplikasi dicegah berdasarkan `notification + model name + keydate`.
+
+Keputusan yang masih perlu dikonfirmasi sebelum coding:
+
+- Header selalu berada di baris pertama atau ada kemungkinan header mulai di baris lain.
+- Apakah scan folder source perlu recursive ke subfolder.
+- Apakah baris dengan salah satu duplicate key kosong harus dilewati atau tetap boleh ditambahkan.
+- Apakah baris baru perlu mengikuti style baris terakhir target.
+- Apakah perlu membuat backup file target sebelum proses append.
+
+## 16. Rekomendasi tambahan
+
+Sebelum proses append, sangat disarankan tool membuat backup otomatis file target.
+
+Contoh:
+
+- Target: `report.xlsx`
+- Backup: `report.backup-20260812-153000.xlsx`
+
+Alasannya:
+
+- Fitur ini menulis langsung ke file target.
+- Jika user salah memilih filter atau source folder, data target bisa bertambah banyak.
+- Backup membuat proses lebih aman dan mudah dikembalikan.
+
+Rekomendasi default:
+
+- Backup otomatis aktif.
+- Backup disimpan di folder yang sama dengan target.
+- Nama backup memakai timestamp.
+- UI menampilkan lokasi backup setelah proses selesai.
+
+## 17. Nama fitur yang mungkin digunakan
+
+Beberapa opsi nama:
+
+- `Append Folder Excel`
+- `Copy Multi Excel`
+- `Import dari Folder Excel`
+- `Tarik Data dari Folder`
+- `Append ke Target Excel`
+
+Rekomendasi nama UI:
+
+`Append Folder Excel`
+
+Nama ini cukup singkat dan menggambarkan bahwa fitur membaca banyak Excel dari folder lalu append ke target.
