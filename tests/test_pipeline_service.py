@@ -529,11 +529,16 @@ def test_lcd_import_prod_lot_and_prod_date_rules_are_config_specific():
 
     for cfg in (lcd_cfg, regular_cfg):
         result_columns = cfg["outputs"][0]["columns"]
-        assert result_columns[result_columns.index("action") + 1 : result_columns.index("defect_category")] == [
+        assert result_columns[result_columns.index("symptom") : result_columns.index("defect_detail") + 1] == [
+            "symptom",
+            "action",
+            "defect_category",
+            "defect",
+            "keydate",
             "code",
             "ref_code",
+            "defect_detail",
         ]
-        assert result_columns[result_columns.index("defect") + 1] == "defect_detail"
 
         code_step = next(step for step in cfg["steps"] if step["id"] == "sub_18_add_code")
         detail_step = next(step for step in cfg["steps"] if step["id"] == "sub_19_add_defect_detail")
