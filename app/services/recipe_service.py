@@ -1256,6 +1256,18 @@ def _add_summary_metadata(summary_df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     return _apply_summary_column_labels(summary_df, cfg)
 
 
+def _resolve_summary_factory_order(factory_series: pd.Series, configured_factory_order: object) -> list[str]:
+    first_seen_factories = factory_series.drop_duplicates().tolist()
+    if isinstance(configured_factory_order, list):
+        preferred_factories = [str(value).strip() for value in configured_factory_order if str(value).strip()]
+    else:
+        preferred_factories = []
+
+    factory_order = [factory for factory in preferred_factories if factory in first_seen_factories]
+    factory_order.extend(factory for factory in first_seen_factories if factory not in factory_order)
+    return factory_order
+
+
 def _build_static_part_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
     cfg = options or {}
     section_column = str(cfg.get("section_column", "section"))
@@ -2006,6 +2018,66 @@ def _build_panel_usage_summary(data_df: pd.DataFrame, options: dict | None) -> p
     return _apply_summary_column_labels(summary_df, cfg)
 
 
+def _build_panel_usage_by_factory_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
+    cfg = options or {}
+    part_column = str(cfg.get("part_column", "part_name"))
+    usage_column = str(cfg.get("usage_column", "panel_usage"))
+    factory_column = str(cfg.get("factory_column", "factory"))
+    usage_order = ["< 1 Year", "1 - 2 Years", "2 - 3 Years", "> 3 Years"]
+    usage_key_to_label = {item.casefold(): item for item in usage_order}
+
+    required_columns = [part_column, usage_column, factory_column]
+    missing = [column for column in required_columns if column not in data_df.columns]
+    if missing:
+        raise ValueError("Panel usage by factory summary gagal, kolom tidak ditemukan: " + ", ".join(missing))
+
+    working_df = data_df.copy()
+    part_series = working_df[part_column].fillna("").astype(str).str.strip()
+    working_df = working_df.loc[part_series.eq("PANEL")].copy()
+
+    usage_series = working_df[usage_column].fillna("").astype(str).str.strip()
+    usage_keys = usage_series.map(lambda value: value.casefold())
+    valid_mask = usage_keys.isin(usage_key_to_label.keys())
+    filtered_df = working_df.loc[valid_mask].copy()
+    filtered_df["panel_usage"] = usage_keys.loc[valid_mask].map(usage_key_to_label)
+    filtered_df["factory"] = filtered_df[factory_column].fillna("").astype(str).str.strip()
+
+    columns = ["part_name", "panel_usage", "Total", "_row_type"]
+    rows: list[dict[str, object]] = []
+
+    overall_counts = filtered_df.groupby("panel_usage", dropna=False).size().to_dict()
+    overall_total = 0.0
+    for usage_label in usage_order:
+        count = float(overall_counts.get(usage_label, 0))
+        rows.append({"part_name": "PANEL", "panel_usage": usage_label, "Total": count, "_row_type": "data"})
+        overall_total += count
+    rows.extend(
+        [
+            {"part_name": "PANEL Total", "panel_usage": "", "Total": overall_total, "_row_type": "subtotal"},
+            {"part_name": "Grand Total", "panel_usage": "", "Total": overall_total, "_row_type": "grand_total"},
+            {"part_name": "", "panel_usage": "", "Total": "", "_row_type": "blank"},
+        ]
+    )
+
+    factory_df = filtered_df.loc[filtered_df["factory"].ne("")].copy()
+    factory_order = _resolve_summary_factory_order(factory_df["factory"], cfg.get("factory_order"))
+
+    for factory in factory_order:
+        factory_rows = factory_df.loc[factory_df["factory"].eq(factory)]
+        factory_counts = factory_rows.groupby("panel_usage", dropna=False).size().to_dict()
+        factory_total = 0.0
+        rows.append({"part_name": factory, "panel_usage": "", "Total": "", "_row_type": "section_title"})
+        rows.append({"part_name": "Part Name", "panel_usage": "Panel Usage", "Total": "Total", "_row_type": "header"})
+        for usage_label in usage_order:
+            count = float(factory_counts.get(usage_label, 0))
+            rows.append({"part_name": "PANEL", "panel_usage": usage_label, "Total": count, "_row_type": "data"})
+            factory_total += count
+        rows.append({"part_name": "PANEL Total", "panel_usage": "", "Total": factory_total, "_row_type": "subtotal"})
+
+    summary_df = pd.DataFrame(rows, columns=columns)
+    return _apply_summary_column_labels(summary_df, cfg)
+
+
 def _build_panel_fcost_inch_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
     cfg = options or {}
     part_column = str(cfg.get("part_column", "part_name"))
@@ -2115,6 +2187,141 @@ def _build_panel_fcost_inch_summary(data_df: pd.DataFrame, options: dict | None)
 
     grand_total = {**panel_total, "part_name": "Grand Total"}
     summary_df = pd.concat([summary_df, pd.DataFrame([panel_total, grand_total])], ignore_index=True)
+    summary_df = _apply_summary_amount_scale(summary_df, cfg, list(cost_columns.keys()))
+    return _apply_summary_column_labels(summary_df, cfg)
+
+
+def _build_panel_fcost_inch_by_factory_summary(data_df: pd.DataFrame, options: dict | None) -> pd.DataFrame:
+    cfg = options or {}
+    part_column = str(cfg.get("part_column", "part_name"))
+    factory_column = str(cfg.get("factory_column", "factory"))
+    inch_column = str(cfg.get("inch_column", "inch"))
+
+    cost_columns = {
+        "Sum of labor_cost": str(cfg.get("labor_cost_column", "labor_cost")),
+        "Sum of transportation_cost": str(cfg.get("transportation_cost_column", "transportation_cost")),
+        "Sum of parts_cost": str(cfg.get("parts_cost_column", "parts_cost")),
+        "Sum of total_cost": str(cfg.get("total_cost_column", "total_cost")),
+    }
+
+    required_columns = [part_column, factory_column, inch_column, *cost_columns.values()]
+    missing = [column for column in required_columns if column not in data_df.columns]
+    if missing:
+        raise ValueError("Panel fcost inch by factory summary gagal, kolom tidak ditemukan: " + ", ".join(missing))
+
+    def inch_sort_key(value: object) -> tuple[int, float, str]:
+        text = str(value).strip()
+        numeric_value = pd.to_numeric(text, errors="coerce")
+        if pd.notna(numeric_value):
+            return (0, float(numeric_value), text)
+        return (1, 0.0, text.casefold())
+
+    working_df = data_df.copy()
+    part_series = working_df[part_column].fillna("").astype(str).str.strip()
+    working_df = working_df.loc[part_series.eq("PANEL")].copy()
+    working_df["factory"] = working_df[factory_column].fillna("").astype(str).str.strip()
+    working_df["inch"] = working_df[inch_column].fillna("").astype(str).str.strip()
+    working_df = working_df.loc[working_df["factory"].ne("") & working_df["inch"].ne("")].copy()
+
+    for target_col, source_col in cost_columns.items():
+        working_df[target_col] = pd.to_numeric(working_df[source_col], errors="coerce").fillna(0)
+
+    grouped = (
+        working_df.groupby(["factory", "inch"], dropna=False, sort=False)
+        .agg(
+            **{
+                "Sum of labor_cost": ("Sum of labor_cost", "sum"),
+                "Sum of transportation_cost": ("Sum of transportation_cost", "sum"),
+                "Sum of parts_cost": ("Sum of parts_cost", "sum"),
+                "Sum of total_cost": ("Sum of total_cost", "sum"),
+                "Count of part_name": ("inch", "count"),
+            }
+        )
+        .reset_index()
+    )
+
+    columns = [
+        "part_name",
+        "inch",
+        "Sum of labor_cost",
+        "Sum of transportation_cost",
+        "Sum of parts_cost",
+        "Sum of total_cost",
+        "Count of part_name",
+        "_row_type",
+    ]
+    rows: list[dict[str, object]] = []
+
+    factory_order = _resolve_summary_factory_order(working_df["factory"], cfg.get("factory_order"))
+
+    for factory in factory_order:
+        factory_rows = grouped.loc[grouped["factory"].eq(factory)].copy()
+        if factory_rows.empty:
+            continue
+
+        records = factory_rows.to_dict("records")
+        records.sort(key=lambda row: (-float(row["Sum of total_cost"]), inch_sort_key(row["inch"])))
+
+        rows.append(
+            {
+                "part_name": factory,
+                "inch": "",
+                "Sum of labor_cost": "",
+                "Sum of transportation_cost": "",
+                "Sum of parts_cost": "",
+                "Sum of total_cost": "",
+                "Count of part_name": "",
+                "_row_type": "section_title",
+            }
+        )
+        rows.append(
+            {
+                "part_name": "Part Name",
+                "inch": "Inch",
+                "Sum of labor_cost": "Labor",
+                "Sum of transportation_cost": "Transportation",
+                "Sum of parts_cost": "Parts",
+                "Sum of total_cost": "Total",
+                "Count of part_name": "Count",
+                "_row_type": "header",
+            }
+        )
+
+        factory_total = {
+            "Sum of labor_cost": 0.0,
+            "Sum of transportation_cost": 0.0,
+            "Sum of parts_cost": 0.0,
+            "Sum of total_cost": 0.0,
+            "Count of part_name": 0.0,
+        }
+        for row in records:
+            data_row = {
+                "part_name": "PANEL",
+                "inch": str(row["inch"]),
+                "Sum of labor_cost": float(row["Sum of labor_cost"]),
+                "Sum of transportation_cost": float(row["Sum of transportation_cost"]),
+                "Sum of parts_cost": float(row["Sum of parts_cost"]),
+                "Sum of total_cost": float(row["Sum of total_cost"]),
+                "Count of part_name": float(row["Count of part_name"]),
+                "_row_type": "data",
+            }
+            rows.append(data_row)
+            for key in factory_total:
+                factory_total[key] += float(data_row[key])
+
+        rows.append(
+            {
+                "part_name": "PANEL Total",
+                "inch": "",
+                **factory_total,
+                "_row_type": "subtotal",
+            }
+        )
+
+    summary_df = pd.DataFrame(rows, columns=columns)
+    if summary_df.empty:
+        summary_df = pd.DataFrame(columns=columns)
+
     summary_df = _apply_summary_amount_scale(summary_df, cfg, list(cost_columns.keys()))
     return _apply_summary_column_labels(summary_df, cfg)
 
@@ -2635,8 +2842,17 @@ def _build_summary_output_sheet(
     if summary_type == "panel_usage_summary":
         return _build_panel_usage_summary(data_df, options if isinstance(options, dict) else None), layout_mode
 
+    if summary_type == "panel_usage_by_factory_summary":
+        return _build_panel_usage_by_factory_summary(data_df, options if isinstance(options, dict) else None), layout_mode
+
     if summary_type == "panel_fcost_inch_summary":
         return _build_panel_fcost_inch_summary(data_df, options if isinstance(options, dict) else None), layout_mode
+
+    if summary_type == "panel_fcost_inch_by_factory_summary":
+        return _build_panel_fcost_inch_by_factory_summary(
+            data_df,
+            options if isinstance(options, dict) else None,
+        ), layout_mode
 
     if summary_type == "panel_top1_inch_model_summary":
         return _build_panel_top1_inch_model_summary(data_df, options if isinstance(options, dict) else None), layout_mode

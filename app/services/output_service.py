@@ -228,6 +228,7 @@ def _apply_summary_sheet_style(
         top=Side(style="thin", color="D9D9D9"),
         bottom=Side(style="thin", color="D9D9D9"),
     )
+    no_border = Border()
     title_fill = _fill_from_config(styling_cfg, "summary_title_color", "1F4E78")
     section_total_header_fill = _fill_from_config(
         styling_cfg,
@@ -287,6 +288,15 @@ def _apply_summary_sheet_style(
         elif row_type == "subtotal":
             row_fill = subtotal_fill
             row_font = Font(name=font_name, bold=True, size=9)
+        elif row_type == "section_title":
+            row_fill = section_total_header_fill
+            row_font = Font(name=font_name, bold=True, size=10)
+        elif row_type == "header":
+            row_fill = None
+            row_font = Font(name=font_name, bold=True, size=10)
+        elif row_type == "blank":
+            row_fill = white_fill
+            row_font = Font(name=font_name, size=9)
         else:
             row_fill = zebra_fill if data_row_counter % 2 == 1 else white_fill
             row_font = Font(name=font_name, size=9)
@@ -295,16 +305,21 @@ def _apply_summary_sheet_style(
         for col_idx in range(1, max_col + 1):
             cell = worksheet.cell(row=row_idx, column=col_idx)
             cell.font = row_font
-            cell.fill = row_fill
-            cell.border = border
+            cell.fill = header_fills[(col_idx - 1) % len(header_fills)] if row_type == "header" else row_fill
+            cell.border = no_border if row_type == "blank" else border
             vertical = "top" if col_idx == 1 and row_type == "data" else "center"
             header_value = worksheet.cell(row=header_row, column=col_idx).value
             number_format_needed = _should_apply_summary_number_format(header_value, cell.value)
             percent_format_needed = _should_apply_summary_percent_format(header_value, cell.value)
-            horizontal = "right" if number_format_needed or percent_format_needed else "left"
-            if row_type in {"subtotal", "grand_total"} and col_idx == 1:
+            if row_type == "header":
+                horizontal = "center"
+            else:
+                horizontal = "right" if number_format_needed or percent_format_needed else "left"
+            if row_type in {"subtotal", "grand_total", "section_title"} and col_idx == 1:
                 horizontal = "center"
             cell.alignment = Alignment(horizontal=horizontal, vertical=vertical)
+            if row_type in {"header", "blank"}:
+                continue
             if number_format_needed:
                 cell.number_format = str(styling_cfg.get("number_format", "#,##0"))
             elif percent_format_needed:

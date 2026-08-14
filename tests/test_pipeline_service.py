@@ -3394,32 +3394,34 @@ def test_run_pipeline_step_recipe_panel_summaries_data3a_data3b_data3c(app_paths
     assert grand_total_c["Total"] == 7
 
 
-def test_run_pipeline_step_recipe_panel_usage_summary_data4_with_fixed_order(app_paths):
+def test_run_pipeline_step_recipe_panel_usage_by_factory_summary_data4(app_paths):
     source_path = app_paths.project_root / "data4_source.xlsx"
     pd.DataFrame(
         [
-            {"part_name": "PANEL", "panel_usage": "2 - 3 Years"},
-            {"part_name": "PANEL", "panel_usage": "< 1 Year"},
-            {"part_name": "PANEL", "panel_usage": "1 - 2 Years"},
-            {"part_name": "PANEL", "panel_usage": "1 - 2 Years"},
-            {"part_name": "PANEL", "panel_usage": "> 3 Years"},
-            {"part_name": "PANEL", "panel_usage": "INVALID"},
-            {"part_name": "PANEL", "panel_usage": ""},
-            {"part_name": "MAIN_UNIT", "panel_usage": "< 1 Year"},
+            {"part_name": "PANEL", "panel_usage": "< 1 Year", "factory": "AE TECH"},
+            {"part_name": "PANEL", "panel_usage": "2 - 3 Years", "factory": "AE TECH"},
+            {"part_name": "PANEL", "panel_usage": "1 - 2 Years", "factory": "SMM"},
+            {"part_name": "PANEL", "panel_usage": "1 - 2 Years", "factory": "SMM"},
+            {"part_name": "PANEL", "panel_usage": "> 3 Years", "factory": "MOKA"},
+            {"part_name": "PANEL", "panel_usage": "> 3 Years", "factory": ""},
+            {"part_name": "PANEL", "panel_usage": "INVALID", "factory": "AE TECH"},
+            {"part_name": "PANEL", "panel_usage": "", "factory": "MOKA"},
+            {"part_name": "MAIN_UNIT", "panel_usage": "< 1 Year", "factory": "AE TECH"},
         ]
     ).to_excel(source_path, index=False, sheet_name="OnlySheet")
 
-    config_path = app_paths.configs_dir / "panel_usage_summary_data4.yaml"
+    config_path = app_paths.configs_dir / "panel_usage_by_factory_summary_data4.yaml"
     _write_yaml(
         config_path,
         "\n".join(
             [
-                'name: "Panel Usage Summary Data4"',
+                'name: "Panel Usage By Factory Summary Data4"',
                 "datasets:",
                 '  working_dataset: "result"',
                 "  canonical_columns:",
                 '    - "part_name"',
                 '    - "panel_usage"',
+                '    - "factory"',
                 "steps:",
                 '  - id: "extract"',
                 '    type: "extract_sheet"',
@@ -3430,16 +3432,21 @@ def test_run_pipeline_step_recipe_panel_usage_summary_data4_with_fixed_order(app
                 "      required:",
                 '        - "part_name"',
                 '        - "panel_usage"',
+                '        - "factory"',
                 "    select:",
                 '      "part_name": "part_name"',
                 '      "panel_usage": "panel_usage"',
+                '      "factory": "factory"',
                 '    write_to: "result"',
                 "outputs:",
                 '  - sheet_name: "data4"',
                 "    summary:",
-                '      type: "panel_usage_summary"',
+                '      type: "panel_usage_by_factory_summary"',
                 '      layout_mode: "plain"',
+                '      title: "PANEL USAGE SUMMARY"',
+                '      subtitle: "Panel summary by usage"',
                 "      options:",
+                '        factory_column: "factory"',
                 "        column_labels:",
                 '          part_name: "Part Name"',
                 '          panel_usage: "Panel Usage"',
@@ -3455,20 +3462,43 @@ def test_run_pipeline_step_recipe_panel_usage_summary_data4_with_fixed_order(app
         log=lambda _: None,
     )
 
-    data4_df = _read_summary_sheet(result.output_path, "data4", fill_forward=["Part Name"])
+    workbook = load_workbook(result.output_path, read_only=True)
+    sheet = workbook["data4"]
 
-    assert data4_df.columns.tolist() == ["Part Name", "Panel Usage", "Total"]
+    assert sheet["A1"].value == "PANEL USAGE SUMMARY"
+    assert sheet["A2"].value == "Panel summary by usage"
+    assert [sheet.cell(row=4, column=column).value for column in range(1, 4)] == [
+        "Part Name",
+        "Panel Usage",
+        "Total",
+    ]
+    assert sheet.max_column == 3
 
-    usage_rows = data4_df[data4_df["Part Name"] == "PANEL"]["Panel Usage"].tolist()
-    assert usage_rows == ["< 1 Year", "1 - 2 Years", "2 - 3 Years", "> 3 Years"]
+    usage_order = ["< 1 Year", "1 - 2 Years", "2 - 3 Years", "> 3 Years"]
+    assert [sheet.cell(row=row, column=2).value for row in range(5, 9)] == usage_order
+    assert [sheet.cell(row=row, column=3).value for row in range(5, 9)] == [1, 2, 1, 2]
+    assert sheet["A9"].value == "PANEL Total"
+    assert sheet["C9"].value == 6
+    assert sheet["A10"].value == "Grand Total"
+    assert sheet["C10"].value == 6
+    assert sheet["A11"].value is None
 
-    usage_counts = data4_df[data4_df["Part Name"] == "PANEL"]["Total"].tolist()
-    assert usage_counts == [1, 2, 1, 1]
-
-    panel_total = data4_df[data4_df["Part Name"] == "PANEL Total"].iloc[0]
-    grand_total = data4_df[data4_df["Part Name"] == "Grand Total"].iloc[0]
-    assert panel_total["Total"] == 5
-    assert grand_total["Total"] == 5
+    factory_expectations = {
+        "AE TECH": ([1, 0, 1, 0], 2),
+        "SMM": ([0, 2, 0, 0], 2),
+        "MOKA": ([0, 0, 0, 1], 1),
+    }
+    for factory, (counts, total) in factory_expectations.items():
+        factory_row = next(row for row in range(1, sheet.max_row + 1) if sheet.cell(row=row, column=1).value == factory)
+        assert [sheet.cell(row=factory_row + 1, column=column).value for column in range(1, 4)] == [
+            "Part Name",
+            "Panel Usage",
+            "Total",
+        ]
+        assert [sheet.cell(row=factory_row + offset, column=2).value for offset in range(2, 6)] == usage_order
+        assert [sheet.cell(row=factory_row + offset, column=3).value for offset in range(2, 6)] == counts
+        assert sheet.cell(row=factory_row + 6, column=1).value == "PANEL Total"
+        assert sheet.cell(row=factory_row + 6, column=3).value == total
 
 
 def test_run_pipeline_step_recipe_panel_fcost_data5a_and_top1_model_data5b(app_paths):
@@ -3613,6 +3643,126 @@ def test_run_pipeline_step_recipe_panel_fcost_data5a_and_top1_model_data5b(app_p
     assert panel_total_b["Labor"] == pytest.approx(0.019)
     assert panel_total_b["Total"] == pytest.approx(0.5)
     assert grand_total_b["Total"] == pytest.approx(0.5)
+
+
+def test_run_pipeline_step_recipe_panel_fcost_inch_by_factory_data5c(app_paths):
+    source_path = app_paths.project_root / "data5c_source.xlsx"
+    pd.DataFrame(
+        [
+            {"part_name": "PANEL", "factory": "AE TECH", "inch": "55", "labor_cost": 100, "transportation_cost": 50, "parts_cost": 1350, "total_cost": 1500},
+            {"part_name": "PANEL", "factory": "AE TECH", "inch": "55", "labor_cost": 50, "transportation_cost": 25, "parts_cost": 425, "total_cost": 500},
+            {"part_name": "PANEL", "factory": "AE TECH", "inch": "75", "labor_cost": 80, "transportation_cost": 20, "parts_cost": 900, "total_cost": 1000},
+            {"part_name": "PANEL", "factory": "SMM", "inch": "45", "labor_cost": 10, "transportation_cost": 5, "parts_cost": 985, "total_cost": 1000},
+            {"part_name": "PANEL", "factory": "SMM", "inch": "50", "labor_cost": 20, "transportation_cost": 10, "parts_cost": 1970, "total_cost": 2000},
+            {"part_name": "PANEL", "factory": "SMM", "inch": "60", "labor_cost": 15, "transportation_cost": 5, "parts_cost": 1480, "total_cost": 1500},
+            {"part_name": "PANEL", "factory": "SMM", "inch": "65", "labor_cost": 40, "transportation_cost": 10, "parts_cost": 3950, "total_cost": 4000},
+            {"part_name": "PANEL", "factory": "MOKA", "inch": "32", "labor_cost": 7, "transportation_cost": 3, "parts_cost": 690, "total_cost": 700},
+            {"part_name": "MAIN_UNIT", "factory": "AE TECH", "inch": "86", "labor_cost": 999, "transportation_cost": 0, "parts_cost": 0, "total_cost": 999},
+            {"part_name": "PANEL", "factory": "", "inch": "24", "labor_cost": 1, "transportation_cost": 1, "parts_cost": 98, "total_cost": 100},
+            {"part_name": "PANEL", "factory": "AE TECH", "inch": "", "labor_cost": 1, "transportation_cost": 1, "parts_cost": 98, "total_cost": 100},
+        ]
+    ).to_excel(source_path, index=False, sheet_name="OnlySheet")
+
+    config_path = app_paths.configs_dir / "panel_fcost_inch_by_factory_data5c.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Panel FCost Inch By Factory Data5c"',
+                "datasets:",
+                '  working_dataset: "result"',
+                "  canonical_columns:",
+                '    - "part_name"',
+                '    - "factory"',
+                '    - "inch"',
+                '    - "labor_cost"',
+                '    - "transportation_cost"',
+                '    - "parts_cost"',
+                '    - "total_cost"',
+                "steps:",
+                '  - id: "extract"',
+                '    type: "extract_sheet"',
+                "    sheet_selector:",
+                '      mode: "single_sheet_workbook"',
+                "    header_locator:",
+                "      scan_rows: [1, 1]",
+                "      required:",
+                '        - "part_name"',
+                '        - "factory"',
+                '        - "inch"',
+                '        - "labor_cost"',
+                '        - "transportation_cost"',
+                '        - "parts_cost"',
+                '        - "total_cost"',
+                "    select:",
+                '      "part_name": "part_name"',
+                '      "factory": "factory"',
+                '      "inch": "inch"',
+                '      "labor_cost": "labor_cost"',
+                '      "transportation_cost": "transportation_cost"',
+                '      "parts_cost": "parts_cost"',
+                '      "total_cost": "total_cost"',
+                '    write_to: "result"',
+                "outputs:",
+                '  - sheet_name: "data5c"',
+                "    summary:",
+                '      type: "panel_fcost_inch_by_factory_summary"',
+                '      layout_mode: "plain"',
+                '      title: "PANEL TOP MODEL BY FACTORY"',
+                '      subtitle: "Top panel model summary by factory - (K.IDR)"',
+                "      options:",
+                "        amount_scale_factor: 1000",
+                '        factory_column: "factory"',
+                "        column_labels:",
+                '          part_name: "Part Name"',
+                '          inch: "Inch"',
+                '          "Sum of labor_cost": "Labor"',
+                '          "Sum of transportation_cost": "Transportation"',
+                '          "Sum of parts_cost": "Parts"',
+                '          "Sum of total_cost": "Total"',
+                '          "Count of part_name": "Count"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _: None,
+    )
+
+    workbook = load_workbook(result.output_path, read_only=True)
+    sheet = workbook["data5c"]
+    expected_header = ["Part Name", "Inch", "Labor", "Transportation", "Parts", "Total", "Count"]
+
+    assert sheet["A1"].value == "PANEL TOP MODEL BY FACTORY"
+    assert sheet["A2"].value == "Top panel model summary by factory - (K.IDR)"
+    assert [sheet.cell(row=4, column=column).value for column in range(1, 8)] == expected_header
+    assert "Model Name" not in [sheet.cell(row=4, column=column).value for column in range(1, sheet.max_column + 1)]
+    assert sheet.max_column == 7
+
+    ae_row = next(row for row in range(1, sheet.max_row + 1) if sheet.cell(row=row, column=1).value == "AE TECH")
+    assert [sheet.cell(row=ae_row + 1, column=column).value for column in range(1, 8)] == expected_header
+    assert [sheet.cell(row=ae_row + offset, column=2).value for offset in range(2, 4)] == ["55", "75"]
+    assert [sheet.cell(row=ae_row + offset, column=6).value for offset in range(2, 4)] == pytest.approx([2, 1])
+    assert [sheet.cell(row=ae_row + offset, column=7).value for offset in range(2, 4)] == [2, 1]
+    assert sheet.cell(row=ae_row + 4, column=1).value == "PANEL Total"
+    assert sheet.cell(row=ae_row + 4, column=3).value == pytest.approx(0.23)
+    assert sheet.cell(row=ae_row + 4, column=6).value == pytest.approx(3)
+    assert sheet.cell(row=ae_row + 4, column=7).value == 3
+
+    smm_row = next(row for row in range(1, sheet.max_row + 1) if sheet.cell(row=row, column=1).value == "SMM")
+    assert [sheet.cell(row=smm_row + offset, column=2).value for offset in range(2, 6)] == ["65", "50", "60", "45"]
+    assert [sheet.cell(row=smm_row + offset, column=6).value for offset in range(2, 6)] == pytest.approx([4, 2, 1.5, 1])
+    assert sheet.cell(row=smm_row + 6, column=1).value == "PANEL Total"
+    assert sheet.cell(row=smm_row + 6, column=6).value == pytest.approx(8.5)
+    assert sheet.cell(row=smm_row + 6, column=7).value == 4
+
+    moka_row = next(row for row in range(1, sheet.max_row + 1) if sheet.cell(row=row, column=1).value == "MOKA")
+    assert sheet.cell(row=moka_row + 2, column=2).value == "32"
+    assert sheet.cell(row=moka_row + 2, column=6).value == pytest.approx(0.7)
+    assert sheet.cell(row=moka_row + 3, column=1).value == "PANEL Total"
 
 
 def test_run_pipeline_step_recipe_panel_symptom_inch_matrix_data6(app_paths):

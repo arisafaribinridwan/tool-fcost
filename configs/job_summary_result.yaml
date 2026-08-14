@@ -270,12 +270,13 @@ outputs:
 
   - sheet_name: "data4"
     summary:
-      type: "panel_usage_summary"
+      type: "panel_usage_by_factory_summary"
       layout_mode: "plain"
       title: "PANEL USAGE SUMMARY"
       subtitle: "Panel summary by usage"
       column_width: 13.0
       options:
+        factory_column: "factory"
         column_labels:
           part_name: "Part Name"
           panel_usage: "Panel Usage"
@@ -312,6 +313,25 @@ outputs:
           part_name: "Part Name"
           inch: "Inch"
           model_name: "Model Name"
+          "Sum of labor_cost": "Labor"
+          "Sum of transportation_cost": "Transportation"
+          "Sum of parts_cost": "Parts"
+          "Sum of total_cost": "Total"
+          "Count of part_name": "Count"
+
+  - sheet_name: "data5c"
+    summary:
+      type: "panel_fcost_inch_by_factory_summary"
+      layout_mode: "plain"
+      title: "PANEL TOP MODEL BY FACTORY"
+      subtitle: "Top panel model summary by factory - (K.IDR)"
+      column_width: 13.0
+      options:
+        amount_scale_factor: 1000
+        factory_column: "factory"
+        column_labels:
+          part_name: "Part Name"
+          inch: "Inch"
           "Sum of labor_cost": "Labor"
           "Sum of transportation_cost": "Transportation"
           "Sum of parts_cost": "Parts"
