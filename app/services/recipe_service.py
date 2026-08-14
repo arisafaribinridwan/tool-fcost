@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from math import ceil
+from numbers import Integral, Real
 from pathlib import Path
 import re
 
@@ -217,6 +218,28 @@ def _literal_or_series(value: object, index: pd.Index) -> pd.Series:
     return pd.Series(value, index=index, dtype="object")
 
 
+def _stringify_concat_value(value: object) -> str | None:
+    if pd.isna(value):
+        return None
+
+    if isinstance(value, str):
+        text = value.strip()
+        return text or None
+
+    if isinstance(value, bool):
+        return str(value)
+
+    if isinstance(value, Integral):
+        return str(value)
+
+    if isinstance(value, Real):
+        numeric = float(value)
+        return str(int(numeric)) if numeric.is_integer() else str(value)
+
+    text = str(value).strip()
+    return text or None
+
+
 def _evaluate_expression(
     data_df: pd.DataFrame,
     expression_cfg: object,
@@ -254,6 +277,30 @@ def _evaluate_expression(
         result = values.str.slice(start, start + length)
         short_mask = values.str.len() < (start + length)
         result.loc[short_mask] = None
+        return result
+
+    if operator == "concat":
+        if not isinstance(payload, dict):
+            raise ValueError(f"{context} concat harus berupa object.")
+        parts = payload.get("parts")
+        if not isinstance(parts, list) or not parts:
+            raise ValueError(f"{context} concat.parts harus berupa list dan minimal 1 item.")
+
+        fallback = payload.get("on_invalid_part", "")
+        result = pd.Series("", index=data_df.index, dtype="object")
+        invalid_mask = pd.Series(False, index=data_df.index)
+        for idx, part_cfg in enumerate(parts, start=1):
+            part_series = _evaluate_expression(
+                data_df,
+                part_cfg,
+                f"{context} concat.parts[{idx}]",
+                runtime_values,
+            )
+            text_series = part_series.map(_stringify_concat_value)
+            invalid_mask = invalid_mask | text_series.isna()
+            result = result + text_series.fillna("")
+
+        result.loc[invalid_mask] = fallback
         return result
 
     if operator == "lot_month_date":

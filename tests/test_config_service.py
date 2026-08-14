@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from app.services.config_service import discover_configs, validate_config_payload
 
 
@@ -368,6 +370,68 @@ def test_validate_config_payload_accepts_step_recipe_schema():
     }
 
     assert validate_config_payload(payload) == ()
+
+
+def test_validate_config_payload_accepts_concat_expression():
+    payload = {
+        "name": "Concat Recipe",
+        "datasets": {
+            "working_dataset": "result",
+            "canonical_columns": ["keydate", "code", "ref_code"],
+        },
+        "steps": [
+            {
+                "id": "add_ref_code",
+                "type": "derive_column",
+                "target": "ref_code",
+                "expression": {
+                    "concat": {
+                        "parts": [
+                            {
+                                "substring": {
+                                    "column": "keydate",
+                                    "start": 2,
+                                    "length": 4,
+                                }
+                            },
+                            {"column": "code"},
+                        ],
+                        "on_invalid_part": "N/A",
+                    }
+                },
+            }
+        ],
+        "outputs": [{"sheet_name": "result", "columns": ["keydate", "code", "ref_code"]}],
+    }
+
+    assert validate_config_payload(payload) == ()
+
+
+@pytest.mark.parametrize("parts", [[], "code"])
+def test_validate_config_payload_rejects_invalid_concat_parts(parts):
+    payload = {
+        "name": "Concat Recipe",
+        "datasets": {
+            "working_dataset": "result",
+            "canonical_columns": ["keydate", "code", "ref_code"],
+        },
+        "steps": [
+            {
+                "id": "add_ref_code",
+                "type": "derive_column",
+                "target": "ref_code",
+                "expression": {
+                    "concat": {
+                        "parts": parts,
+                    }
+                },
+            }
+        ],
+        "outputs": [{"sheet_name": "result", "columns": ["keydate", "code", "ref_code"]}],
+    }
+
+    errors = validate_config_payload(payload)
+    assert any(".expression.concat.parts harus berupa list dan minimal 1 item." in item for item in errors)
 
 
 def test_validate_config_payload_rejects_invalid_lookup_rules_matching_schema():

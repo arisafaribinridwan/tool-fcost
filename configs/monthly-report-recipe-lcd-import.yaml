@@ -61,8 +61,11 @@ datasets:
     - "model_series"
     - "symptom"
     - "action"
+    - "code"
+    - "ref_code"
     - "defect_category"
     - "defect"
+    - "defect_detail"
     - "keydate"
 
 masters:
@@ -744,13 +747,62 @@ steps:
         "replace_remote_control": "Replace Remote"
     on_missing_match: null
 
-  - id: "sub_18_add_keydate"
+  - id: "sub_18_add_code"
+    type: "lookup_exact"
+    source_column: "action"
+    target_column: "code"
+    master:
+      file: "masters/master_table.xlsx"
+      sheet: "defect_category"
+      key: "Repair Action"
+      value: "Code"
+    matching:
+      trim: true
+      case_sensitive: false
+      normalizer: "compact_text"
+      aliases:
+        "replace_remote_control": "Replace Remote"
+    on_blank_source: "N/A"
+    on_missing_match: "N/A"
+
+  - id: "sub_19_add_defect_detail"
+    type: "lookup_exact"
+    source_column: "action"
+    target_column: "defect_detail"
+    master:
+      file: "masters/master_table.xlsx"
+      sheet: "defect_category"
+      key: "Repair Action"
+      value: "Defect Detail"
+    matching:
+      trim: true
+      case_sensitive: false
+      normalizer: "compact_text"
+      aliases:
+        "replace_remote_control": "Replace Remote"
+    on_blank_source: "N/A"
+    on_missing_match: "N/A"
+
+  - id: "sub_20_add_keydate"
     type: "derive_column"
     target: "keydate"
     expression:
       runtime_value: "period_keydate"
 
-  - id: "sub_19_add_sales"
+  - id: "sub_21_add_ref_code"
+    type: "derive_column"
+    target: "ref_code"
+    expression:
+      concat:
+        parts:
+          - substring:
+              column: "keydate"
+              start: 2
+              length: 4
+          - column: "code"
+        on_invalid_part: "N/A"
+
+  - id: "sub_22_add_sales"
     type: "extract_sheet"
     sheet_selector:
       contains: "calculation"
@@ -776,14 +828,14 @@ steps:
     write_to: "sales"
     mode: "replace"
 
-  - id: "sub_19_add_sales_model_name"
+  - id: "sub_22_add_sales_model_name"
     type: "derive_column"
     dataset: "sales"
     target: "model_name"
     expression:
       column: "Model"
 
-  - id: "sub_19_add_sales_factory"
+  - id: "sub_22_add_sales_factory"
     type: "lookup_exact"
     dataset: "sales"
     source_column: "model_name"
@@ -835,8 +887,11 @@ outputs:
       - "model_series"
       - "symptom"
       - "action"
+      - "code"
+      - "ref_code"
       - "defect_category"
       - "defect"
+      - "defect_detail"
       - "keydate"
   - sheet_name: "sales"
     dataset: "sales"

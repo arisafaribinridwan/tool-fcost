@@ -435,6 +435,78 @@ def test_run_pipeline_step_recipe_derives_lcd_import_prod_date_from_ym_lot(app_p
     assert workbook["result"]["B5"].number_format == "YYYY-MM-DD"
 
 
+def test_run_pipeline_step_recipe_supports_concat_text_expression(app_paths):
+    source_path = app_paths.project_root / "source.xlsx"
+    pd.DataFrame(
+        [
+            {"keydate": "202603", "code": 20.0},
+            {"keydate": "202603", "code": "N/A"},
+            {"keydate": "203", "code": 20},
+        ]
+    ).to_excel(source_path, index=False, sheet_name="Data")
+
+    config_path = app_paths.configs_dir / "concat_recipe.yaml"
+    _write_yaml(
+        config_path,
+        "\n".join(
+            [
+                'name: "Concat Recipe"',
+                "datasets:",
+                '  working_dataset: "result"',
+                "  canonical_columns:",
+                '    - "keydate"',
+                '    - "code"',
+                '    - "ref_code"',
+                "steps:",
+                '  - id: "extract"',
+                '    type: "extract_sheet"',
+                "    sheet_selector:",
+                '      contains: "Data"',
+                "    header_locator:",
+                '      type: "required_columns"',
+                "      scan_rows: [1, 1]",
+                "      required:",
+                '        - "keydate"',
+                '        - "code"',
+                "    select:",
+                '      "keydate": "keydate"',
+                '      "code": "code"',
+                '    write_to: "result"',
+                '    mode: "replace"',
+                '  - id: "add_ref_code"',
+                '    type: "derive_column"',
+                '    target: "ref_code"',
+                "    expression:",
+                "      concat:",
+                "        parts:",
+                "          - substring:",
+                '              column: "keydate"',
+                "              start: 2",
+                "              length: 4",
+                '          - column: "code"',
+                '        on_invalid_part: "N/A"',
+                "outputs:",
+                '  - sheet_name: "result"',
+                "    columns:",
+                '      - "keydate"',
+                '      - "code"',
+                '      - "ref_code"',
+            ]
+        ),
+    )
+
+    result = run_pipeline(
+        paths=app_paths,
+        source_path=source_path,
+        config_path=config_path,
+        log=lambda _message: None,
+    )
+
+    detail_df = pd.read_excel(result.output_path, sheet_name="result", skiprows=3, keep_default_na=False)
+
+    assert detail_df["ref_code"].tolist() == ["260320", "2603N/A", "N/A"]
+
+
 def test_lcd_import_prod_lot_and_prod_date_rules_are_config_specific():
     lcd_cfg = yaml.safe_load(Path("configs/monthly-report-recipe-lcd-import.yaml").read_text(encoding="utf-8"))
     regular_cfg = yaml.safe_load(Path("configs/monthly-report-recipe.yaml").read_text(encoding="utf-8"))
@@ -454,6 +526,31 @@ def test_lcd_import_prod_lot_and_prod_date_rules_are_config_specific():
     assert regular_step["expression"]["substring"]["length"] == 3
     assert "short_year_month_date" in lcd_prod_date_step["expression"]
     assert "lot_month_date" in regular_prod_date_step["expression"]
+
+    for cfg in (lcd_cfg, regular_cfg):
+        result_columns = cfg["outputs"][0]["columns"]
+        assert result_columns[result_columns.index("action") + 1 : result_columns.index("defect_category")] == [
+            "code",
+            "ref_code",
+        ]
+        assert result_columns[result_columns.index("defect") + 1] == "defect_detail"
+
+        code_step = next(step for step in cfg["steps"] if step["id"] == "sub_18_add_code")
+        detail_step = next(step for step in cfg["steps"] if step["id"] == "sub_19_add_defect_detail")
+        ref_code_step = next(step for step in cfg["steps"] if step["id"] == "sub_21_add_ref_code")
+
+        assert code_step["master"]["value"] == "Code"
+        assert code_step["on_blank_source"] == "N/A"
+        assert code_step["on_missing_match"] == "N/A"
+        assert detail_step["master"]["value"] == "Defect Detail"
+        assert detail_step["on_blank_source"] == "N/A"
+        assert detail_step["on_missing_match"] == "N/A"
+        assert ref_code_step["expression"]["concat"]["parts"][0]["substring"] == {
+            "column": "keydate",
+            "start": 2,
+            "length": 4,
+        }
+        assert ref_code_step["expression"]["concat"]["parts"][1]["column"] == "code"
 
 
 def test_run_pipeline_uses_output_name_override_for_filename(app_paths):
@@ -2265,21 +2362,29 @@ def test_run_pipeline_supports_monthly_step_recipe_end_to_end(app_paths):
                     "Repair Action": "Replace Panel",
                     "Category": "Defect",
                     "Defect": "Panel",
+                    "Code": 20,
+                    "Defect Detail": "PANEL",
                 },
                 {
                     "Repair Action": "Cancel",
                     "Category": "N/A",
                     "Defect": "N/A",
+                    "Code": "N/A",
+                    "Defect Detail": "N/A",
                 },
                 {
                     "Repair Action": "Factory Reset",
                     "Category": "Software",
                     "Defect": "Software",
+                    "Code": 30,
+                    "Defect Detail": "SOFTWARE",
                 },
                 {
                     "Repair Action": "Replace Power Unit",
                     "Category": "Defect",
                     "Defect": "Power",
+                    "Code": 21,
+                    "Defect Detail": "POWER",
                 },
             ]
         ).to_excel(writer, index=False, sheet_name="defect_category")
@@ -2334,6 +2439,9 @@ def test_run_pipeline_supports_monthly_step_recipe_end_to_end(app_paths):
     ]
     assert detail_df["defect_category"].tolist() == ["Defect", "N/A", "Software", "Defect"]
     assert detail_df["defect"].tolist() == ["Panel", "N/A", "Software", "Power"]
+    assert detail_df["code"].astype(str).tolist() == ["20", "N/A", "30", "21"]
+    assert detail_df["ref_code"].tolist() == ["260320", "2603N/A", "260330", "260321"]
+    assert detail_df["defect_detail"].tolist() == ["PANEL", "N/A", "SOFTWARE", "POWER"]
     assert detail_df["keydate"].astype(str).tolist() == ["202603", "202603", "202603", "202603"]
     assert any("duplicate group rewrite" in item.lower() for item in logs)
 

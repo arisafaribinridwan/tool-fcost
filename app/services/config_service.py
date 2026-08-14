@@ -567,6 +567,29 @@ def is_step_recipe_payload(payload: object) -> bool:
     return isinstance(payload, dict) and "steps" in payload and "datasets" in payload
 
 
+def _validate_recipe_expression(expression: object, *, path: str, errors: list[str]) -> None:
+    if not isinstance(expression, dict) or len(expression) != 1:
+        return
+
+    operator, payload = next(iter(expression.items()))
+    if operator != "concat":
+        return
+
+    if not isinstance(payload, dict):
+        errors.append(f"{path}.concat harus berupa object.")
+        return
+
+    parts = payload.get("parts")
+    if not isinstance(parts, list) or len(parts) == 0:
+        errors.append(f"{path}.concat.parts harus berupa list dan minimal 1 item.")
+    else:
+        for idx, part in enumerate(parts):
+            _validate_recipe_expression(part, path=f"{path}.concat.parts[{idx}]", errors=errors)
+
+    if "on_invalid_part" in payload and not _is_supported_literal(payload.get("on_invalid_part")):
+        errors.append(f"{path}.concat.on_invalid_part hanya boleh memakai nilai literal sederhana.")
+
+
 def _validate_step_recipe_payload(payload: dict, errors: list[str]) -> None:
     for field in ("name", "datasets", "steps", "outputs"):
         if field not in payload:
@@ -619,6 +642,12 @@ def _validate_step_recipe_payload(payload: dict, errors: list[str]) -> None:
                 for field in ("target", "expression"):
                     if field not in step:
                         errors.append(f"{path}.{field} wajib diisi.")
+                if "expression" in step:
+                    _validate_recipe_expression(
+                        step.get("expression"),
+                        path=f"{path}.expression",
+                        errors=errors,
+                    )
                 continue
 
             if step_type == "update_columns":
