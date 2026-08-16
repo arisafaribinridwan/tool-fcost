@@ -63,7 +63,7 @@ Alur penggunaan yang diinginkan:
 
 - Semua file dengan ekstensi `.xlsx`.
 - Untuk tahap awal, file temporary Excel seperti `~$nama_file.xlsx` sebaiknya diabaikan.
-- Subfolder tidak perlu diproses pada versi awal kecuali nanti diminta.
+- Subfolder tidak diproses pada versi awal.
 
 ### Output utama
 
@@ -79,7 +79,11 @@ Alur penggunaan yang diinginkan:
   - jumlah baris cocok filter,
   - jumlah baris baru ditambahkan,
   - jumlah baris dilewati karena duplikat,
+  - jumlah baris dilewati karena duplicate key tidak lengkap,
+  - nama sheet log error baris,
+  - lokasi backup file target,
   - daftar error per file.
+- Detail baris yang dilewati karena duplicate key tidak lengkap ditulis ke sheet khusus di file target, bukan ditampilkan panjang di log aplikasi.
 
 ## 4. Aturan pembacaan workbook
 
@@ -88,13 +92,13 @@ Alur penggunaan yang diinginkan:
 - User memilih nama sheet dari file target.
 - File sumber diproses memakai nama sheet yang sama.
 - Jika file sumber tidak memiliki sheet tersebut:
-  - file tersebut dilewati,
-  - status dicatat sebagai gagal atau skipped dengan alasan `Sheet target tidak ditemukan`.
+  - proses append dibatalkan,
+  - status dicatat sebagai error dengan alasan `Sheet target tidak ditemukan`.
 
 ### Header
 
 - Header target menjadi acuan utama.
-- Pada versi awal, header diasumsikan berada di baris pertama.
+- Pada versi awal, header wajib berada di baris pertama.
 - Semua kolom output mengikuti urutan header pada file target.
 - Header kosong di target diabaikan sebagai kolom data.
 - Matching header sebaiknya dibuat toleran:
@@ -111,6 +115,8 @@ Contoh:
 Catatan penting:
 
 - Jika ada dua header yang menjadi sama setelah normalisasi, misalnya `Model Name` dan `model name`, tool perlu menolak proses dengan pesan validasi karena mapping kolom menjadi ambigu.
+- Jika header tidak ditemukan atau tidak valid di baris pertama file target, seluruh proses harus dihentikan dengan warning yang jelas.
+- Jika header tidak ditemukan atau tidak valid di baris pertama file source, proses append dibatalkan dan error dicatat dengan jelas.
 
 ### Kolom yang ditulis
 
@@ -147,18 +153,23 @@ Alasannya:
 
 ### Matching nilai filter
 
-Rekomendasi awal:
+Keputusan final:
 
 - Matching nilai filter dilakukan dengan normalisasi:
   - trim spasi,
   - case-insensitive,
   - nilai numerik seperti `123.0` dan `123` dianggap sama jika aman.
+- Nilai kosong ditampilkan dan dicocokkan sebagai `(kosong)`.
 
 Untuk tanggal:
 
 - Jika kolom filter berisi tanggal, nilai yang ditampilkan ke user harus stabil dan mudah dibaca.
 - Matching tanggal perlu dinormalisasi agar tanggal Excel, `datetime`, dan string tanggal yang sama tidak dianggap berbeda.
-- Format tampilan yang disarankan: `YYYY-MM-DD` untuk tanggal murni.
+- Untuk kolom filter non-`keydate`, tanggal murni ditampilkan sebagai `YYYY-MM-DD`.
+- Untuk kolom filter non-`keydate`, datetime ditampilkan sebagai `YYYY-MM-DD HH:MM:SS`.
+- String tanggal ambigu tidak ditebak agresif agar tidak salah membaca urutan hari/bulan.
+- Khusus duplicate key `keydate`, data sudah dibakukan di semua file sebagai periode `yyyymm`.
+- Matching `keydate` menggunakan normalisasi periode `yyyymm`, termasuk menyamakan angka/string integer-like seperti `202608.0` dan `202608` jika aman.
 
 ## 6. Aturan anti-duplikasi
 
@@ -178,7 +189,7 @@ Untuk mengurangi false duplicate dan false new row:
 - Nilai key dinormalisasi dengan trim spasi.
 - Text dibandingkan case-insensitive.
 - Angka dengan akhiran `.0` dapat disamakan dengan bentuk integer text.
-- Tanggal pada `keydate` perlu dinormalisasi ke bentuk stabil, misalnya `YYYY-MM-DD`, jika memungkinkan.
+- `keydate` dinormalisasi sebagai periode `yyyymm`, bukan sebagai tanggal bebas.
 
 ### Validasi duplicate key
 
@@ -189,7 +200,7 @@ Jika salah satu dari tiga kolom key tidak ada di file target:
 
 Jika salah satu dari tiga kolom key tidak ada di file source:
 
-- ada dua opsi, tetapi rekomendasi untuk versi awal adalah proses file tersebut gagal/skipped.
+- proses append dibatalkan.
 - Alasannya, tanpa key lengkap, anti-duplikasi tidak bisa dipercaya.
 
 Catatan:
@@ -199,17 +210,26 @@ Catatan:
 
 ### Baris dengan key kosong
 
-Perlu diputuskan sebelum implementasi final.
-
-Rekomendasi awal:
-
-- Jika ketiga nilai key kosong, baris dianggap tidak valid dan dilewati.
-- Jika sebagian key kosong, baris tetap diproses tetapi dicatat sebagai warning, atau dilewati agar anti-duplikasi lebih aman.
-
-Rekomendasi paling aman:
+Keputusan final:
 
 - Lewati baris jika salah satu dari `notification`, `model name`, atau `keydate` kosong.
 - Tampilkan jumlah baris yang dilewati karena duplicate key tidak lengkap.
+- Detail baris yang dilewati ditulis ke sheet khusus `Append_Error_Log` di file target.
+- Log aplikasi hanya menampilkan ringkasan dan nama sheet log error.
+- Sheet `Append_Error_Log` minimal mencakup kolom:
+  - `timestamp`,
+  - nama file source,
+  - nama sheet source,
+  - nomor baris Excel,
+  - tipe error,
+  - pesan error,
+  - nilai `notification`,
+  - nilai `model name`,
+  - nilai `keydate`,
+  - kolom filter,
+  - nilai filter.
+- Format ringkasan log aplikasi:
+  - `12 baris dilewati karena duplicate key tidak lengkap. Detail dicatat di sheet Append_Error_Log pada file target.`
 
 ## 7. Perilaku append ke target
 
@@ -219,18 +239,26 @@ Rekomendasi paling aman:
 - Header tidak ditulis ulang.
 - Urutan kolom mengikuti header target.
 
+### Excel Table target
+
+Keputusan final:
+
+- User memilih sheet target secara spesifik dari file target.
+- Saat init check/precheck, sheet target wajib memiliki tepat satu Excel Table sebagai target append.
+- Jika sheet target tidak memiliki Excel Table, proses dibatalkan dengan warning/log yang jelas.
+- Jika sheet target memiliki lebih dari satu Excel Table, proses dibatalkan dengan warning/log yang jelas.
+- Header Excel Table target harus cocok dengan header target yang dibaca dari baris pertama.
+- Data baru diappend ke bawah data lama dan Excel Table target di-resize agar baris baru masuk ke table.
+
 ### Format dan style
 
-Pilihan awal yang sederhana:
+Keputusan final:
 
-- Append value saja.
-- Tidak memaksakan style baru.
-
-Opsional yang bisa ditambahkan:
-
-- Copy style dari baris data terakhir di target ke baris baru.
-- Highlight baris baru dengan warna tertentu.
-- Resize Excel Table jika sheet target memakai tabel Excel.
+- Data baru ditulis sebagai value mengikuti urutan header target.
+- Baris baru tidak mengikuti style baris data terakhir target.
+- Baris baru diberi style/highlight khusus agar user bisa mengenali data hasil append secara visual.
+- Warna fill baris baru menggunakan `D9EAD3`.
+- Style lama di target tidak diubah.
 
 Catatan arsitektur:
 
@@ -287,19 +315,29 @@ Rekomendasi:
 
 Precheck sebaiknya tersedia sebelum proses write.
 
+Keputusan final:
+
+- Tombol `Precheck` tersedia sebagai validasi manual tanpa menulis file.
+- User tidak wajib menjalankan `Precheck` secara manual sebelum append.
+- Saat user menekan `Proses Append`, tool wajib menjalankan precheck otomatis sebelum menulis target.
+- Jika precheck menemukan error fatal, proses append dibatalkan, target tidak ditulis, dan warning/log error ditampilkan ke user.
+
 Precheck memvalidasi:
 
 - file target ada dan `.xlsx`,
 - file target bisa dibuka,
 - sheet target ada,
+- sheet target memiliki tepat satu Excel Table target,
+- header Excel Table target cocok dengan header target di baris pertama,
 - header target tidak kosong,
 - kolom filter ada,
 - duplicate key columns ada di target,
 - folder sumber ada,
 - ada file `.xlsx` yang bisa diproses,
-- minimal beberapa file source memiliki sheet target,
-- minimal beberapa file source memiliki kolom filter,
-- duplicate key columns ada di source.
+- semua file source yang akan diproses memiliki sheet target,
+- semua file source yang akan diproses memiliki header valid di baris pertama,
+- semua file source yang akan diproses memiliki kolom filter,
+- semua file source yang akan diproses memiliki duplicate key columns.
 
 Precheck sebaiknya tidak menulis apapun ke target.
 
@@ -332,6 +370,7 @@ Service ini bertanggung jawab untuk:
 `TargetSheetMetadata`
 
 - `sheet_name: str`
+- `table_name: str`
 - `headers: list[str]`
 - `duplicate_key_columns_present: bool`
 - `warnings: list[str]`
@@ -353,20 +392,36 @@ Service ini bertanggung jawab untuk:
 - `invalid_key_rows: int`
 - `reason: str`
 
+`AppendErrorLogEntry`
+
+- `timestamp: str`
+- `source_file: str`
+- `source_sheet: str`
+- `source_row: int`
+- `error_type: str`
+- `message: str`
+- `notification: str`
+- `model_name: str`
+- `keydate: str`
+- `filter_column: str`
+- `filter_value: str`
+
 `FolderAppendResult`
 
 - `target_file: Path`
 - `target_sheet_name: str`
+- `error_log_sheet_name: str | None`
 - `source_folder: Path`
 - `files_found: int`
 - `files_processed: int`
-- `files_skipped: int`
+- `files_skipped: int` untuk file yang sengaja diabaikan seperti temporary Excel dan file target sendiri
 - `files_failed: int`
 - `matched_rows: int`
 - `appended_rows: int`
 - `duplicate_rows: int`
 - `invalid_key_rows: int`
 - `file_results: list[SourceFileAppendResult]`
+- `error_log_entries: list[AppendErrorLogEntry]`
 
 ### Fungsi service yang disarankan
 
@@ -379,6 +434,8 @@ Service ini bertanggung jawab untuk:
 `load_target_sheet_metadata(target_file: Path, sheet_name: str) -> TargetSheetMetadata`
 
 - Membaca header.
+- Memvalidasi sheet target memiliki tepat satu Excel Table target.
+- Memvalidasi header Excel Table target cocok dengan header target di baris pertama.
 - Memvalidasi duplicate key columns.
 
 `load_filter_value_options(target_file: Path, sheet_name: str, filter_column: str) -> list[FilterValueOption]`
@@ -401,6 +458,8 @@ Service ini bertanggung jawab untuk:
 - Membaca tiap source workbook.
 - Filter data.
 - Append row baru.
+- Tulis detail baris invalid key ke sheet `Append_Error_Log` jika ada.
+- Resize Excel Table target agar mencakup baris baru.
 - Save target.
 - Mengembalikan ringkasan detail.
 
@@ -446,8 +505,8 @@ Contoh log:
 - `Folder sumber: D:/Data/Source`
 - `File sumber ditemukan: 128`
 - `[updated] source_001.xlsx - matched=20, appended=18, duplicate=2`
-- `[skipped] source_002.xlsx - sheet tidak ditemukan`
-- `Selesai: appended=430, duplicate=88, failed=3`
+- `[error] source_002.xlsx - sheet target tidak ditemukan; proses dibatalkan`
+- `Selesai: appended=430, duplicate=88, invalid_key=12`
 
 ## 11. Rencana validasi dan error handling
 
@@ -467,7 +526,7 @@ Contoh log:
 
 ### Error per file source
 
-Error ini tidak harus menghentikan seluruh proses:
+Error pada file source menghentikan seluruh proses append:
 
 - file source tidak bisa dibuka,
 - sheet target tidak ada di source,
@@ -475,7 +534,7 @@ Error ini tidak harus menghentikan seluruh proses:
 - kolom filter tidak ada di source,
 - duplicate key columns tidak lengkap di source.
 
-Setiap error per source dicatat di result dan log.
+Setiap error source dicatat di result dan log dengan nama file serta alasan yang jelas. Jika error ditemukan saat precheck otomatis, proses append dibatalkan sebelum target ditulis.
 
 ### File target termasuk di folder source
 
@@ -553,11 +612,11 @@ Test minimum:
 11. Duplicate antar source dalam batch yang sama tidak diappend.
 12. Duplicate key memakai `notification + model name + keydate`.
 13. Proses gagal jika duplicate key columns tidak ada di target.
-14. Source file dilewati jika sheet target tidak ditemukan.
-15. Source file dilewati jika kolom filter tidak ditemukan.
+14. Proses gagal jika source file tidak memiliki sheet target.
+15. Proses gagal jika source file tidak memiliki kolom filter.
 16. File temporary `~$...xlsx` diabaikan.
 17. Target file di dalam source folder tidak ikut diproses sebagai source.
-18. Tanggal `keydate` yang sama tidak dianggap berbeda hanya karena format cell berbeda.
+18. `keydate` periode `yyyymm` yang sama tidak dianggap berbeda hanya karena format cell berbeda, misalnya `202608.0` dan `202608`.
 19. Proses mengembalikan summary jumlah file/baris yang benar.
 20. Target workbook tetap bisa dibuka setelah proses save.
 
@@ -572,10 +631,11 @@ Test UI bisa ditambahkan lebih ringan:
 
 ### Tahap 1: Finalisasi aturan
 
-- Konfirmasi posisi header selalu baris pertama.
-- Konfirmasi source folder tidak recursive.
-- Konfirmasi baris dengan duplicate key tidak lengkap dilewati.
-- Konfirmasi apakah style baris baru perlu dicopy atau cukup value saja.
+- Header wajib berada di baris pertama.
+- Source folder tidak recursive.
+- Baris dengan duplicate key tidak lengkap dilewati dan dicatat detailnya.
+- Baris baru diberi style/highlight khusus.
+- Backup file target dibuat otomatis sebelum proses append.
 
 ### Tahap 2: Service metadata target
 
@@ -607,6 +667,7 @@ Test UI bisa ditambahkan lebih ringan:
 - Tambahkan tombol precheck dan proses.
 - Tambahkan log dan summary.
 - Jalankan proses di worker thread.
+- Proses append selalu menjalankan precheck otomatis terlebih dahulu; jika ada error fatal, proses batal dan error ditampilkan di log/UI.
 
 ### Tahap 6: Integrasi ke aplikasi utama
 
@@ -628,20 +689,34 @@ Keputusan yang sudah disepakati:
 
 - File source hanya `.xlsx`.
 - Folder source berisi file dengan format kolom dan nama sheet yang sama.
+- Source folder tidak recursive; subfolder diabaikan.
 - User tetap bisa memilih sheet target.
+- Sheet target wajib memiliki tepat satu Excel Table target saat init check/precheck.
+- Jika sheet target tidak memiliki Excel Table atau memiliki lebih dari satu Excel Table, proses dibatalkan dengan warning/log yang jelas.
+- Excel Table target di-resize otomatis agar baris baru masuk ke table.
 - Header target menjadi acuan kolom yang dicopy.
+- Header wajib berada di baris pertama; jika tidak valid, tampilkan warning dan hentikan proses.
 - Nilai filter diambil dari Excel target.
 - Data hasil copy ditambahkan ke bawah data target yang sudah ada.
 - Jika kolom target tidak ditemukan di source, isi dikosongkan.
 - Duplikasi dicegah berdasarkan `notification + model name + keydate`.
+- Baris dengan salah satu duplicate key kosong dilewati.
+- Detail baris yang dilewati karena duplicate key tidak lengkap harus dicatat ke sheet error, termasuk nilai `notification`, `model name`, dan `keydate`.
+- Baris baru diberi style/highlight khusus warna `D9EAD3` agar terlihat sebagai data baru.
+- Backup file target dibuat otomatis sebelum proses append.
+- Precheck tersedia sebagai tombol opsional, tetapi validasi precheck wajib berjalan otomatis sebelum append.
+- Jika precheck menemukan error fatal, proses append dibatalkan dan warning/log error ditampilkan.
+- Jika ada file source error, proses append dibatalkan dan log harus menjelaskan file serta penyebabnya.
+- Detail baris yang dilewati karena duplicate key tidak lengkap ditulis ke sheet `Append_Error_Log` di file target.
+- Log aplikasi untuk invalid key hanya menampilkan ringkasan dan nama sheet log error.
+- Nama fitur final di UI adalah `Append Folder Excel`.
+- Matching nilai filter memakai trim, case-insensitive, penyamaan angka integer-like seperti `123.0` dan `123`, serta nilai kosong sebagai `(kosong)`.
+- `keydate` sudah dibakukan di semua file sebagai periode `yyyymm` dan dinormalisasi sebagai periode, bukan tanggal bebas.
+- Kolom filter non-`keydate` yang berupa tanggal memakai tampilan `YYYY-MM-DD`, datetime memakai `YYYY-MM-DD HH:MM:SS`, dan string tanggal ambigu tidak ditebak agresif.
 
 Keputusan yang masih perlu dikonfirmasi sebelum coding:
 
-- Header selalu berada di baris pertama atau ada kemungkinan header mulai di baris lain.
-- Apakah scan folder source perlu recursive ke subfolder.
-- Apakah baris dengan salah satu duplicate key kosong harus dilewati atau tetap boleh ditambahkan.
-- Apakah baris baru perlu mengikuti style baris terakhir target.
-- Apakah perlu membuat backup file target sebelum proses append.
+- Belum ada.
 
 ## 16. Rekomendasi tambahan
 
@@ -658,9 +733,9 @@ Alasannya:
 - Jika user salah memilih filter atau source folder, data target bisa bertambah banyak.
 - Backup membuat proses lebih aman dan mudah dikembalikan.
 
-Rekomendasi default:
+Keputusan final:
 
-- Backup otomatis aktif.
+- Backup otomatis wajib aktif sebelum proses append.
 - Backup disimpan di folder yang sama dengan target.
 - Nama backup memakai timestamp.
 - UI menampilkan lokasi backup setelah proses selesai.
@@ -679,4 +754,7 @@ Rekomendasi nama UI:
 
 `Append Folder Excel`
 
-Nama ini cukup singkat dan menggambarkan bahwa fitur membaca banyak Excel dari folder lalu append ke target.
+Keputusan final:
+
+- Nama fitur di UI adalah `Append Folder Excel`.
+- Nama ini cukup singkat dan menggambarkan bahwa fitur membaca banyak Excel dari folder lalu append ke target.
